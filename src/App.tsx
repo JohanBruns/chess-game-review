@@ -1,9 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useGame } from './hooks/useGame'
+import { useEngine } from './lib/engine/useEngine'
 import { PgnInput } from './components/PgnInput'
 import { BoardPanel } from './components/BoardPanel'
 import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
+import { EvalPanel } from './components/EvalPanel'
 
 function App() {
   const {
@@ -21,6 +23,19 @@ function App() {
     goToLast,
     goToPly,
   } = useGame()
+
+  const {
+    isReady,
+    isEvaluating,
+    result,
+    error: engineError,
+    evaluate,
+  } = useEngine()
+
+  const handleEvaluate = useCallback(
+    () => evaluate(currentFen),
+    [evaluate, currentFen],
+  )
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -48,6 +63,14 @@ function App() {
             canGoPrev={canGoPrev}
             canGoNext={canGoNext}
             isLoaded={isLoaded}
+          />
+          <EvalPanel
+            isReady={isReady}
+            isEvaluating={isEvaluating}
+            result={result}
+            error={engineError}
+            isGameLoaded={isLoaded}
+            onEvaluate={handleEvaluate}
           />
         </div>
         <MoveList
