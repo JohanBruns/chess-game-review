@@ -58,6 +58,7 @@ export function useGame() {
 
   return {
     currentFen: game.fens[currentPly] ?? DEFAULT_POSITION,
+    fens: game.fens,
     moves: game.moves,
     currentPly,
     error: game.error,
