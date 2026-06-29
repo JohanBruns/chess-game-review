@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useMemo } from 'react'
 import { useGame } from './hooks/useGame'
 import { useEngine } from './lib/engine/useEngine'
 import { PgnInput } from './components/PgnInput'
@@ -7,6 +7,7 @@ import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
+import { buildMoveAnalyses } from './lib/analysis/classify'
 
 function App() {
   const {
@@ -42,6 +43,11 @@ function App() {
     () => evaluate(currentFen),
     [evaluate, currentFen],
   )
+
+  const moveAnalyses = useMemo(() => {
+    if (evalResults.length === 0) return null
+    return buildMoveAnalyses(moves, evalResults)
+  }, [moves, evalResults])
 
   const handleAnalyzeGame = useCallback(
     () => analyzeGame(fens),
@@ -98,6 +104,7 @@ function App() {
           moves={moves}
           currentPly={currentPly}
           onSelectPly={goToPly}
+          moveAnalyses={moveAnalyses}
         />
       </div>
     </div>
