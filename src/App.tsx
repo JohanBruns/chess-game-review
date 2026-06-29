@@ -7,7 +7,7 @@ import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
-import { buildMoveAnalyses } from './lib/analysis/classify'
+import { buildMoveAnalyses, playerAccuracy } from './lib/analysis/classify'
 
 function App() {
   const {
@@ -49,6 +49,15 @@ function App() {
     return buildMoveAnalyses(moves, evalResults)
   }, [moves, evalResults])
 
+  const whiteAccuracy = useMemo(
+    () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'white') : null),
+    [moveAnalyses],
+  )
+  const blackAccuracy = useMemo(
+    () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'black') : null),
+    [moveAnalyses],
+  )
+
   const handleAnalyzeGame = useCallback(
     () => analyzeGame(fens),
     [analyzeGame, fens],
@@ -89,6 +98,8 @@ function App() {
             result={result}
             error={engineError}
             isGameLoaded={isLoaded}
+            whiteAccuracy={whiteAccuracy}
+            blackAccuracy={blackAccuracy}
             onEvaluate={handleEvaluate}
             onAnalyzeGame={handleAnalyzeGame}
           />
