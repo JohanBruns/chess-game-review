@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest'
-import { winPct, classifyMove } from './classify'
+import type { Move } from 'chess.js'
+import type { EvalResult } from '../engine/useEngine'
+import { winPct, classifyMove, buildMoveAnalyses, moveAccuracy, playerAccuracy } from './classify'
+
+// Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
+const mv = (san: string) => ({ san } as unknown as Move)
+const ev = (cp: number, bestMoveSan: string | null = null): EvalResult => ({
+  cp,
+  mate: null,
+  bestMoveSan,
+})
 
 describe('winPct', () => {
   it('returns 50 at cp=0', () => {
@@ -75,5 +85,150 @@ describe('classifyMove', () => {
 
   it('Blunder: large loss', () => {
     expect(classifyMove(100, false)).toBe('Blunder')
+  })
+})
+
+describe('buildMoveAnalyses — Vorzeichen-Logik', () => {
+  it('white blunder: cp drops from 0 to -500 → Blunder', () => {
+    const [a] = buildMoveAnalyses([mv('d4')], [ev(0), ev(-500)])
+    expect(a.classification).toBe('Blunder')
+    expect(a.lossInWinPct).toBeGreaterThan(20)
+  })
+
+  it('white improvement: cp rises 0→+200 → 0 loss (clamped)', () => {
+    const [a] = buildMoveAnalyses([mv('Nxf7')], [ev(0), ev(200)])
+    expect(a.lossInWinPct).toBe(0)
+    expect(a.classification).toBe('Excellent')
+  })
+
+  it('black good move: cp drops in white-perspective (200→100) → 0 loss', () => {
+    // evalResults: [before-white, after-white/before-black, after-black]
+    // Black plays at index 1; cp goes 200→100 (white advantage shrinks = black improved)
+    // Correct: from black perspective cpBefore=-200, cpAfter=-100 → winPct improved → loss=0
+    // Bug (no negation): 200→100 would give loss≈8.5 → Inaccuracy (WRONG)
+    const moves = [mv('e4'), mv('Nc6')]
+    const evals = [ev(0), ev(200), ev(100)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    const blackMove = analyses.find(a => a.moveIndex === 1)!
+    expect(blackMove.lossInWinPct).toBe(0)
+    expect(blackMove.classification).toBe('Excellent')
+  })
+
+  it('black blunder: cp rises in white-perspective (0→+500) → Blunder', () => {
+    // Black plays at index 1; after black's move white has +500 → black blundered
+    const moves = [mv('e4'), mv('Nd4??')]
+    const evals = [ev(0), ev(0), ev(500)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    const blackMove = analyses.find(a => a.moveIndex === 1)!
+    // From black: cpBefore=0 → winPct=50, cpAfter=-500 → winPct≈10 → loss≈40 → Blunder
+    expect(blackMove.classification).toBe('Blunder')
+    expect(blackMove.lossInWinPct).toBeGreaterThan(20)
+  })
+
+  it('loss is clamped to 0 — never negative', () => {
+    // White gains material: eval goes from 0 to +400 → would give negative loss without clamp
+    const [a] = buildMoveAnalyses([mv('Rxf7')], [ev(0), ev(400)])
+    expect(a.lossInWinPct).toBe(0)
+  })
+
+  it('isEngineBestMove: san === bestMoveSan → Best', () => {
+    const [a] = buildMoveAnalyses([mv('e4')], [ev(0, 'e4'), ev(50)])
+    expect(a.classification).toBe('Best')
+  })
+
+  it('isEngineBestMove: san !== bestMoveSan → not Best', () => {
+    // -400cp: loss = winPct(0)-winPct(-400) ≈ 50-18.6 = 31.4 → Blunder
+    const [a] = buildMoveAnalyses([mv('d4')], [ev(0, 'e4'), ev(-400)])
+    expect(a.classification).not.toBe('Best')
+    expect(a.classification).toBe('Blunder')
+  })
+
+  it('skips positions where evalResults entry is null', () => {
+    const analyses = buildMoveAnalyses([mv('e4')], [ev(0), null])
+    expect(analyses).toHaveLength(0)
+  })
+
+  it('mate score treated as ±10000 cp', () => {
+    // White announces mate: evalBefore has mate=2 (white mates in 2), evalAfter also mate=1
+    const mateEv = (mateIn: number): EvalResult => ({ cp: null, mate: mateIn, bestMoveSan: null })
+    const [a] = buildMoveAnalyses([mv('Qh5+')], [mateEv(2), mateEv(1)])
+    // Both map to +10000 from white's perspective → loss ≈ 0
+    expect(a.lossInWinPct).toBe(0)
+  })
+
+  it('accuracy field is populated on each MoveAnalysis', () => {
+    const [a] = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)])
+    expect(a.accuracy).toBeGreaterThanOrEqual(0)
+    expect(a.accuracy).toBeLessThanOrEqual(100)
+  })
+})
+
+describe('moveAccuracy', () => {
+  it('returns ~100 at loss=0 (perfect move)', () => {
+    expect(moveAccuracy(0)).toBeCloseTo(100, 0)
+  })
+
+  it('is clamped to max 100', () => {
+    expect(moveAccuracy(0)).toBeLessThanOrEqual(100)
+  })
+
+  it('returns ~79.8 at loss=5', () => {
+    expect(moveAccuracy(5)).toBeCloseTo(79.8, 0)
+  })
+
+  it('returns ~63.6 at loss=10', () => {
+    expect(moveAccuracy(10)).toBeCloseTo(63.6, 0)
+  })
+
+  it('returns ~40.0 at loss=20', () => {
+    expect(moveAccuracy(20)).toBeCloseTo(40.0, 0)
+  })
+
+  it('is clamped to 0 for very large loss', () => {
+    expect(moveAccuracy(100)).toBe(0)
+  })
+
+  it('is monotonically decreasing: loss=5 > loss=20', () => {
+    expect(moveAccuracy(5)).toBeGreaterThan(moveAccuracy(20))
+  })
+})
+
+describe('playerAccuracy', () => {
+  it('returns null when analyses is empty', () => {
+    expect(playerAccuracy([], 'white')).toBeNull()
+    expect(playerAccuracy([], 'black')).toBeNull()
+  })
+
+  it('returns null when no moves for that player', () => {
+    // Only one move at index 0 (white) — black has no moves
+    const analyses = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)])
+    expect(playerAccuracy(analyses, 'black')).toBeNull()
+  })
+
+  it('returns white accuracy from even-index moves only', () => {
+    const moves = [mv('e4'), mv('e5'), mv('Nf3')]
+    const evals = [ev(0), ev(0), ev(0), ev(0)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    const white = playerAccuracy(analyses, 'white')!
+    expect(white).toBeGreaterThan(0)
+    expect(white).toBeLessThanOrEqual(100)
+    // White has 2 moves (index 0 and 2), both loss=0 → accuracy ≈ 100
+    expect(white).toBeCloseTo(100, 0)
+  })
+
+  it('returns average accuracy for black (odd-index moves)', () => {
+    const moves = [mv('e4'), mv('e5')]
+    const evals = [ev(0), ev(0), ev(0)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    const black = playerAccuracy(analyses, 'black')!
+    expect(black).toBeGreaterThan(0)
+    expect(black).toBeLessThanOrEqual(100)
+  })
+
+  it('lower accuracy when player blunders', () => {
+    // White plays a blunder: cp drops from 0 to -500
+    const analyses = buildMoveAnalyses([mv('d4')], [ev(0), ev(-500)])
+    const white = playerAccuracy(analyses, 'white')!
+    expect(white).toBeLessThan(50)
   })
 })

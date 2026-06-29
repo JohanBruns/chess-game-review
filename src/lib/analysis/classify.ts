@@ -7,6 +7,23 @@ export interface MoveAnalysis {
   moveIndex: number
   lossInWinPct: number
   classification: MoveClass
+  accuracy: number
+}
+
+export function moveAccuracy(lossInWinPct: number): number {
+  const raw = 103.1668 * Math.exp(-0.04354 * lossInWinPct) - 3.1669
+  return Math.min(100, Math.max(0, raw))
+}
+
+export function playerAccuracy(
+  analyses: MoveAnalysis[],
+  player: 'white' | 'black',
+): number | null {
+  const playerMoves = analyses.filter(a =>
+    player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0,
+  )
+  if (playerMoves.length === 0) return null
+  return playerMoves.reduce((sum, a) => sum + a.accuracy, 0) / playerMoves.length
 }
 
 export function winPct(cp: number): number {
@@ -51,6 +68,7 @@ export function buildMoveAnalyses(
       moveIndex: i,
       lossInWinPct: loss,
       classification: classifyMove(loss, isEngineBestMove),
+      accuracy: moveAccuracy(loss),
     })
   }
 

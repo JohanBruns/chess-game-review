@@ -8,6 +8,8 @@ interface EvalPanelProps {
   result: EvalResult | null
   error: string | null
   isGameLoaded: boolean
+  whiteAccuracy: number | null
+  blackAccuracy: number | null
   onEvaluate: () => void
   onAnalyzeGame: () => void
 }
@@ -31,6 +33,8 @@ export function EvalPanel({
   result,
   error,
   isGameLoaded,
+  whiteAccuracy,
+  blackAccuracy,
   onEvaluate,
   onAnalyzeGame,
 }: EvalPanelProps) {
@@ -86,6 +90,19 @@ export function EvalPanel({
               Bester Zug: {result.bestMoveSan}
             </span>
           )}
+        </div>
+      )}
+
+      {whiteAccuracy !== null && blackAccuracy !== null && (
+        <div className="flex justify-between text-sm px-1 py-1 bg-slate-800 rounded">
+          <span>
+            <span className="text-slate-400">Weiß </span>
+            <span className="font-semibold text-white">{whiteAccuracy.toFixed(1)}%</span>
+          </span>
+          <span>
+            <span className="text-slate-400">Schwarz </span>
+            <span className="font-semibold text-slate-300">{blackAccuracy.toFixed(1)}%</span>
+          </span>
         </div>
       )}
 
