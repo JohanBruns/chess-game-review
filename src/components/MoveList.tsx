@@ -1,13 +1,24 @@
 import { useEffect, useRef } from 'react'
 import type { Move } from 'chess.js'
+import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
 
 interface MoveListProps {
   moves: Move[]
   currentPly: number
   onSelectPly: (ply: number) => void
+  moveAnalyses: MoveAnalysis[] | null
 }
 
-export function MoveList({ moves, currentPly, onSelectPly }: MoveListProps) {
+const CLASS_STYLE: Record<MoveClass, { symbol: string; cls: string }> = {
+  Best:        { symbol: '★',  cls: 'text-cyan-400' },
+  Excellent:   { symbol: '✓✓', cls: 'text-green-400' },
+  Good:        { symbol: '✓',  cls: 'text-green-600' },
+  Inaccuracy:  { symbol: '?!', cls: 'text-yellow-400' },
+  Mistake:     { symbol: '?',  cls: 'text-orange-400' },
+  Blunder:     { symbol: '??', cls: 'text-red-500' },
+}
+
+export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses }: MoveListProps) {
   const selectedRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -22,8 +33,7 @@ export function MoveList({ moves, currentPly, onSelectPly }: MoveListProps) {
     )
   }
 
-  const rows: { moveNumber: number; whitePly: number; blackPly: number | null }[] =
-    []
+  const rows: { moveNumber: number; whitePly: number; blackPly: number | null }[] = []
   for (let i = 0; i < moves.length; i += 2) {
     rows.push({
       moveNumber: Math.floor(i / 2) + 1,
@@ -48,6 +58,7 @@ export function MoveList({ moves, currentPly, onSelectPly }: MoveListProps) {
                   currentPly={currentPly}
                   onClick={onSelectPly}
                   selectedRef={selectedRef}
+                  analysis={moveAnalyses?.[whitePly - 1] ?? null}
                 />
               </td>
               <td className="py-0.5 w-1/2">
@@ -58,6 +69,7 @@ export function MoveList({ moves, currentPly, onSelectPly }: MoveListProps) {
                     currentPly={currentPly}
                     onClick={onSelectPly}
                     selectedRef={selectedRef}
+                    analysis={moveAnalyses?.[blackPly - 1] ?? null}
                   />
                 )}
               </td>
@@ -75,10 +87,13 @@ interface MoveButtonProps {
   currentPly: number
   onClick: (ply: number) => void
   selectedRef: React.RefObject<HTMLButtonElement | null>
+  analysis: MoveAnalysis | null
 }
 
-function MoveButton({ san, ply, currentPly, onClick, selectedRef }: MoveButtonProps) {
+function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis }: MoveButtonProps) {
   const isActive = ply === currentPly
+  const style = analysis ? CLASS_STYLE[analysis.classification] : null
+
   return (
     <button
       ref={isActive ? selectedRef : null}
@@ -90,6 +105,11 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef }: MoveButtonPr
       onClick={() => onClick(ply)}
     >
       {san}
+      {style && (
+        <span className={`ml-1 text-xs font-sans ${isActive ? 'text-white/80' : style.cls}`}>
+          {style.symbol}
+        </span>
+      )}
     </button>
   )
 }
