@@ -6,10 +6,12 @@ import { BoardPanel } from './components/BoardPanel'
 import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
+import { EvalGraph } from './components/EvalGraph'
 
 function App() {
   const {
     currentFen,
+    fens,
     moves,
     currentPly,
     error,
@@ -27,14 +29,23 @@ function App() {
   const {
     isReady,
     isEvaluating,
+    isAnalyzing,
     result,
+    evalResults,
+    analysisProgress,
     error: engineError,
     evaluate,
+    analyzeGame,
   } = useEngine()
 
   const handleEvaluate = useCallback(
     () => evaluate(currentFen),
     [evaluate, currentFen],
+  )
+
+  const handleAnalyzeGame = useCallback(
+    () => analyzeGame(fens),
+    [analyzeGame, fens],
   )
 
   useEffect(() => {
@@ -67,11 +78,21 @@ function App() {
           <EvalPanel
             isReady={isReady}
             isEvaluating={isEvaluating}
+            isAnalyzing={isAnalyzing}
+            analysisProgress={analysisProgress}
             result={result}
             error={engineError}
             isGameLoaded={isLoaded}
             onEvaluate={handleEvaluate}
+            onAnalyzeGame={handleAnalyzeGame}
           />
+          {evalResults.length > 0 && (
+            <EvalGraph
+              evalResults={evalResults}
+              currentPly={currentPly}
+              onSelectPly={goToPly}
+            />
+          )}
         </div>
         <MoveList
           moves={moves}
