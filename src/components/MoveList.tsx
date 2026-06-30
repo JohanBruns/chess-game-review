@@ -10,14 +10,16 @@ interface MoveListProps {
   keyMoments?: Set<number>
 }
 
-const CLASS_STYLE: Record<MoveClass, { symbol: string; cls: string }> = {
-  Book:        { symbol: '📖', cls: 'text-slate-400' },
-  Best:        { symbol: '★',  cls: 'text-cyan-400' },
-  Excellent:   { symbol: '✓✓', cls: 'text-green-400' },
-  Good:        { symbol: '✓',  cls: 'text-green-600' },
-  Inaccuracy:  { symbol: '?!', cls: 'text-yellow-400' },
-  Mistake:     { symbol: '?',  cls: 'text-orange-400' },
-  Blunder:     { symbol: '??', cls: 'text-red-500' },
+const CLASS_ICON: Record<MoveClass, string> = {
+  Book:        '/marks/book_128x.png',
+  Brilliant:   '/marks/brilliant_128x.png',
+  Great:       '/marks/great_find_128x.png',
+  Best:        '/marks/best_128x.png',
+  Excellent:   '/marks/excellent_128x.png',
+  Good:        '/marks/good_128x.png',
+  Inaccuracy:  '/marks/inaccuracy_128x.png',
+  Mistake:     '/marks/mistake_128x.png',
+  Blunder:     '/marks/blunder_128x.png',
 }
 
 export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments }: MoveListProps) {
@@ -97,7 +99,6 @@ interface MoveButtonProps {
 
 function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKeyMoment }: MoveButtonProps) {
   const isActive = ply === currentPly
-  const style = analysis ? CLASS_STYLE[analysis.classification] : null
 
   return (
     <button
@@ -110,13 +111,13 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
       onClick={() => onClick(ply)}
     >
       {san}
-      {style && (
-        <span
-          className={`ml-0.5 font-sans ${isActive ? 'text-white/80' : style.cls}`}
-          title={analysis!.classification}
-        >
-          {style.symbol}
-        </span>
+      {analysis && (
+        <img
+          src={CLASS_ICON[analysis.classification]}
+          alt={analysis.classification}
+          title={analysis.classification}
+          className="inline w-4 h-4 ml-0.5 align-middle"
+        />
       )}
       {isKeyMoment && (
         <span className={`ml-0.5 ${isActive ? 'text-white/80' : 'text-red-400'}`}>⚡</span>
