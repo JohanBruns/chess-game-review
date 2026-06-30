@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useMemo, useRef } from 'react'
 import { useGame } from './hooks/useGame'
 import { useEngine } from './lib/engine/useEngine'
-import { PgnInput } from './components/PgnInput'
+import { GamePicker } from './components/GamePicker'
 import { BoardPanel } from './components/BoardPanel'
 import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
@@ -159,7 +159,7 @@ function App() {
 
   return (
     <div className="h-screen bg-slate-900 text-slate-100 flex flex-col overflow-hidden">
-      <PgnInput onLoad={loadPgn} error={error} />
+      <GamePicker onLoad={loadPgn} error={error} />
 
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap) ── */}
