@@ -111,7 +111,10 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
     >
       {san}
       {style && (
-        <span className={`ml-1 text-xs font-sans ${isActive ? 'text-white/80' : style.cls}`}>
+        <span
+          className={`ml-1 text-xs font-sans ${isActive ? 'text-white/80' : style.cls}`}
+          title={analysis!.classification}
+        >
           {style.symbol}
         </span>
       )}
