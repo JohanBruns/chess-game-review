@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import type { Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
-import { winPct, classifyMove, buildMoveAnalyses, moveAccuracy, playerAccuracy } from './classify'
+import { winPct, classifyMove, buildMoveAnalyses, moveAccuracy, playerAccuracy, findKeyMoments } from './classify'
+import type { MoveAnalysis } from './classify'
 
 // Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
 const mv = (san: string) => ({ san } as unknown as Move)
@@ -193,6 +194,30 @@ describe('moveAccuracy', () => {
   })
 })
 
+describe('buildMoveAnalyses — Book classification', () => {
+  it('marks moves below openingPly as Book', () => {
+    const moves = [mv('e4'), mv('e5'), mv('Nf3')]
+    const evals = [ev(0), ev(0), ev(0), ev(0)]
+    const analyses = buildMoveAnalyses(moves, evals, 2)
+    expect(analyses[0].classification).toBe('Book')
+    expect(analyses[1].classification).toBe('Book')
+    expect(analyses[2].classification).not.toBe('Book')
+  })
+
+  it('Book moves have lossInWinPct=0 and accuracy=100', () => {
+    const analyses = buildMoveAnalyses([mv('e4'), mv('e5')], [ev(0), ev(0), ev(0)], 2)
+    for (const a of analyses) {
+      expect(a.lossInWinPct).toBe(0)
+      expect(a.accuracy).toBe(100)
+    }
+  })
+
+  it('openingPly=0 means no Book moves', () => {
+    const analyses = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)], 0)
+    expect(analyses[0].classification).not.toBe('Book')
+  })
+})
+
 describe('playerAccuracy', () => {
   it('returns null when analyses is empty', () => {
     expect(playerAccuracy([], 'white')).toBeNull()
@@ -230,5 +255,65 @@ describe('playerAccuracy', () => {
     const analyses = buildMoveAnalyses([mv('d4')], [ev(0), ev(-500)])
     const white = playerAccuracy(analyses, 'white')!
     expect(white).toBeLessThan(50)
+  })
+
+  it('Book moves are excluded from accuracy calculation', () => {
+    // 2 Book moves (white+black), then 1 non-Book move for white
+    const moves = [mv('e4'), mv('e5'), mv('Nf3')]
+    const evals = [ev(0), ev(0), ev(0), ev(0)]
+    const analyses = buildMoveAnalyses(moves, evals, 2)
+    // moves[0] (white, Book) excluded; moves[2] (white) included with loss=0 → ~100
+    const white = playerAccuracy(analyses, 'white')!
+    expect(white).toBeCloseTo(100, 0)
+  })
+
+  it('returns null when all player moves are Book', () => {
+    // 2 moves both Book (openingPly=2); white has no non-Book moves
+    const analyses = buildMoveAnalyses([mv('e4'), mv('e5')], [ev(0), ev(0), ev(0)], 2)
+    expect(playerAccuracy(analyses, 'white')).toBeNull()
+    expect(playerAccuracy(analyses, 'black')).toBeNull()
+  })
+})
+
+describe('findKeyMoments', () => {
+  function makeAnalyses(losses: number[]): MoveAnalysis[] {
+    return losses.map((loss, i) => ({
+      moveIndex: i,
+      lossInWinPct: loss,
+      classification: classifyMove(loss, false),
+      accuracy: 100 - loss,
+    }))
+  }
+
+  it('returns top-N move indices by lossInWinPct', () => {
+    const analyses = makeAnalyses([5, 25, 3, 30, 10])
+    const km = findKeyMoments(analyses, 3)
+    expect(km.has(3)).toBe(true)  // loss=30 — highest
+    expect(km.has(1)).toBe(true)  // loss=25 — second
+    expect(km.has(4)).toBe(true)  // loss=10 — third
+    expect(km.has(0)).toBe(false)
+    expect(km.has(2)).toBe(false)
+  })
+
+  it('returns all when n >= analyses.length', () => {
+    const analyses = makeAnalyses([5, 25, 3])
+    const km = findKeyMoments(analyses, 10)
+    expect(km.size).toBe(3)
+  })
+
+  it('excludes Book moves', () => {
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0, classification: 'Book', accuracy: 100 },
+      { moveIndex: 1, lossInWinPct: 0, classification: 'Book', accuracy: 100 },
+      { moveIndex: 2, lossInWinPct: 30, classification: 'Blunder', accuracy: 0 },
+    ]
+    const km = findKeyMoments(analyses, 3)
+    expect(km.has(0)).toBe(false)
+    expect(km.has(1)).toBe(false)
+    expect(km.has(2)).toBe(true)
+  })
+
+  it('returns empty set for empty input', () => {
+    expect(findKeyMoments([], 5).size).toBe(0)
   })
 })

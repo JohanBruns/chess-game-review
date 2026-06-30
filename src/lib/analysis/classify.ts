@@ -1,7 +1,7 @@
 import type { Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
 
-export type MoveClass = 'Best' | 'Excellent' | 'Good' | 'Inaccuracy' | 'Mistake' | 'Blunder'
+export type MoveClass = 'Book' | 'Best' | 'Excellent' | 'Good' | 'Inaccuracy' | 'Mistake' | 'Blunder'
 
 export interface MoveAnalysis {
   moveIndex: number
@@ -20,7 +20,8 @@ export function playerAccuracy(
   player: 'white' | 'black',
 ): number | null {
   const playerMoves = analyses.filter(a =>
-    player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0,
+    (player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0) &&
+    a.classification !== 'Book',
   )
   if (playerMoves.length === 0) return null
   return playerMoves.reduce((sum, a) => sum + a.accuracy, 0) / playerMoves.length
@@ -45,13 +46,25 @@ export function classifyMove(loss: number, isEngineBestMove: boolean): MoveClass
   return 'Blunder'
 }
 
+export function findKeyMoments(analyses: MoveAnalysis[], n = 5): Set<number> {
+  const sorted = [...analyses]
+    .filter(a => a.classification !== 'Book')
+    .sort((a, b) => b.lossInWinPct - a.lossInWinPct)
+  return new Set(sorted.slice(0, n).map(a => a.moveIndex))
+}
+
 export function buildMoveAnalyses(
   moves: Move[],
   evalResults: (EvalResult | null)[],
+  openingPly = 0,
 ): MoveAnalysis[] {
   const analyses: MoveAnalysis[] = []
 
   for (let i = 0; i < moves.length; i++) {
+    if (i < openingPly) {
+      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100 })
+      continue
+    }
     const evalBefore = evalResults[i]
     const evalAfter = evalResults[i + 1]
     if (!evalBefore || !evalAfter) continue

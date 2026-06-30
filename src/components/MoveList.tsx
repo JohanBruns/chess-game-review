@@ -7,9 +7,11 @@ interface MoveListProps {
   currentPly: number
   onSelectPly: (ply: number) => void
   moveAnalyses: MoveAnalysis[] | null
+  keyMoments?: Set<number>
 }
 
 const CLASS_STYLE: Record<MoveClass, { symbol: string; cls: string }> = {
+  Book:        { symbol: '📖', cls: 'text-slate-400' },
   Best:        { symbol: '★',  cls: 'text-cyan-400' },
   Excellent:   { symbol: '✓✓', cls: 'text-green-400' },
   Good:        { symbol: '✓',  cls: 'text-green-600' },
@@ -18,7 +20,7 @@ const CLASS_STYLE: Record<MoveClass, { symbol: string; cls: string }> = {
   Blunder:     { symbol: '??', cls: 'text-red-500' },
 }
 
-export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses }: MoveListProps) {
+export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments }: MoveListProps) {
   const selectedRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -59,6 +61,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses }: MoveL
                   onClick={onSelectPly}
                   selectedRef={selectedRef}
                   analysis={moveAnalyses?.[whitePly - 1] ?? null}
+                  isKeyMoment={keyMoments?.has(whitePly - 1) ?? false}
                 />
               </td>
               <td className="py-0.5 w-1/2">
@@ -70,6 +73,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses }: MoveL
                     onClick={onSelectPly}
                     selectedRef={selectedRef}
                     analysis={moveAnalyses?.[blackPly - 1] ?? null}
+                    isKeyMoment={keyMoments?.has(blackPly - 1) ?? false}
                   />
                 )}
               </td>
@@ -88,9 +92,10 @@ interface MoveButtonProps {
   onClick: (ply: number) => void
   selectedRef: React.RefObject<HTMLButtonElement | null>
   analysis: MoveAnalysis | null
+  isKeyMoment: boolean
 }
 
-function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis }: MoveButtonProps) {
+function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKeyMoment }: MoveButtonProps) {
   const isActive = ply === currentPly
   const style = analysis ? CLASS_STYLE[analysis.classification] : null
 
@@ -109,6 +114,9 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis }: Mo
         <span className={`ml-1 text-xs font-sans ${isActive ? 'text-white/80' : style.cls}`}>
           {style.symbol}
         </span>
+      )}
+      {isKeyMoment && (
+        <span className={`ml-1 text-xs ${isActive ? 'text-white/80' : 'text-red-400'}`}>⚡</span>
       )}
     </button>
   )

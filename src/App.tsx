@@ -7,7 +7,9 @@ import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
-import { buildMoveAnalyses, playerAccuracy } from './lib/analysis/classify'
+import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
+import { detectOpening } from './lib/analysis/openings'
+import { OpeningBadge } from './components/OpeningBadge'
 
 function App() {
   const {
@@ -44,10 +46,22 @@ function App() {
     [evaluate, currentFen],
   )
 
+  const openingResult = useMemo(
+    () => (fens.length > 0 ? detectOpening(fens) : null),
+    [fens],
+  )
+  const openingPly = openingResult?.fenPly ?? 0
+
   const moveAnalyses = useMemo(() => {
     if (evalResults.length === 0) return null
-    return buildMoveAnalyses(moves, evalResults)
-  }, [moves, evalResults])
+    return buildMoveAnalyses(moves, evalResults, openingPly)
+  }, [moves, evalResults, openingPly])
+
+  const keyMoments = useMemo(
+    () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),
+    [moveAnalyses],
+  )
+  const keyMomentPlies = useMemo(() => [...keyMoments].map(i => i + 1), [keyMoments])
 
   const whiteAccuracy = useMemo(
     () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'white') : null),
@@ -78,6 +92,7 @@ function App() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
       <PgnInput onLoad={loadPgn} error={error} />
+      <OpeningBadge opening={openingResult?.opening ?? null} />
       <div className="flex flex-row gap-4 px-4 pb-4 items-start">
         <div className="flex flex-col gap-2 flex-shrink-0">
           <BoardPanel fen={currentFen} />
@@ -108,6 +123,7 @@ function App() {
               evalResults={evalResults}
               currentPly={currentPly}
               onSelectPly={goToPly}
+              keyMomentPlies={keyMomentPlies}
             />
           )}
         </div>
@@ -116,6 +132,7 @@ function App() {
           currentPly={currentPly}
           onSelectPly={goToPly}
           moveAnalyses={moveAnalyses}
+          keyMoments={keyMoments}
         />
       </div>
     </div>
