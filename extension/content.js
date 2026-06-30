@@ -2,9 +2,10 @@
 // Tries multiple strategies to extract PGN.
 
 async function extractPgn() {
-  const urlMatch = location.pathname.match(/\/game\/(live|daily|chess960)\/(\d+)/)
+  const urlMatch = location.pathname.match(/\/game\/(?:(live|daily|chess960)\/)?(\d+)/)
   if (!urlMatch) return null
-  const [, gameType, gameId] = urlMatch
+  const gameType = urlMatch[1] ?? 'live'
+  const gameId = urlMatch[2]
 
   // Username: from URL query param (?username=...) or from the page DOM
   const username =

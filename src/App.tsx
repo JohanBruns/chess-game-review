@@ -99,6 +99,23 @@ function App() {
     }
   }, [currentPly, resetCoaching])
 
+  // Sound effects
+  const captureAudioRef = useRef<HTMLAudioElement | null>(null)
+  const moveAudioRef = useRef<HTMLAudioElement | null>(null)
+  useEffect(() => {
+    captureAudioRef.current = new Audio('/sounds/capture.mp3')
+    moveAudioRef.current = new Audio('/sounds/move-self.mp3')
+  }, [])
+  const soundPlyRef = useRef(currentPly)
+  useEffect(() => {
+    const prev = soundPlyRef.current
+    soundPlyRef.current = currentPly
+    if (currentPly !== prev + 1 || currentPly === 0) return
+    const move = moves[currentPly - 1]
+    const audio = move.captured ? captureAudioRef.current : moveAudioRef.current
+    if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
+  }, [currentPly, moves])
+
   const canExplain =
     currentPly > 0 &&
     evalResults[currentPly - 1] != null &&
@@ -150,7 +167,11 @@ function App() {
           <div className="flex flex-row items-stretch" style={{ height: 'calc(100vh - 128px)' }}>
             <EvalBar evalResult={evalResults[currentPly] ?? result} />
             <div className="aspect-square h-full">
-              <BoardPanel fen={currentFen} />
+              <BoardPanel
+                fen={currentFen}
+                lastMoveTo={currentPly > 0 ? moves[currentPly - 1].to : undefined}
+                classification={currentPly > 0 ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
+              />
             </div>
           </div>
           <NavControls
