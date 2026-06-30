@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Chess Analyzer",
+  "version": "1.0",
+  "description": "Öffnet chess.com-Partien im lokalen Analyse-Tool (localhost:5173)",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["*://*.chess.com/*"],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Im Analyse-Tool öffnen"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.chess.com/game/*", "*://*.chess.com/analysis/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
