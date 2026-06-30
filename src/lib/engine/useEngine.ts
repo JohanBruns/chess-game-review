@@ -6,6 +6,7 @@ export interface EvalResult {
   mate: number | null
   bestMoveSan: string | null
   pv: string | null
+  secondBestCp: number | null
 }
 
 interface AnalysisQueue {
@@ -45,6 +46,7 @@ export function useEngine() {
   const lastCpRef = useRef<number | null>(null)
   const lastMateRef = useRef<number | null>(null)
   const lastPvRef = useRef<string[]>([])
+  const lastSecondBestCpRef = useRef<number | null>(null)
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
@@ -56,6 +58,7 @@ export function useEngine() {
     lastCpRef.current = null
     lastMateRef.current = null
     lastPvRef.current = []
+    lastSecondBestCpRef.current = null
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
     workerRef.current.postMessage(`position fen ${fen}`)
     workerRef.current.postMessage('go depth 15')
@@ -108,11 +111,15 @@ export function useEngine() {
 
       if (initPhaseRef.current === 'isready' && line === 'readyok') {
         initPhaseRef.current = 'ready'
+        worker.postMessage('setoption name MultiPV value 2')
         setState(prev => ({ ...prev, isReady: true }))
         return
       }
 
       if (line.startsWith('info') && line.includes(' score ')) {
+        const multipvMatch = line.match(/multipv (\d+)/)
+        const multipvIdx = multipvMatch ? parseInt(multipvMatch[1], 10) : 1
+
         const cpMatch = line.match(/score cp (-?\d+)/)
         const mateMatch = line.match(/score mate (-?\d+)/)
         const rawCp = cpMatch ? parseInt(cpMatch[1], 10) : null
@@ -122,17 +129,21 @@ export function useEngine() {
         const cp = rawCp !== null ? (isBlackToMove ? -rawCp : rawCp) : null
         const mate = rawMate !== null ? (isBlackToMove ? -rawMate : rawMate) : null
 
-        lastCpRef.current = cp
-        lastMateRef.current = mate
-        const pvMatch = line.match(/ pv (.+)$/)
-        if (pvMatch) lastPvRef.current = pvMatch[1].trim().split(' ').slice(0, 5)
+        if (multipvIdx === 1) {
+          lastCpRef.current = cp
+          lastMateRef.current = mate
+          const pvMatch = line.match(/ pv (.+)$/)
+          if (pvMatch) lastPvRef.current = pvMatch[1].trim().split(' ').slice(0, 5)
 
-        // Skip intermediate state updates during batch analysis to avoid excessive re-renders
-        if (!analysisQueueRef.current) {
-          setState(prev => ({
-            ...prev,
-            result: { cp, mate, bestMoveSan: prev.result?.bestMoveSan ?? null, pv: prev.result?.pv ?? null },
-          }))
+          // Skip intermediate state updates during batch analysis to avoid excessive re-renders
+          if (!analysisQueueRef.current) {
+            setState(prev => ({
+              ...prev,
+              result: { cp, mate, bestMoveSan: prev.result?.bestMoveSan ?? null, pv: prev.result?.pv ?? null, secondBestCp: lastSecondBestCpRef.current },
+            }))
+          }
+        } else if (multipvIdx === 2 && cp !== null) {
+          lastSecondBestCpRef.current = cp
         }
         return
       }
@@ -178,6 +189,7 @@ export function useEngine() {
           mate: lastMateRef.current,
           bestMoveSan,
           pv,
+          secondBestCp: lastSecondBestCpRef.current,
         }
 
         const queue = analysisQueueRef.current
