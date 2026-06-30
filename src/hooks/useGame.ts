@@ -24,7 +24,10 @@ export function useGame() {
   const loadPgn = useCallback((pgn: string) => {
     const chess = new Chess()
     try {
-      chess.loadPgn(pgn)
+      // chess.com PGNs contain [%clk ...] / [%eval ...] annotations inside
+      // brace comments which chess.js 1.x cannot parse — strip them first.
+      const cleaned = pgn.replace(/\{[^}]*\}/g, '').replace(/\s+/g, ' ').trim()
+      chess.loadPgn(cleaned)
       const moves = chess.history({ verbose: true }) as Move[]
       const fens =
         moves.length === 0

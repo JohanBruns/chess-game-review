@@ -1,50 +1,97 @@
 // Injected into chess.com/game/* pages.
-// Tries multiple strategies to extract PGN, then exposes it via a custom event.
+// Tries multiple strategies to extract PGN.
 
 async function extractPgn() {
-  // Strategy 1: Check Next.js server-side data (works on many chess.com pages)
-  try {
-    const nextDataEl = document.getElementById('__NEXT_DATA__')
-    if (nextDataEl) {
-      const data = JSON.parse(nextDataEl.textContent || '{}')
-      // Path varies by page type; try common locations
-      const pgn =
-        data?.props?.pageProps?.game?.pgn ||
-        data?.props?.pageProps?.gameData?.pgn ||
-        data?.props?.pageProps?.gamePgn
-      if (pgn && typeof pgn === 'string' && pgn.trim().length > 0) {
-        return pgn.trim()
-      }
-    }
-  } catch (_) { /* continue */ }
-
-  // Strategy 2: Unofficial callback API (game ID from URL)
-  // URL patterns: /game/live/12345, /game/daily/12345, /game/chess960/12345
   const urlMatch = location.pathname.match(/\/game\/(live|daily|chess960)\/(\d+)/)
-  if (urlMatch) {
-    const [, gameType, gameId] = urlMatch
-    try {
-      const res = await fetch(`https://www.chess.com/callback/${gameType}/game/${gameId}`, {
-        credentials: 'include', // send cookies so auth works
-      })
-      if (res.ok) {
-        const json = await res.json()
-        // Try known response shapes
-        const pgn =
-          json?.game?.pgn ||
-          json?.pgn ||
-          json?.game?.pgnHeaders // last resort: just headers, no moves
-        if (pgn && typeof pgn === 'string' && pgn.trim().length > 0) {
-          return pgn.trim()
-        }
-      }
-    } catch (_) { /* continue */ }
+  if (!urlMatch) return null
+  const [, gameType, gameId] = urlMatch
+
+  // Username: from URL query param (?username=...) or from the page DOM
+  const username =
+    new URLSearchParams(location.search).get('username') ||
+    document.querySelector('[data-username]')?.dataset?.username ||
+    document.querySelector('.user-username-component')?.textContent?.trim() ||
+    null
+
+  // Strategy 1: Official public API — requires username, returns full PGN
+  if (username) {
+    const pgn = await fetchFromOfficialApi(username, gameId)
+    if (pgn) return pgn
   }
 
-  // Strategy 3: Official public API (username + month required — skipped here,
-  // needs user input; better handled via the app UI directly)
+  // Strategy 2: Unofficial callback API — try common response shapes
+  const pgn2 = await fetchFromCallbackApi(gameType, gameId)
+  if (pgn2) return pgn2
 
+  // Strategy 3: __NEXT_DATA__ (Next.js SSR data in page source)
+  return extractFromNextData()
+}
+
+// Official: https://api.chess.com/pub/player/{username}/games/{year}/{month}
+// Tries current month and the two previous months (covers games near month boundaries).
+async function fetchFromOfficialApi(username, gameId) {
+  const now = new Date()
+  const months = [
+    { year: now.getFullYear(), month: now.getMonth() + 1 },
+    { year: now.getFullYear(), month: now.getMonth() },     // previous month
+    { year: now.getFullYear(), month: now.getMonth() - 1 }, // two months ago
+  ].map(({ year, month }) => {
+    // Wrap December → January etc.
+    if (month <= 0) { month += 12; year -= 1 }
+    return { year, month: String(month).padStart(2, '0') }
+  })
+
+  for (const { year, month } of months) {
+    try {
+      const url = `https://api.chess.com/pub/player/${username}/games/${year}/${month}`
+      const res = await fetch(url)
+      if (!res.ok) continue
+      const json = await res.json()
+      const games = json?.games ?? []
+      // Match by game ID in the game's URL field
+      const game = games.find(g => g?.url?.includes(gameId))
+      if (game?.pgn) return game.pgn
+    } catch (_) { /* try next month */ }
+  }
   return null
+}
+
+// Unofficial: https://www.chess.com/callback/{type}/game/{id}
+async function fetchFromCallbackApi(gameType, gameId) {
+  try {
+    const res = await fetch(
+      `https://www.chess.com/callback/${gameType}/game/${gameId}`,
+      { credentials: 'include' },
+    )
+    if (!res.ok) return null
+    const json = await res.json()
+    // Try every known field name
+    return (
+      json?.game?.pgn ||
+      json?.pgn ||
+      json?.game?.pgnHeaders ||
+      null
+    )
+  } catch (_) {
+    return null
+  }
+}
+
+// __NEXT_DATA__: Next.js bakes server data into a <script> tag
+function extractFromNextData() {
+  try {
+    const el = document.getElementById('__NEXT_DATA__')
+    if (!el) return null
+    const data = JSON.parse(el.textContent || '{}')
+    return (
+      data?.props?.pageProps?.game?.pgn ||
+      data?.props?.pageProps?.gameData?.pgn ||
+      data?.props?.pageProps?.gamePgn ||
+      null
+    )
+  } catch (_) {
+    return null
+  }
 }
 
 // Listen for message from popup

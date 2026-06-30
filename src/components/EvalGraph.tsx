@@ -79,7 +79,7 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies
   }
 
   return (
-    <div style={{ width: '100%', height: 110 }}>
+    <div style={{ width: '100%', height: 200 }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}

@@ -21,7 +21,7 @@ export function EvalBar({ evalResult }: { evalResult: EvalResult | null }) {
   const label = evalResult ? formatLabel(evalResult) : null
 
   return (
-    <div className="relative flex flex-col w-5 self-stretch min-h-[480px] overflow-hidden rounded-l select-none">
+    <div className="relative flex flex-col w-10 self-stretch overflow-hidden rounded-l select-none">
       <div
         className="bg-slate-900 w-full transition-all duration-300"
         style={{ height: `${100 - pct}%` }}
@@ -32,7 +32,7 @@ export function EvalBar({ evalResult }: { evalResult: EvalResult | null }) {
       />
       {label && (
         <span
-          className="absolute left-1/2 -translate-x-1/2 text-[9px] font-mono font-bold pointer-events-none"
+          className="absolute left-1/2 -translate-x-1/2 text-xs font-mono font-bold pointer-events-none"
           style={{ top: pct < 15 ? '2px' : undefined, bottom: pct >= 15 ? '2px' : undefined, color: pct > 50 ? '#0f172a' : '#f1f5f9' }}
         >
           {label}

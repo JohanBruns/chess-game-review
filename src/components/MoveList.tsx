@@ -29,7 +29,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
 
   if (moves.length === 0) {
     return (
-      <div className="flex-1 bg-slate-800 rounded p-3 text-slate-500 text-sm italic">
+      <div className="flex-1 min-h-0 flex items-center justify-center text-slate-500 text-xs italic">
         Keine Züge geladen
       </div>
     )
@@ -45,15 +45,15 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
   }
 
   return (
-    <div className="flex-1 bg-slate-800 rounded overflow-y-auto max-h-[520px] p-2">
-      <table className="w-full text-sm border-collapse">
+    <div className="flex-1 min-h-0 overflow-y-auto">
+      <table className="w-full border-collapse">
         <tbody>
           {rows.map(({ moveNumber, whitePly, blackPly }) => (
-            <tr key={moveNumber} className="hover:bg-slate-700/40">
-              <td className="text-slate-500 pr-2 pl-1 py-0.5 select-none w-8 text-right">
+            <tr key={moveNumber} className="hover:bg-slate-700/30">
+              <td className="text-slate-600 pr-1 pl-2 py-0 select-none w-7 text-right text-[11px] leading-5">
                 {moveNumber}.
               </td>
-              <td className="py-0.5 w-1/2">
+              <td className="py-0 w-[46%]">
                 <MoveButton
                   san={moves[whitePly - 1].san}
                   ply={whitePly}
@@ -64,7 +64,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
                   isKeyMoment={keyMoments?.has(whitePly - 1) ?? false}
                 />
               </td>
-              <td className="py-0.5 w-1/2">
+              <td className="py-0 w-[46%]">
                 {blackPly !== null && (
                   <MoveButton
                     san={moves[blackPly - 1].san}
@@ -102,24 +102,24 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
   return (
     <button
       ref={isActive ? selectedRef : null}
-      className={`w-full text-left px-2 py-0.5 rounded font-mono transition-colors ${
+      className={`w-full text-left px-1.5 py-0.5 rounded font-mono text-xs leading-5 transition-colors ${
         isActive
           ? 'bg-blue-600 text-white font-semibold'
-          : 'text-slate-200 hover:bg-slate-600'
+          : 'text-slate-300 hover:bg-slate-600/50'
       }`}
       onClick={() => onClick(ply)}
     >
       {san}
       {style && (
         <span
-          className={`ml-1 text-xs font-sans ${isActive ? 'text-white/80' : style.cls}`}
+          className={`ml-0.5 font-sans ${isActive ? 'text-white/80' : style.cls}`}
           title={analysis!.classification}
         >
           {style.symbol}
         </span>
       )}
       {isKeyMoment && (
-        <span className={`ml-1 text-xs ${isActive ? 'text-white/80' : 'text-red-400'}`}>⚡</span>
+        <span className={`ml-0.5 ${isActive ? 'text-white/80' : 'text-red-400'}`}>⚡</span>
       )}
     </button>
   )
