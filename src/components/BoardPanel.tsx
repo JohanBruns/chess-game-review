@@ -7,13 +7,15 @@ interface BoardPanelProps {
   classification?: MoveClass
 }
 
-const BADGE: Record<Exclude<MoveClass, 'Book'>, { bg: string; symbol: string }> = {
-  Best:       { bg: '#22d3ee', symbol: '★' },
-  Excellent:  { bg: '#4ade80', symbol: '✓✓' },
-  Good:       { bg: '#16a34a', symbol: '✓' },
-  Inaccuracy: { bg: '#facc15', symbol: '?!' },
-  Mistake:    { bg: '#fb923c', symbol: '?' },
-  Blunder:    { bg: '#ef4444', symbol: '??' },
+const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
+  Brilliant:  'brilliant_128x.png',
+  Great:      'great_find_128x.png',
+  Best:       'best_128x.png',
+  Excellent:  'excellent_128x.png',
+  Good:       'good_128x.png',
+  Inaccuracy: 'inaccuracy_128x.png',
+  Mistake:    'mistake_128x.png',
+  Blunder:    'blunder_128x.png',
 }
 
 const IMG: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain' }
@@ -40,9 +42,9 @@ export function BoardPanel({ fen, lastMoveTo, classification }: BoardPanelProps)
           const file = lastMoveTo.charCodeAt(0) - 97  // 0 = a … 7 = h
           const rank = parseInt(lastMoveTo[1])          // 1–8
           return {
-            left: (file + 1) / 8 * 100,               // right edge of column (%)
-            top:  (8 - rank + 1) / 8 * 100,           // bottom edge of row (%)
-            style: BADGE[classification as Exclude<MoveClass, 'Book'>],
+            left: (file + 1) / 8 * 100,
+            top:  (8 - rank + 1) / 8 * 100,
+            src:  `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
           }
         })()
       : null
@@ -64,22 +66,16 @@ export function BoardPanel({ fen, lastMoveTo, classification }: BoardPanelProps)
       />
       {badge && (
         <div className="absolute inset-0 pointer-events-none">
-          <div
-            className="absolute flex items-center justify-center rounded-full text-white font-bold select-none"
+          <img
+            src={badge.src}
+            alt={classification}
+            className="absolute w-7 h-7 drop-shadow-lg"
             style={{
               left: `${badge.left}%`,
               top:  `${badge.top}%`,
               transform: 'translate(-50%, -50%)',
-              backgroundColor: badge.style.bg,
-              width:  '22px',
-              height: '22px',
-              fontSize: '9px',
-              lineHeight: 1,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.6)',
             }}
-          >
-            {badge.style.symbol}
-          </div>
+          />
         </div>
       )}
     </div>

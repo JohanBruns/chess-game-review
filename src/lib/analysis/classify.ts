@@ -1,7 +1,16 @@
-import type { Move } from 'chess.js'
+import { Chess, type Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
 
-export type MoveClass = 'Book' | 'Best' | 'Excellent' | 'Good' | 'Inaccuracy' | 'Mistake' | 'Blunder'
+export type MoveClass =
+  | 'Book'
+  | 'Brilliant'
+  | 'Great'
+  | 'Best'
+  | 'Excellent'
+  | 'Good'
+  | 'Inaccuracy'
+  | 'Mistake'
+  | 'Blunder'
 
 export interface MoveAnalysis {
   moveIndex: number
@@ -37,7 +46,56 @@ function evalToCp(r: EvalResult): number {
   return 0
 }
 
-export function classifyMove(loss: number, isEngineBestMove: boolean): MoveClass {
+// Piece values for sacrifice detection
+const PIECE_VAL: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+
+// A move is a sacrifice when material is given without immediate equal compensation.
+// Two cases:
+//   a) Direct exchange sacrifice: captured piece worth less than moving piece
+//   b) Piece hangs on destination (non-pawn only — pawn advances to defended squares are normal play)
+export function isSacrifice(move: Move): boolean {
+  if (!move.piece || !move.color || !move.after) return false
+  const pieceVal = PIECE_VAL[move.piece] ?? 0
+
+  if (move.captured) {
+    return (PIECE_VAL[move.captured] ?? 0) < pieceVal
+  }
+
+  if (pieceVal <= 1) return false  // pawn non-capture: skip
+  try {
+    const chess = new Chess(move.after)
+    const oppColor = move.color === 'w' ? 'b' : 'w'
+    return chess.isAttacked(move.to, oppColor)
+  } catch {
+    return false
+  }
+}
+
+// Optional params enable Brilliant/Great detection when full context is available.
+// Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
+export function classifyMove(
+  loss: number,
+  isEngineBestMove: boolean,
+  move?: Move,
+  winPctBefore?: number,
+  bestCp?: number | null,
+  secondBestCp?: number | null,
+): MoveClass {
+  // Brilliant: sacrifice + nearly best + position not already trivially won
+  if (
+    move != null && winPctBefore != null &&
+    loss <= 2 && winPctBefore < 90 &&
+    isSacrifice(move)
+  ) return 'Brilliant'
+
+  // Great: clearly best move where 2nd-best is significantly worse (only good move)
+  if (
+    isEngineBestMove &&
+    bestCp != null && secondBestCp != null &&
+    winPctBefore != null && winPctBefore < 85 &&
+    winPct(bestCp) - winPct(secondBestCp) >= 10
+  ) return 'Great'
+
   if (isEngineBestMove) return 'Best'
   if (loss <= 2) return 'Excellent'
   if (loss <= 5) return 'Good'
@@ -71,16 +129,29 @@ export function buildMoveAnalyses(
 
     const isWhite = i % 2 === 0
     const cpBefore = isWhite ? evalToCp(evalBefore) : -evalToCp(evalBefore)
-    const cpAfter = isWhite ? evalToCp(evalAfter) : -evalToCp(evalAfter)
+    const cpAfter  = isWhite ? evalToCp(evalAfter)  : -evalToCp(evalAfter)
 
     const loss = Math.max(0, winPct(cpBefore) - winPct(cpAfter))
     const isEngineBestMove =
       evalBefore.bestMoveSan !== null && moves[i].san === evalBefore.bestMoveSan
 
+    // Convert secondBestCp from White-perspective (stored in EvalResult) to mover's perspective
+    const secondBestCpMover =
+      evalBefore.secondBestCp !== null
+        ? (isWhite ? evalBefore.secondBestCp : -evalBefore.secondBestCp)
+        : null
+
     analyses.push({
       moveIndex: i,
       lossInWinPct: loss,
-      classification: classifyMove(loss, isEngineBestMove),
+      classification: classifyMove(
+        loss,
+        isEngineBestMove,
+        moves[i],
+        winPct(cpBefore),
+        cpBefore,
+        secondBestCpMover,
+      ),
       accuracy: moveAccuracy(loss),
     })
   }
