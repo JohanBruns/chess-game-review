@@ -1,12 +1,19 @@
 const btn = document.getElementById('btn')
 const status = document.getElementById('status')
 const urlInput = document.getElementById('url-input')
+const userInput = document.getElementById('user-input')
 
-// Persist URL setting via localStorage
+// Persist settings via localStorage
 const savedUrl = localStorage.getItem('chess-analyzer-url')
 if (savedUrl) urlInput.value = savedUrl
 urlInput.addEventListener('change', () => {
   localStorage.setItem('chess-analyzer-url', urlInput.value)
+})
+
+const savedUser = localStorage.getItem('chess-analyzer-username')
+if (savedUser) userInput.value = savedUser
+userInput.addEventListener('change', () => {
+  localStorage.setItem('chess-analyzer-username', userInput.value)
 })
 
 btn.addEventListener('click', async () => {
@@ -29,7 +36,10 @@ btn.addEventListener('click', async () => {
       await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
     } catch (_) { /* already injected or no permission — try sending anyway */ }
 
-    const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PGN' })
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'GET_PGN',
+      username: userInput.value.trim() || null,
+    })
     const pgn = response?.pgn
 
     if (!pgn) {
