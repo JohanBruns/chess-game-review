@@ -1,14 +1,15 @@
 // Injected into chess.com/game/* pages.
 // Tries multiple strategies to extract PGN.
 
-async function extractPgn() {
+async function extractPgn(providedUsername = null) {
   const urlMatch = location.pathname.match(/\/game\/(?:(live|daily|chess960)\/)?(\d+)/)
   if (!urlMatch) return null
   const gameType = urlMatch[1] ?? 'live'
   const gameId = urlMatch[2]
 
-  // Username: from URL query param (?username=...) or from the page DOM
+  // Username: provided by popup > URL query param > page DOM
   const username =
+    providedUsername ||
     new URLSearchParams(location.search).get('username') ||
     document.querySelector('[data-username]')?.dataset?.username ||
     document.querySelector('.user-username-component')?.textContent?.trim() ||
@@ -67,11 +68,8 @@ async function fetchFromCallbackApi(gameType, gameId) {
     if (!res.ok) return null
     const json = await res.json()
     // Try every known field name
-    return (
-      json?.game?.pgn ||
-      json?.pgn ||
-      null
-    )
+    const pgn = json?.game?.pgn || json?.pgn || null
+    return typeof pgn === 'string' && pgn.length > 10 ? pgn : null
   } catch (_) {
     return null
   }
@@ -97,6 +95,6 @@ function extractFromNextData() {
 // Listen for message from popup
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type !== 'GET_PGN') return
-  extractPgn().then(pgn => sendResponse({ pgn }))
+  extractPgn(msg.username ?? null).then(pgn => sendResponse({ pgn }))
   return true // keep channel open for async response
 })
