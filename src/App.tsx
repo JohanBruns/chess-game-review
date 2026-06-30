@@ -109,6 +109,12 @@ function App() {
   )
 
   useEffect(() => {
+    const pgn = new URLSearchParams(window.location.search).get('pgn')
+    if (pgn) loadPgn(pgn)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // intentionally runs once on mount
+
+  useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLTextAreaElement) return
       if (e.key === 'ArrowLeft') { e.preventDefault(); goToPrev() }
