@@ -4,7 +4,7 @@ import type { EvalResult } from '../engine/useEngine'
 import type { MoveAnalysis } from './classify'
 
 const ev = (cp: number, bestMoveSan: string | null = null, pv: string | null = null): EvalResult => ({
-  cp, mate: null, bestMoveSan, pv,
+  cp, mate: null, bestMoveSan, pv, secondBestCp: null,
 })
 
 const analysis: MoveAnalysis = {
