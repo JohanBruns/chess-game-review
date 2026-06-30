@@ -7,7 +7,7 @@
 //   3. Auf chess.com/game/* anklicken
 
 javascript:(async()=>{
-  const APP = 'http://localhost:5173';
+  const APP = 'https://chess-game-review-drab.vercel.app';
 
   // Strategy 1: __NEXT_DATA__
   let pgn = null;
