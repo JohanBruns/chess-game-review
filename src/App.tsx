@@ -10,6 +10,7 @@ import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
+import { EvalBar } from './components/EvalBar'
 import { useCoaching } from './hooks/useCoaching'
 import { CoachingPanel } from './components/CoachingPanel'
 
@@ -124,8 +125,11 @@ function App() {
       <PgnInput onLoad={loadPgn} error={error} />
       <OpeningBadge opening={openingResult?.opening ?? null} />
       <div className="flex flex-row gap-4 px-4 pb-4 items-start">
-        <div className="flex flex-col gap-2 flex-shrink-0">
-          <BoardPanel fen={currentFen} />
+        <div className="flex flex-col gap-2 flex-shrink-0 w-full max-w-[500px]">
+          <div className="flex flex-row">
+            <EvalBar evalResult={evalResults[currentPly] ?? result} />
+            <BoardPanel fen={currentFen} />
+          </div>
           <NavControls
             onFirst={goToFirst}
             onPrev={goToPrev}
