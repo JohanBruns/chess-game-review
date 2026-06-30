@@ -6,7 +6,7 @@ interface BoardPanelProps {
 
 export function BoardPanel({ fen }: BoardPanelProps) {
   return (
-    <div className="w-full max-w-[480px] aspect-square">
+    <div className="w-full h-full">
       <Chessboard options={{ position: fen, allowDragging: false }} />
     </div>
   )

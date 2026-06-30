@@ -13,6 +13,7 @@ import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { useCoaching } from './hooks/useCoaching'
 import { CoachingPanel } from './components/CoachingPanel'
+import { ClassLegend } from './components/ClassLegend'
 
 function App() {
   const {
@@ -44,10 +45,23 @@ function App() {
     analyzeGame,
   } = useEngine()
 
-  const handleEvaluate = useCallback(
-    () => evaluate(currentFen),
-    [evaluate, currentFen],
-  )
+  const autoEvalRef = useRef(false)
+  // Tracks which ply was last auto-evaluated to prevent re-triggering when isEvaluating flips
+  const autoEvalPlyRef = useRef<number>(-1)
+
+  useEffect(() => {
+    if (!autoEvalRef.current) return
+    if (!isReady || !isLoaded || isAnalyzing || isEvaluating) return
+    if (autoEvalPlyRef.current === currentPly) return   // already evaluated this ply
+    autoEvalPlyRef.current = currentPly
+    evaluate(currentFen)
+  }, [currentPly, currentFen, isReady, isLoaded, isAnalyzing, isEvaluating, evaluate])
+
+  const handleEvaluate = useCallback(() => {
+    autoEvalRef.current = true
+    autoEvalPlyRef.current = currentPly   // prevent effect from double-evaluating on first click
+    evaluate(currentFen)
+  }, [evaluate, currentFen, currentPly])
 
   const openingResult = useMemo(
     () => (fens.length > 0 ? detectOpening(fens) : null),
@@ -127,14 +141,17 @@ function App() {
   }, [goToFirst, goToPrev, goToNext, goToLast])
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col">
+    <div className="h-screen bg-slate-900 text-slate-100 flex flex-col overflow-hidden">
       <PgnInput onLoad={loadPgn} error={error} />
-      <OpeningBadge opening={openingResult?.opening ?? null} />
-      <div className="flex flex-row gap-4 px-4 pb-4 items-start">
-        <div className="flex flex-col gap-2 flex-shrink-0 w-full max-w-[500px]">
-          <div className="flex flex-row">
+
+      <div className="flex flex-1 min-h-0">
+        {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap) ── */}
+        <div className="shrink-0 flex flex-col p-3 gap-2" style={{ width: 'calc(100vh - 64px)' }}>
+          <div className="flex flex-row items-stretch" style={{ height: 'calc(100vh - 128px)' }}>
             <EvalBar evalResult={evalResults[currentPly] ?? result} />
-            <BoardPanel fen={currentFen} />
+            <div className="aspect-square h-full">
+              <BoardPanel fen={currentFen} />
+            </div>
           </div>
           <NavControls
             onFirst={goToFirst}
@@ -145,44 +162,56 @@ function App() {
             canGoNext={canGoNext}
             isLoaded={isLoaded}
           />
-          <EvalPanel
-            isReady={isReady}
-            isEvaluating={isEvaluating}
-            isAnalyzing={isAnalyzing}
-            analysisProgress={analysisProgress}
-            result={result}
-            error={engineError}
-            isGameLoaded={isLoaded}
-            whiteAccuracy={whiteAccuracy}
-            blackAccuracy={blackAccuracy}
-            onEvaluate={handleEvaluate}
-            onAnalyzeGame={handleAnalyzeGame}
-          />
-          <CoachingPanel
-            apiKey={apiKey}
-            onSaveApiKey={saveApiKey}
-            canExplain={canExplain}
-            onExplain={handleExplain}
-            explanation={explanation}
-            isLoading={coachingLoading}
-            error={coachingError}
+        </div>
+
+        {/* ── Right: Sidebar — fills remaining width ── */}
+        <div className="flex-1 min-w-0 border-l border-slate-700 flex flex-col overflow-hidden">
+          <OpeningBadge opening={openingResult?.opening ?? null} />
+          <div className="shrink-0 px-2 py-2 border-b border-slate-700/60">
+            <EvalPanel
+              isReady={isReady}
+              isEvaluating={isEvaluating}
+              isAnalyzing={isAnalyzing}
+              analysisProgress={analysisProgress}
+              result={result}
+              error={engineError}
+              isGameLoaded={isLoaded}
+              whiteAccuracy={whiteAccuracy}
+              blackAccuracy={blackAccuracy}
+              onEvaluate={handleEvaluate}
+              onAnalyzeGame={handleAnalyzeGame}
+            />
+          </div>
+          <MoveList
+            moves={moves}
+            currentPly={currentPly}
+            onSelectPly={goToPly}
+            moveAnalyses={moveAnalyses}
+            keyMoments={keyMoments}
           />
           {evalResults.length > 0 && (
-            <EvalGraph
-              evalResults={evalResults}
-              currentPly={currentPly}
-              onSelectPly={goToPly}
-              keyMomentPlies={keyMomentPlies}
-            />
+            <div className="shrink-0 border-t border-slate-700">
+              <EvalGraph
+                evalResults={evalResults}
+                currentPly={currentPly}
+                onSelectPly={goToPly}
+                keyMomentPlies={keyMomentPlies}
+              />
+            </div>
           )}
+          <ClassLegend />
+          <div className="shrink-0 border-t border-slate-700">
+            <CoachingPanel
+              apiKey={apiKey}
+              onSaveApiKey={saveApiKey}
+              canExplain={canExplain}
+              onExplain={handleExplain}
+              explanation={explanation}
+              isLoading={coachingLoading}
+              error={coachingError}
+            />
+          </div>
         </div>
-        <MoveList
-          moves={moves}
-          currentPly={currentPly}
-          onSelectPly={goToPly}
-          moveAnalyses={moveAnalyses}
-          keyMoments={keyMoments}
-        />
       </div>
     </div>
   )

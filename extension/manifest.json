@@ -3,7 +3,7 @@
   "name": "Chess Analyzer",
   "version": "1.0",
   "description": "Öffnet chess.com-Partien im lokalen Analyse-Tool (localhost:5173)",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "scripting", "tabs"],
   "host_permissions": ["*://*.chess.com/*"],
   "action": {
     "default_popup": "popup.html",

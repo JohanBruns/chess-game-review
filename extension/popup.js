@@ -2,12 +2,11 @@ const btn = document.getElementById('btn')
 const status = document.getElementById('status')
 const portInput = document.getElementById('port-input')
 
-// Persist port setting
-chrome.storage.local.get('port', ({ port }) => {
-  if (port) portInput.value = port
-})
+// Persist port setting via localStorage
+const savedPort = localStorage.getItem('chess-analyzer-port')
+if (savedPort) portInput.value = savedPort
 portInput.addEventListener('change', () => {
-  chrome.storage.local.set({ port: portInput.value })
+  localStorage.setItem('chess-analyzer-port', portInput.value)
 })
 
 btn.addEventListener('click', async () => {
@@ -24,6 +23,12 @@ btn.addEventListener('click', async () => {
   }
 
   try {
+    // Inject content script on demand — handles tabs that were already open
+    // before the extension was installed or last reloaded.
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
+    } catch (_) { /* already injected or no permission — try sending anyway */ }
+
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'GET_PGN' })
     const pgn = response?.pgn
 
