@@ -5,6 +5,7 @@ export interface EvalResult {
   cp: number | null
   mate: number | null
   bestMoveSan: string | null
+  pv: string | null
 }
 
 interface AnalysisQueue {
@@ -43,6 +44,7 @@ export function useEngine() {
   const analysisQueueRef = useRef<AnalysisQueue | null>(null)
   const lastCpRef = useRef<number | null>(null)
   const lastMateRef = useRef<number | null>(null)
+  const lastPvRef = useRef<string[]>([])
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
@@ -53,6 +55,7 @@ export function useEngine() {
     evaluatingFenRef.current = fen
     lastCpRef.current = null
     lastMateRef.current = null
+    lastPvRef.current = []
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
     workerRef.current.postMessage(`position fen ${fen}`)
     workerRef.current.postMessage('go depth 15')
@@ -121,18 +124,31 @@ export function useEngine() {
 
         lastCpRef.current = cp
         lastMateRef.current = mate
+        const pvMatch = line.match(/ pv (.+)$/)
+        if (pvMatch) lastPvRef.current = pvMatch[1].trim().split(' ').slice(0, 5)
 
         // Skip intermediate state updates during batch analysis to avoid excessive re-renders
         if (!analysisQueueRef.current) {
           setState(prev => ({
             ...prev,
-            result: { cp, mate, bestMoveSan: prev.result?.bestMoveSan ?? null },
+            result: { cp, mate, bestMoveSan: prev.result?.bestMoveSan ?? null, pv: prev.result?.pv ?? null },
           }))
         }
         return
       }
 
       if (line.startsWith('bestmove')) {
+        function uciPvToSan(fen: string, uciMoves: string[]): string {
+          const chess = new Chess(fen)
+          const sans: string[] = []
+          for (const uci of uciMoves) {
+            try {
+              const m = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] })
+              if (m) sans.push(m.san); else break
+            } catch { break }
+          }
+          return sans.join(' ')
+        }
         if (timeoutRef.current !== null) {
           clearTimeout(timeoutRef.current)
           timeoutRef.current = null
@@ -153,10 +169,15 @@ export function useEngine() {
           }
         }
 
+        const pv = lastPvRef.current.length > 0 && evaluatingFenRef.current
+          ? uciPvToSan(evaluatingFenRef.current, lastPvRef.current)
+          : null
+
         const finalResult: EvalResult = {
           cp: lastCpRef.current,
           mate: lastMateRef.current,
           bestMoveSan,
+          pv,
         }
 
         const queue = analysisQueueRef.current
