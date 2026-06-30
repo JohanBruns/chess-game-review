@@ -70,7 +70,6 @@ async function fetchFromCallbackApi(gameType, gameId) {
     return (
       json?.game?.pgn ||
       json?.pgn ||
-      json?.game?.pgnHeaders ||
       null
     )
   } catch (_) {
