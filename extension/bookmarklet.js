@@ -20,10 +20,11 @@ javascript:(async()=>{
 
   // Strategy 2: Unofficial callback API
   if (!pgn) {
-    const m = location.pathname.match(/\/game\/(live|daily|chess960)\/(\d+)/);
+    const m = location.pathname.match(/\/game\/(?:(live|daily|chess960)\/)?(\d+)/);
     if (m) {
       try {
-        const r = await fetch(`https://www.chess.com/callback/${m[1]}/game/${m[2]}`,{credentials:'include'});
+        const gameType = m[1] ?? 'live';
+        const r = await fetch(`https://www.chess.com/callback/${gameType}/game/${m[2]}`,{credentials:'include'});
         if (r.ok) {
           const j = await r.json();
           pgn = j?.game?.pgn || j?.pgn;
