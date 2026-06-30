@@ -33,29 +33,27 @@
       word-break: break-word;
     }
     #status.error { color: #f87171; }
-    #port-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    #url-row {
       margin-bottom: 10px;
     }
-    #port-row label { color: #64748b; font-size: 11px; white-space: nowrap; }
-    #port-input {
-      width: 60px;
+    #url-row label { color: #64748b; font-size: 11px; display: block; margin-bottom: 3px; }
+    #url-input {
+      width: 100%;
+      box-sizing: border-box;
       background: #334155;
       color: #f1f5f9;
       border: 1px solid #475569;
       border-radius: 4px;
-      padding: 2px 4px;
-      font-size: 12px;
+      padding: 3px 6px;
+      font-size: 11px;
     }
   </style>
 </head>
 <body>
   <h1>Chess Analyzer</h1>
-  <div id="port-row">
-    <label for="port-input">Port:</label>
-    <input id="port-input" type="number" value="5173" min="1" max="65535" />
+  <div id="url-row">
+    <label for="url-input">App-URL:</label>
+    <input id="url-input" type="text" value="https://chess-game-review-drab.vercel.app" />
   </div>
   <button id="btn">Partie analysieren</button>
   <div id="status">Auf einer chess.com/game/…-Seite öffnen.</div>

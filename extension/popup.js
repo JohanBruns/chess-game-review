@@ -1,12 +1,12 @@
 const btn = document.getElementById('btn')
 const status = document.getElementById('status')
-const portInput = document.getElementById('port-input')
+const urlInput = document.getElementById('url-input')
 
-// Persist port setting via localStorage
-const savedPort = localStorage.getItem('chess-analyzer-port')
-if (savedPort) portInput.value = savedPort
-portInput.addEventListener('change', () => {
-  localStorage.setItem('chess-analyzer-port', portInput.value)
+// Persist URL setting via localStorage
+const savedUrl = localStorage.getItem('chess-analyzer-url')
+if (savedUrl) urlInput.value = savedUrl
+urlInput.addEventListener('change', () => {
+  localStorage.setItem('chess-analyzer-url', urlInput.value)
 })
 
 btn.addEventListener('click', async () => {
@@ -39,8 +39,8 @@ btn.addEventListener('click', async () => {
       return
     }
 
-    const port = portInput.value || '5173'
-    const url = `http://localhost:${port}/?pgn=${encodeURIComponent(pgn)}`
+    const baseUrl = (urlInput.value || 'https://chess-game-review-drab.vercel.app').replace(/\/$/, '')
+    const url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
 
     // URL-Längenlimit (~8000 Zeichen); bei Überschreitung Warnung
     if (url.length > 8000) {
