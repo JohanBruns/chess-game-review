@@ -5,6 +5,7 @@ import {
   XAxis,
   YAxis,
   ReferenceLine,
+  ReferenceDot,
   Tooltip,
 } from 'recharts'
 import type { TooltipProps } from 'recharts'
@@ -14,6 +15,7 @@ interface EvalGraphProps {
   evalResults: (EvalResult | null)[]
   currentPly: number
   onSelectPly: (ply: number) => void
+  keyMomentPlies?: number[]
 }
 
 type DataPoint = { ply: number; cp: number | null }
@@ -53,7 +55,7 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   )
 }
 
-export function EvalGraph({ evalResults, currentPly, onSelectPly }: EvalGraphProps) {
+export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies }: EvalGraphProps) {
   if (evalResults.length === 0) return null
 
   const data: DataPoint[] = evalResults.map((r, ply) => ({
@@ -121,6 +123,16 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly }: EvalGraphPro
             strokeDasharray="3 3"
           />
           <Tooltip content={<CustomTooltip />} />
+          {keyMomentPlies?.map(ply => (
+            <ReferenceDot
+              key={ply}
+              x={ply}
+              y={data[ply]?.cp ?? 0}
+              r={4}
+              fill="#ef4444"
+              stroke="none"
+            />
+          ))}
           <Area
             type="monotone"
             dataKey="cp"
