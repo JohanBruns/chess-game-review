@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo } from 'react'
+import { useEffect, useCallback, useMemo, useRef } from 'react'
 import { useGame } from './hooks/useGame'
 import { useEngine } from './lib/engine/useEngine'
 import { PgnInput } from './components/PgnInput'
@@ -10,6 +10,8 @@ import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
+import { useCoaching } from './hooks/useCoaching'
+import { CoachingPanel } from './components/CoachingPanel'
 
 function App() {
   const {
@@ -72,6 +74,34 @@ function App() {
     [moveAnalyses],
   )
 
+  const { explanation, isLoading: coachingLoading, error: coachingError, apiKey, saveApiKey, explainMove, reset: resetCoaching } = useCoaching()
+
+  const prevPlyRef = useRef<number>(currentPly)
+  useEffect(() => {
+    if (prevPlyRef.current !== currentPly) {
+      prevPlyRef.current = currentPly
+      resetCoaching()
+    }
+  }, [currentPly, resetCoaching])
+
+  const canExplain =
+    currentPly > 0 &&
+    evalResults[currentPly - 1] != null &&
+    evalResults[currentPly] != null &&
+    moveAnalyses != null &&
+    moveAnalyses[currentPly - 1]?.classification !== 'Book'
+
+  const handleExplain = useCallback(() => {
+    if (!canExplain || !moveAnalyses) return
+    explainMove({
+      fenBefore: fens[currentPly - 1],
+      sanPlayed: moves[currentPly - 1].san,
+      evalBefore: evalResults[currentPly - 1]!,
+      evalAfter: evalResults[currentPly]!,
+      analysis: moveAnalyses[currentPly - 1],
+    })
+  }, [canExplain, moveAnalyses, fens, moves, evalResults, currentPly, explainMove])
+
   const handleAnalyzeGame = useCallback(
     () => analyzeGame(fens),
     [analyzeGame, fens],
@@ -117,6 +147,15 @@ function App() {
             blackAccuracy={blackAccuracy}
             onEvaluate={handleEvaluate}
             onAnalyzeGame={handleAnalyzeGame}
+          />
+          <CoachingPanel
+            apiKey={apiKey}
+            onSaveApiKey={saveApiKey}
+            canExplain={canExplain}
+            onExplain={handleExplain}
+            explanation={explanation}
+            isLoading={coachingLoading}
+            error={coachingError}
           />
           {evalResults.length > 0 && (
             <EvalGraph
