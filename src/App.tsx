@@ -43,6 +43,7 @@ function App() {
     error: engineError,
     evaluate,
     analyzeGame,
+    clearAnalysis,
   } = useEngine()
 
   const autoEvalRef = useRef(false)
@@ -139,9 +140,14 @@ function App() {
     [analyzeGame, fens],
   )
 
+  const handleLoadPgn = useCallback((pgn: string) => {
+    clearAnalysis()
+    loadPgn(pgn)
+  }, [clearAnalysis, loadPgn])
+
   useEffect(() => {
     const pgn = new URLSearchParams(window.location.search).get('pgn')
-    if (pgn) loadPgn(pgn)
+    if (pgn) handleLoadPgn(pgn)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally runs once on mount
 
@@ -158,8 +164,8 @@ function App() {
   }, [goToFirst, goToPrev, goToNext, goToLast])
 
   return (
-    <div className="h-screen bg-slate-900 text-slate-100 flex flex-col overflow-hidden">
-      <GamePicker onLoad={loadPgn} error={error} />
+    <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
+      <GamePicker onLoad={handleLoadPgn} error={error} />
 
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap) ── */}
@@ -186,9 +192,9 @@ function App() {
         </div>
 
         {/* ── Right: Sidebar — fills remaining width ── */}
-        <div className="flex-1 min-w-0 border-l border-slate-700 flex flex-col overflow-hidden">
+        <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-hidden">
           <OpeningBadge opening={openingResult?.opening ?? null} />
-          <div className="shrink-0 px-2 py-2 border-b border-slate-700/60">
+          <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
             <EvalPanel
               isReady={isReady}
               isEvaluating={isEvaluating}
@@ -211,7 +217,7 @@ function App() {
             keyMoments={keyMoments}
           />
           {evalResults.length > 0 && (
-            <div className="shrink-0 border-t border-slate-700">
+            <div className="shrink-0 border-t border-cc-border">
               <EvalGraph
                 evalResults={evalResults}
                 currentPly={currentPly}
@@ -221,7 +227,7 @@ function App() {
             </div>
           )}
           <ClassLegend />
-          <div className="shrink-0 border-t border-slate-700">
+          <div className="shrink-0 border-t border-cc-border">
             <CoachingPanel
               apiKey={apiKey}
               onSaveApiKey={saveApiKey}

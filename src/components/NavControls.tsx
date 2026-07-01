@@ -18,7 +18,7 @@ export function NavControls({
   isLoaded,
 }: NavControlsProps) {
   const base =
-    'px-3 py-1.5 rounded font-mono text-sm bg-slate-700 hover:bg-slate-600 text-slate-100 disabled:opacity-30 disabled:cursor-not-allowed'
+    'px-3 py-1.5 rounded font-mono text-sm bg-cc-surface hover:bg-cc-surface-hover text-cc-text disabled:opacity-30 disabled:cursor-not-allowed'
 
   return (
     <div className="flex justify-center gap-2">
@@ -26,7 +26,7 @@ export function NavControls({
         className={base}
         onClick={onFirst}
         disabled={!isLoaded || !canGoPrev}
-        title="Erster Zug (Home)"
+        title="First Move (Home)"
       >
         ⏮
       </button>
@@ -34,7 +34,7 @@ export function NavControls({
         className={base}
         onClick={onPrev}
         disabled={!isLoaded || !canGoPrev}
-        title="Vorheriger Zug (←)"
+        title="Previous Move (←)"
       >
         ◀
       </button>
@@ -42,7 +42,7 @@ export function NavControls({
         className={base}
         onClick={onNext}
         disabled={!isLoaded || !canGoNext}
-        title="Nächster Zug (→)"
+        title="Next Move (→)"
       >
         ▶
       </button>
@@ -50,7 +50,7 @@ export function NavControls({
         className={base}
         onClick={onLast}
         disabled={!isLoaded || !canGoNext}
-        title="Letzter Zug (End)"
+        title="Last Move (End)"
       >
         ⏭
       </button>

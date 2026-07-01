@@ -1,1 +1,17 @@
 @import "tailwindcss";
+
+@theme {
+  --color-cc-bg: #302e2b;
+  --color-cc-bg-dark: #1e1c1a;
+  --color-cc-panel: #262421;
+  --color-cc-surface: #3d3a37;
+  --color-cc-surface-hover: #4a4744;
+  --color-cc-border: #4a4744;
+  --color-cc-text: #e9e9e8;
+  --color-cc-text-dim: #b8b8b8;
+  --color-cc-text-faint: #86847f;
+  --color-cc-green: #81b64c;
+  --color-cc-green-hover: #6fa63f;
+  --color-cc-green-dark: #4b7a2f;
+  --color-cc-red: #e5533d;
+}

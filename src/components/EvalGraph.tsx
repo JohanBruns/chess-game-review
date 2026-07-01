@@ -41,12 +41,12 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   return (
     <div
       style={{
-        background: '#1e293b',
-        color: '#f1f5f9',
+        background: '#1e1c1a',
+        color: '#e9e9e8',
         fontSize: 11,
         padding: '2px 8px',
         borderRadius: 4,
-        border: '1px solid #475569',
+        border: '1px solid #4a4744',
       }}
     >
       {moveNum > 0 ? `${moveNum}${side}: ` : 'Start: '}
@@ -89,20 +89,20 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies
         >
           <defs>
             <linearGradient id="evalGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e2e8f0" stopOpacity={0.9} />
-              <stop offset="50%" stopColor="#e2e8f0" stopOpacity={0.25} />
-              <stop offset="50%" stopColor="#0f172a" stopOpacity={0.55} />
-              <stop offset="100%" stopColor="#0f172a" stopOpacity={0.95} />
+              <stop offset="0%" stopColor="#e9e9e8" stopOpacity={0.9} />
+              <stop offset="50%" stopColor="#e9e9e8" stopOpacity={0.25} />
+              <stop offset="50%" stopColor="#1e1c1a" stopOpacity={0.55} />
+              <stop offset="100%" stopColor="#1e1c1a" stopOpacity={0.95} />
             </linearGradient>
           </defs>
           <XAxis
             dataKey="ply"
             interval={0}
-            tick={{ fontSize: 10, fill: '#64748b' }}
+            tick={{ fontSize: 10, fill: '#86847f' }}
             tickFormatter={(ply: number) =>
               ply > 0 && ply % 10 === 0 ? String(Math.round(ply / 2)) : ''
             }
-            axisLine={{ stroke: '#334155' }}
+            axisLine={{ stroke: '#4a4744' }}
             tickLine={false}
             height={16}
           />
@@ -110,12 +110,12 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies
             domain={[-1000, 1000]}
             ticks={[-1000, -500, 0, 500, 1000]}
             tickFormatter={(v: number) => (v / 100).toFixed(0)}
-            tick={{ fontSize: 10, fill: '#64748b' }}
+            tick={{ fontSize: 10, fill: '#86847f' }}
             axisLine={false}
             tickLine={false}
             width={24}
           />
-          <ReferenceLine y={0} stroke="#475569" strokeWidth={1} />
+          <ReferenceLine y={0} stroke="#4a4744" strokeWidth={1} />
           <ReferenceLine
             x={currentPly}
             stroke="#f59e0b"
@@ -129,14 +129,14 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies
               x={ply}
               y={data[ply]?.cp ?? 0}
               r={4}
-              fill="#ef4444"
+              fill="#e5533d"
               stroke="none"
             />
           ))}
           <Area
             type="monotone"
             dataKey="cp"
-            stroke="#94a3b8"
+            stroke="#b8b8b8"
             strokeWidth={1.5}
             fill="url(#evalGradient)"
             dot={false}

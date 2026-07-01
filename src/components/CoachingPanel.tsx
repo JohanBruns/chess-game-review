@@ -22,8 +22,8 @@ export function CoachingPanel({
   const [draft, setDraft] = useState('')
 
   return (
-    <div className="bg-slate-800 rounded p-3 text-sm flex flex-col gap-2">
-      <div className="text-slate-400 font-semibold text-xs uppercase tracking-wide">Coaching</div>
+    <div className="bg-cc-panel rounded p-3 text-sm flex flex-col gap-2">
+      <div className="text-cc-text-dim font-semibold text-xs uppercase tracking-wide">Coaching</div>
 
       {apiKey === '' ? (
         <form
@@ -34,15 +34,15 @@ export function CoachingPanel({
             type="password"
             value={draft}
             onChange={e => setDraft(e.target.value)}
-            placeholder="Anthropic API-Key"
-            className="flex-1 bg-slate-700 text-slate-100 text-xs rounded px-2 py-1 outline-none border border-slate-600 focus:border-blue-500"
+            placeholder="Anthropic API key"
+            className="flex-1 bg-cc-surface text-cc-text text-xs rounded px-2 py-1 outline-none border border-cc-border focus:border-cc-green"
           />
           <button
             type="submit"
             disabled={draft.trim() === ''}
-            className="px-2 py-1 rounded bg-blue-600 text-white text-xs disabled:opacity-50"
+            className="px-2 py-1 rounded bg-cc-green text-white text-xs disabled:opacity-50"
           >
-            Speichern
+            Save
           </button>
         </form>
       ) : (
@@ -50,14 +50,14 @@ export function CoachingPanel({
           <button
             onClick={onExplain}
             disabled={!canExplain || isLoading}
-            className="px-3 py-1 rounded bg-blue-600 text-white text-xs disabled:opacity-40 hover:bg-blue-500 transition-colors"
+            className="px-3 py-1 rounded bg-cc-green text-white text-xs disabled:opacity-40 hover:bg-cc-green-hover transition-colors"
           >
-            {isLoading ? 'Lädt…' : 'Zug erklären'}
+            {isLoading ? 'Loading…' : 'Explain Move'}
           </button>
           <button
             onClick={() => onSaveApiKey('')}
-            className="text-slate-500 text-xs hover:text-slate-300"
-            title="API-Key entfernen"
+            className="text-cc-text-faint text-xs hover:text-cc-text-dim"
+            title="Remove API key"
           >
             ✕
           </button>
@@ -65,17 +65,17 @@ export function CoachingPanel({
       )}
 
       {isLoading && (
-        <div className="text-slate-400 text-xs animate-pulse">Trainer denkt nach…</div>
+        <div className="text-cc-text-dim text-xs animate-pulse">Coach is thinking…</div>
       )}
 
       {explanation && !isLoading && (
-        <div className="bg-slate-700 rounded p-2 text-slate-200 text-xs leading-relaxed">
+        <div className="bg-cc-surface rounded p-2 text-cc-text text-xs leading-relaxed">
           {explanation}
         </div>
       )}
 
       {error && !isLoading && (
-        <div className="text-red-400 text-xs">{error}</div>
+        <div className="text-cc-red text-xs">{error}</div>
       )}
     </div>
   )

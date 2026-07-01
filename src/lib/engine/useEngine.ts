@@ -126,8 +126,11 @@ export function useEngine() {
         const rawMate = mateMatch ? parseInt(mateMatch[1], 10) : null
 
         const isBlackToMove = evaluatingFenRef.current?.split(' ')[1] === 'b'
-        const cp = rawCp !== null ? (isBlackToMove ? -rawCp : rawCp) : null
-        const mate = rawMate !== null ? (isBlackToMove ? -rawMate : rawMate) : null
+        // mate=0 means the side to move is already in checkmate.
+        // Convert to a signed large cp so evalToCp never sees an ambiguous zero.
+        const cpFromMate0 = rawMate === 0 ? (isBlackToMove ? 10000 : -10000) : null
+        const cp = rawCp !== null ? (isBlackToMove ? -rawCp : rawCp) : cpFromMate0
+        const mate = rawMate !== null && rawMate !== 0 ? (isBlackToMove ? -rawMate : rawMate) : null
 
         if (multipvIdx === 1) {
           lastCpRef.current = cp
@@ -234,7 +237,7 @@ export function useEngine() {
         ...prev,
         isEvaluating: false,
         isAnalyzing: false,
-        error: `Engine-Fehler: ${e.message}`,
+        error: `Engine error: ${e.message}`,
       }))
     }
 
@@ -252,6 +255,23 @@ export function useEngine() {
     analysisQueueRef.current = null
     setState(prev => ({ ...prev, isEvaluating: true, isAnalyzing: false, result: null, error: null }))
     postEvalRef.current(fen)
+  }, [])
+
+  const clearAnalysis = useCallback(() => {
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+    analysisQueueRef.current = null
+    setState(prev => ({
+      ...prev,
+      evalResults: [],
+      result: null,
+      isAnalyzing: false,
+      isEvaluating: false,
+      analysisProgress: null,
+      error: null,
+    }))
   }, [])
 
   const analyzeGame = useCallback((fens: string[]) => {
@@ -283,5 +303,6 @@ export function useEngine() {
     error: state.error,
     evaluate,
     analyzeGame,
+    clearAnalysis,
   }
 }

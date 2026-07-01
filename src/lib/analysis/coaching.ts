@@ -2,10 +2,10 @@ import type { EvalResult } from '../engine/useEngine'
 import type { MoveAnalysis } from './classify'
 import { winPct } from './classify'
 
-export const SYSTEM_PROMPT = `Du bist ein prägnanter Schachtrainer. Erkläre einen einzelnen Zug in \
-2–3 Sätzen, verständlich für ein Vereinsmitglied (ca. 1200 Elo). Bewerte die \
-Stellung NICHT selbst — nutze ausschließlich die gelieferten Engine-Daten. \
-Keine Floskeln, kein Lob ohne Inhalt. Sprache: Deutsch.`
+export const SYSTEM_PROMPT = `You are a concise chess coach. Explain a single move in \
+2-3 sentences, understandable for a club player (roughly 1200 Elo). Do NOT evaluate \
+the position yourself — use only the engine data provided. \
+No filler phrases, no empty praise. Language: English.`
 
 function evalToCp(r: EvalResult): number {
   if (r.cp !== null) return r.cp
@@ -14,8 +14,10 @@ function evalToCp(r: EvalResult): number {
 }
 
 function formatEval(r: EvalResult): string {
-  if (r.mate !== null) return r.mate > 0 ? `Matt in ${r.mate}` : `Matt in ${-r.mate} (Gegner)`
+  if (r.mate !== null) return r.mate > 0 ? `Mate in ${r.mate}` : `Mate in ${-r.mate} (opponent)`
   if (r.cp !== null) {
+    if (r.cp >= 10000) return 'Mate (for you)'
+    if (r.cp <= -10000) return 'Mate (for opponent)'
     const p = r.cp / 100
     return p > 0 ? `+${p.toFixed(2)}` : p.toFixed(2)
   }
@@ -35,12 +37,12 @@ export function buildCoachingPrompt(params: {
   const bestMove = evalBefore.bestMoveSan ?? '?'
   const pv = evalBefore.pv ?? bestMove
 
-  return `Stellung (FEN): ${fenBefore}
-Gespielter Zug: ${sanPlayed}
-Engine-Bewertung vorher: ${formatEval(evalBefore)} (${wpBefore}%)
-Engine-Bewertung nachher: ${formatEval(evalAfter)} (${wpAfter}%)
-Bester Zug laut Engine: ${bestMove}  → Hauptvariante: ${pv}
-Klassifizierung: ${analysis.classification}   (Win-%-Verlust: ${analysis.lossInWinPct.toFixed(1)}%)
+  return `Position (FEN): ${fenBefore}
+Move played: ${sanPlayed}
+Engine eval before: ${formatEval(evalBefore)} (${wpBefore}%)
+Engine eval after: ${formatEval(evalAfter)} (${wpAfter}%)
+Best move per engine: ${bestMove}  → Main line: ${pv}
+Classification: ${analysis.classification}   (win-% loss: ${analysis.lossInWinPct.toFixed(1)}%)
 
-Erkläre: Warum ist dieser Zug ${analysis.classification}? Was wäre ${bestMove} besser gewesen und welche konkrete Idee/Drohung steckt dahinter?`
+Explain: Why is this move ${analysis.classification}? Why would ${bestMove} have been better, and what concrete idea/threat is behind it?`
 }

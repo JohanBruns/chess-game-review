@@ -16,9 +16,11 @@ interface EvalPanelProps {
 
 function formatEval(result: EvalResult): string {
   if (result.mate !== null) {
-    return `Matt in ${Math.abs(result.mate)}`
+    return `Mate in ${Math.abs(result.mate)}`
   }
   if (result.cp !== null) {
+    if (result.cp >= 10000) return 'Mate (+)'
+    if (result.cp <= -10000) return 'Mate (-)'
     const pawns = result.cp / 100
     return pawns >= 0 ? `+${pawns.toFixed(1)}` : pawns.toFixed(1)
   }
@@ -48,28 +50,28 @@ export function EvalPanel({
         <button
           onClick={onEvaluate}
           disabled={evalDisabled}
-          className="flex-1 px-3 py-2 rounded bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          className="flex-1 px-3 py-2 rounded bg-cc-green-dark hover:bg-cc-green disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
         >
-          Stellung bewerten
+          Evaluate Position
         </button>
         <button
           onClick={onAnalyzeGame}
           disabled={analyzeDisabled}
-          className="flex-1 px-3 py-2 rounded bg-emerald-700 hover:bg-emerald-600 disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          className="flex-1 px-3 py-2 rounded bg-cc-green hover:bg-cc-green-hover disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
         >
-          Partie analysieren
+          Analyze Game
         </button>
       </div>
 
       {isAnalyzing && analysisProgress && (
         <div className="flex flex-col gap-1">
-          <p className="text-slate-400 text-sm animate-pulse">
-            Analysiere… Zug {Math.ceil(analysisProgress.current / 2)} /{' '}
+          <p className="text-cc-text-dim text-sm animate-pulse">
+            Analyzing… Move {Math.ceil(analysisProgress.current / 2)} /{' '}
             {Math.ceil(analysisProgress.total / 2)}
           </p>
-          <div className="w-full bg-slate-700 rounded-full h-1.5">
+          <div className="w-full bg-cc-surface rounded-full h-1.5">
             <div
-              className="bg-emerald-500 h-1.5 rounded-full transition-all duration-200"
+              className="bg-cc-green h-1.5 rounded-full transition-all duration-200"
               style={{
                 width: `${(analysisProgress.current / analysisProgress.total) * 100}%`,
               }}
@@ -79,34 +81,34 @@ export function EvalPanel({
       )}
 
       {isEvaluating && (
-        <p className="text-slate-400 text-sm animate-pulse">Bewerte…</p>
+        <p className="text-cc-text-dim text-sm animate-pulse">Evaluating…</p>
       )}
 
       {!busy && result && (
         <div className="flex justify-between text-sm px-1">
           <span className="font-semibold">{formatEval(result)}</span>
           {result.bestMoveSan && (
-            <span className="font-mono text-slate-300">
-              Bester Zug: {result.bestMoveSan}
+            <span className="font-mono text-cc-text-dim">
+              Best move: {result.bestMoveSan}
             </span>
           )}
         </div>
       )}
 
       {whiteAccuracy !== null && blackAccuracy !== null && (
-        <div className="flex justify-between text-sm px-1 py-1 bg-slate-800 rounded">
+        <div className="flex justify-between text-sm px-1 py-1 bg-cc-panel rounded">
           <span>
-            <span className="text-slate-400">Weiß </span>
+            <span className="text-cc-text-dim">White </span>
             <span className="font-semibold text-white">{whiteAccuracy.toFixed(1)}%</span>
           </span>
           <span>
-            <span className="text-slate-400">Schwarz </span>
-            <span className="font-semibold text-slate-300">{blackAccuracy.toFixed(1)}%</span>
+            <span className="text-cc-text-dim">Black </span>
+            <span className="font-semibold text-cc-text-dim">{blackAccuracy.toFixed(1)}%</span>
           </span>
         </div>
       )}
 
-      {error && <p className="text-red-400 text-xs px-1">{error}</p>}
+      {error && <p className="text-cc-red text-xs px-1">{error}</p>}
     </div>
   )
 }
