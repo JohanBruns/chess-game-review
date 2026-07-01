@@ -126,10 +126,16 @@ export function useEngine() {
         const rawMate = mateMatch ? parseInt(mateMatch[1], 10) : null
 
         const isBlackToMove = evaluatingFenRef.current?.split(' ')[1] === 'b'
-        // mate=0 means the side to move is already in checkmate.
-        // Convert to a signed large cp so evalToCp never sees an ambiguous zero.
-        const cpFromMate0 = rawMate === 0 ? (isBlackToMove ? 10000 : -10000) : null
-        const cp = rawCp !== null ? (isBlackToMove ? -rawCp : rawCp) : cpFromMate0
+        // Any mate score (not just mate=0, the "already checkmated" edge case) converts
+        // to a signed ±10000 cp sentinel so evalToCp/secondBestCp never see an ambiguous
+        // null. rawMate > 0 means the side to move delivers mate (good, +10000 for them);
+        // rawMate <= 0 means they get mated (bad, -10000). Then flip into White-absolute
+        // perspective like rawCp. Applied uniformly so multipv 2 ("2nd best") lines that
+        // lead to forced mate also get a usable secondBestCp instead of staying null.
+        const cpFromMate = rawMate !== null
+          ? (isBlackToMove ? -1 : 1) * (rawMate > 0 ? 10000 : -10000)
+          : null
+        const cp = rawCp !== null ? (isBlackToMove ? -rawCp : rawCp) : cpFromMate
         const mate = rawMate !== null && rawMate !== 0 ? (isBlackToMove ? -rawMate : rawMate) : null
 
         if (multipvIdx === 1) {
