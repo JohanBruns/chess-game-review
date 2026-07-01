@@ -10,6 +10,8 @@ function evalToCp(r: EvalResult): number {
 function formatLabel(r: EvalResult): string {
   if (r.mate !== null) return r.mate > 0 ? `+M${r.mate}` : `-M${-r.mate}`
   if (r.cp !== null) {
+    if (r.cp >= 10000) return '+M'
+    if (r.cp <= -10000) return '-M'
     const p = r.cp / 100
     return p > 0 ? `+${p.toFixed(1)}` : p.toFixed(1)
   }
@@ -23,17 +25,17 @@ export function EvalBar({ evalResult }: { evalResult: EvalResult | null }) {
   return (
     <div className="relative flex flex-col w-10 self-stretch overflow-hidden rounded-l select-none">
       <div
-        className="bg-slate-900 w-full transition-all duration-300"
+        className="bg-cc-bg-dark w-full transition-all duration-300"
         style={{ height: `${100 - pct}%` }}
       />
       <div
-        className="bg-slate-100 w-full transition-all duration-300"
+        className="bg-cc-text w-full transition-all duration-300"
         style={{ height: `${pct}%` }}
       />
       {label && (
         <span
           className="absolute left-1/2 -translate-x-1/2 text-xs font-mono font-bold pointer-events-none"
-          style={{ top: pct < 15 ? '2px' : undefined, bottom: pct >= 15 ? '2px' : undefined, color: pct > 50 ? '#0f172a' : '#f1f5f9' }}
+          style={{ top: pct < 15 ? '2px' : undefined, bottom: pct >= 15 ? '2px' : undefined, color: pct > 50 ? '#262421' : '#e9e9e8' }}
         >
           {label}
         </span>

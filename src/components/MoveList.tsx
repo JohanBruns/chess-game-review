@@ -31,8 +31,8 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
 
   if (moves.length === 0) {
     return (
-      <div className="flex-1 min-h-0 flex items-center justify-center text-slate-500 text-xs italic">
-        Keine Züge geladen
+      <div className="flex-1 min-h-0 flex items-center justify-center text-cc-text-faint text-xs italic">
+        No moves loaded
       </div>
     )
   }
@@ -51,8 +51,8 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
       <table className="w-full border-collapse">
         <tbody>
           {rows.map(({ moveNumber, whitePly, blackPly }) => (
-            <tr key={moveNumber} className="hover:bg-slate-700/30">
-              <td className="text-slate-600 pr-1 pl-2 py-0 select-none w-7 text-right text-[11px] leading-5">
+            <tr key={moveNumber} className="hover:bg-cc-surface/30">
+              <td className="text-cc-text-faint pr-1 pl-2 py-0 select-none w-7 text-right text-[11px] leading-5">
                 {moveNumber}.
               </td>
               <td className="py-0 w-[46%]">
@@ -105,8 +105,8 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
       ref={isActive ? selectedRef : null}
       className={`w-full text-left px-1.5 py-0.5 rounded font-mono text-xs leading-5 transition-colors ${
         isActive
-          ? 'bg-blue-600 text-white font-semibold'
-          : 'text-slate-300 hover:bg-slate-600/50'
+          ? 'bg-cc-green text-white font-semibold'
+          : 'text-cc-text-dim hover:bg-cc-surface-hover/50'
       }`}
       onClick={() => onClick(ply)}
     >
@@ -120,7 +120,7 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
         />
       )}
       {isKeyMoment && (
-        <span className={`ml-0.5 ${isActive ? 'text-white/80' : 'text-red-400'}`}>⚡</span>
+        <span className={`ml-0.5 ${isActive ? 'text-white/80' : 'text-cc-red'}`}>⚡</span>
       )}
     </button>
   )

@@ -22,6 +22,10 @@ export function useGame() {
   const [currentPly, setCurrentPly] = useState(0)
 
   const loadPgn = useCallback((pgn: string) => {
+    if (!pgn.trim()) {
+      setGame((prev) => ({ ...prev, error: 'No PGN entered.' }))
+      return
+    }
     const chess = new Chess()
     try {
       // chess.com PGNs contain [%clk ...] / [%eval ...] annotations inside
@@ -29,10 +33,11 @@ export function useGame() {
       const cleaned = pgn.replace(/\{[^}]*\}/g, '').replace(/\s+/g, ' ').trim()
       chess.loadPgn(cleaned)
       const moves = chess.history({ verbose: true }) as Move[]
-      const fens =
-        moves.length === 0
-          ? [DEFAULT_POSITION]
-          : [moves[0].before, ...moves.map((m) => m.after)]
+      if (moves.length === 0) {
+        setGame((prev) => ({ ...prev, error: 'Invalid PGN: no moves found.' }))
+        return
+      }
+      const fens = [moves[0].before, ...moves.map((m) => m.after)]
       setGame({ fens, moves, error: null, isLoaded: true })
       setCurrentPly(0)
     } catch (e) {

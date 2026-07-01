@@ -49,7 +49,7 @@ export function useCoaching() {
         }),
       })
       const json = await res.json()
-      if (!res.ok) throw new Error(json.error?.message ?? 'API-Fehler')
+      if (!res.ok) throw new Error(json.error?.message ?? 'API error')
       setState({ explanation: json.content[0].text, isLoading: false, error: null })
     } catch (e) {
       setState({ explanation: null, isLoading: false, error: String(e) })

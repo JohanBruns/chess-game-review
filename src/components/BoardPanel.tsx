@@ -42,8 +42,8 @@ export function BoardPanel({ fen, lastMoveTo, classification }: BoardPanelProps)
           const file = lastMoveTo.charCodeAt(0) - 97  // 0 = a … 7 = h
           const rank = parseInt(lastMoveTo[1])          // 1–8
           return {
-            left: (file + 1) / 8 * 100,
-            top:  (8 - rank + 1) / 8 * 100,
+            left: (file + 0.5) / 8 * 100,
+            top:  (8 - rank + 0.5) / 8 * 100,
             src:  `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
           }
         })()
