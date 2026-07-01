@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useGame } from './hooks/useGame'
 import { useEngine } from './lib/engine/useEngine'
 import { GamePicker } from './components/GamePicker'
@@ -8,6 +8,7 @@ import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
+import { getBestMoveArrow, getAttackArrows } from './lib/analysis/arrows'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
@@ -92,13 +93,31 @@ function App() {
 
   const { explanation, isLoading: coachingLoading, error: coachingError, apiKey, saveApiKey, explainMove, reset: resetCoaching } = useCoaching()
 
+  const [showBestMoveArrow, setShowBestMoveArrow] = useState(false)
+
   const prevPlyRef = useRef<number>(currentPly)
   useEffect(() => {
     if (prevPlyRef.current !== currentPly) {
       prevPlyRef.current = currentPly
       resetCoaching()
+      setShowBestMoveArrow(false)
     }
   }, [currentPly, resetCoaching])
+
+  // Green suggestion arrow — only meaningful when the played move differs from the engine's best.
+  const bestMoveArrow = useMemo(() => {
+    if (!showBestMoveArrow || currentPly === 0) return undefined
+    const bestMoveSan = evalResults[currentPly - 1]?.bestMoveSan
+    if (!bestMoveSan || bestMoveSan === moves[currentPly - 1].san) return undefined
+    return getBestMoveArrow(fens[currentPly - 1], bestMoveSan) ?? undefined
+  }, [showBestMoveArrow, currentPly, evalResults, moves, fens])
+
+  // Attack/attacked-by arrows — pure board geometry, always shown for the current move.
+  const attackArrows = useMemo(() => {
+    if (currentPly === 0) return undefined
+    const move = moves[currentPly - 1]
+    return getAttackArrows(currentFen, move.to, move.color)
+  }, [currentPly, moves, currentFen])
 
   // Sound effects
   const captureAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -123,6 +142,12 @@ function App() {
     evalResults[currentPly] != null &&
     moveAnalyses != null &&
     moveAnalyses[currentPly - 1]?.classification !== 'Book'
+
+  const canShowBestMove = currentPly > 0 && evalResults[currentPly - 1]?.bestMoveSan != null
+
+  const handleToggleBestMoveArrow = useCallback(() => {
+    setShowBestMoveArrow(v => !v)
+  }, [])
 
   const handleExplain = useCallback(() => {
     if (!canExplain || !moveAnalyses) return
@@ -175,8 +200,11 @@ function App() {
             <div className="aspect-square h-full">
               <BoardPanel
                 fen={currentFen}
+                lastMoveFrom={currentPly > 0 ? moves[currentPly - 1].from : undefined}
                 lastMoveTo={currentPly > 0 ? moves[currentPly - 1].to : undefined}
                 classification={currentPly > 0 ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
+                bestMoveArrow={bestMoveArrow}
+                attackArrows={attackArrows}
               />
             </div>
           </div>
@@ -226,7 +254,7 @@ function App() {
               />
             </div>
           )}
-          <ClassLegend />
+          <ClassLegend moveAnalyses={moveAnalyses} />
           <div className="shrink-0 border-t border-cc-border">
             <CoachingPanel
               apiKey={apiKey}
@@ -236,6 +264,9 @@ function App() {
               explanation={explanation}
               isLoading={coachingLoading}
               error={coachingError}
+              canShowBestMove={canShowBestMove}
+              showBestMoveArrow={showBestMoveArrow}
+              onToggleBestMoveArrow={handleToggleBestMoveArrow}
             />
           </div>
         </div>

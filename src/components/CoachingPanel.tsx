@@ -8,6 +8,9 @@ interface CoachingPanelProps {
   explanation: string | null
   isLoading: boolean
   error: string | null
+  canShowBestMove: boolean
+  showBestMoveArrow: boolean
+  onToggleBestMoveArrow: () => void
 }
 
 export function CoachingPanel({
@@ -18,12 +21,29 @@ export function CoachingPanel({
   explanation,
   isLoading,
   error,
+  canShowBestMove,
+  showBestMoveArrow,
+  onToggleBestMoveArrow,
 }: CoachingPanelProps) {
   const [draft, setDraft] = useState('')
 
   return (
     <div className="bg-cc-panel rounded p-3 text-sm flex flex-col gap-2">
-      <div className="text-cc-text-dim font-semibold text-xs uppercase tracking-wide">Coaching</div>
+      <div className="flex items-center justify-between">
+        <div className="text-cc-text-dim font-semibold text-xs uppercase tracking-wide">Coaching</div>
+        <button
+          onClick={onToggleBestMoveArrow}
+          disabled={!canShowBestMove}
+          aria-pressed={showBestMoveArrow}
+          className={`px-3 py-1 rounded text-xs disabled:opacity-40 transition-colors ${
+            showBestMoveArrow
+              ? 'bg-cc-green text-white hover:bg-cc-green-hover'
+              : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
+          }`}
+        >
+          Best
+        </button>
+      </div>
 
       {apiKey === '' ? (
         <form
