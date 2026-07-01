@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Internal planning files (keep locally, don't commit)
+CLAUDE.md
+Plan.md
+handoff.md
+milestone4.md
+todolist.md
