@@ -65,7 +65,10 @@ export function isSacrifice(move: Move): boolean {
   try {
     const chess = new Chess(move.after)
     const oppColor = move.color === 'w' ? 'b' : 'w'
-    return chess.isAttacked(move.to, oppColor)
+    // Genuinely hanging: opponent can take it AND the mover has nothing recapturing
+    // there. If the mover's own side also defends the square, any "capture" is just
+    // an even trade (e.g. a supported knight outpost) — not a sacrifice.
+    return chess.isAttacked(move.to, oppColor) && !chess.isAttacked(move.to, move.color)
   } catch {
     return false
   }
@@ -81,19 +84,28 @@ export function classifyMove(
   bestCp?: number | null,
   secondBestCp?: number | null,
 ): MoveClass {
+  const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
+
   // Brilliant: sacrifice + nearly best + position not already trivially won
+  // + you are NOT lost afterward (winPct >= 50 = at least equal).
   if (
-    move != null && winPctBefore != null &&
+    move != null && winPctBefore != null && winPctAfter != null &&
     loss <= 2 && winPctBefore < 90 &&
+    winPctAfter >= 50 &&
     isSacrifice(move)
   ) return 'Brilliant'
 
-  // Great: clearly best move where 2nd-best is significantly worse (only good move)
+  // Great: clearly best move where the 2nd-best alternative is a genuinely bad,
+  // no-longer-favored outcome (winPct < 50) AND the gap is well past Blunder-scale
+  // (>= 30 win%-points, vs. the existing >20-loss Blunder cutoff) — i.e. missing
+  // this move would have been a serious, critical-position error, not just
+  // "slightly less good while still comfortably winning either way".
   if (
     isEngineBestMove &&
     bestCp != null && secondBestCp != null &&
     winPctBefore != null && winPctBefore < 85 &&
-    winPct(bestCp) - winPct(secondBestCp) >= 10
+    winPct(bestCp) - winPct(secondBestCp) >= 30 &&
+    winPct(secondBestCp) < 50
   ) return 'Great'
 
   if (isEngineBestMove) return 'Best'

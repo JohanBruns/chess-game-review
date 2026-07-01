@@ -1,18 +1,24 @@
 import { describe, it, expect } from 'vitest'
-import type { Move } from 'chess.js'
+import { Chess, type Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
-import { winPct, classifyMove, buildMoveAnalyses, moveAccuracy, playerAccuracy, findKeyMoments } from './classify'
+import { winPct, classifyMove, isSacrifice, buildMoveAnalyses, moveAccuracy, playerAccuracy, findKeyMoments } from './classify'
 import type { MoveAnalysis } from './classify'
 
 // Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
 const mv = (san: string) => ({ san } as unknown as Move)
-const ev = (cp: number, bestMoveSan: string | null = null): EvalResult => ({
+const ev = (cp: number, bestMoveSan: string | null = null, secondBestCp: number | null = null): EvalResult => ({
   cp,
   mate: null,
   bestMoveSan,
   pv: null,
-  secondBestCp: null,
+  secondBestCp,
 })
+
+// A synthetic capture-type "sacrifice" move — isSacrifice's capture branch only reads
+// .piece/.captured (never .to/.after), so a cast is safe here (unlike the non-capture
+// branch tests below, which need a real board to check attacker/defender squares).
+const sacMv = (san: string): Move =>
+  ({ san, piece: 'q', captured: 'n', color: 'w', to: 'e4', after: 'x' } as unknown as Move)
 
 describe('winPct', () => {
   it('returns 50 at cp=0', () => {
@@ -91,6 +97,105 @@ describe('classifyMove', () => {
   })
 })
 
+describe('isSacrifice', () => {
+  it('capture worth less than the mover → sacrifice', () => {
+    // queen (9) captures a knight (3)
+    const move = { piece: 'q', captured: 'n', color: 'w', to: 'e4', after: 'x' } as unknown as Move
+    expect(isSacrifice(move)).toBe(true)
+  })
+
+  it('capture worth more than or equal to the mover → not a sacrifice', () => {
+    // knight (3) captures a queen (9)
+    const move = { piece: 'n', captured: 'q', color: 'w', to: 'e4', after: 'x' } as unknown as Move
+    expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('pawn non-capture is never a sacrifice', () => {
+    const move = { piece: 'p', captured: undefined, color: 'w', to: 'e4', after: 'x' } as unknown as Move
+    expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('non-capture onto a square defended by the mover\'s own side → not a sacrifice (regression: defended outpost)', () => {
+    // Sveshnikov Sicilian: 9.Nd5 lands the knight on a square attacked by ...Nf6
+    // but defended by White's own e4 pawn — a normal supported move, not a sacrifice.
+    const chess = new Chess()
+    for (const san of ['e4', 'c5', 'Nf3', 'Nc6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5', 'Ndb5', 'd6', 'Bg5', 'a6', 'Na3', 'b5']) {
+      chess.move(san)
+    }
+    const move = chess.move('Nd5')
+    expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('non-capture onto a square genuinely undefended → still a sacrifice', () => {
+    // White Nc3-d5: attacked by Black's e6 pawn, no White piece defends d5.
+    const chess = new Chess('4k3/8/4p3/8/8/2N5/8/4K3 w - - 0 1')
+    const move = chess.move({ from: 'c3', to: 'd5' })
+    expect(isSacrifice(move)).toBe(true)
+  })
+})
+
+describe('classifyMove — Brilliant', () => {
+  it('fires: sacrifice, small loss, not trivially won, not lost afterward', () => {
+    // winPctBefore=67.62 (cp=200), loss=1 → winPctAfter=66.62 (>=50)
+    expect(classifyMove(1, false, sacMv('Qxh7'), 67.6212, null, null)).toBe('Brilliant')
+  })
+
+  it('blocked: sacrifice played from a position that stays lost afterward', () => {
+    // winPctBefore=24.89 (cp=-300), loss=1 → winPctAfter=23.89 (<50) — still losing
+    expect(classifyMove(1, false, sacMv('Qxh7'), 24.8874, null, null)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv('Qxh7'), 24.8874, null, null)).toBe('Excellent')
+  })
+
+  it('blocked: position already trivially won (winPctBefore >= 90)', () => {
+    // winPctBefore=92.94 (cp=700), loss=1
+    expect(classifyMove(1, false, sacMv('Qxh7'), 92.9397, null, null)).not.toBe('Brilliant')
+  })
+
+  it('blocked: loss too big (> 2)', () => {
+    expect(classifyMove(3, false, sacMv('Qxh7'), 67.6212, null, null)).not.toBe('Brilliant')
+  })
+
+  it('blocked: move is not a sacrifice', () => {
+    const notASac = mv('Nf3')
+    expect(classifyMove(1, false, notASac, 67.6212, null, null)).not.toBe('Brilliant')
+  })
+})
+
+describe('classifyMove — Great', () => {
+  it('fires: best move keeps the game fine, 2nd-best loses it (critical position)', () => {
+    // bestCp=200 → winPctBefore=67.62 (<85); secondBestCp=-400 → winPct=18.65 (<50); gap≈48.97
+    expect(classifyMove(0, true, undefined, 67.6212, 200, -400)).toBe('Great')
+  })
+
+  it('blocked: big gap but 2nd-best is still favored to win (key regression)', () => {
+    // bestCp=450 → winPctBefore=83.98 (<85); secondBestCp=20 → winPct=51.84 (NOT <50); gap≈32.14 (passes gap alone)
+    expect(classifyMove(0, true, undefined, 83.9826, 450, 20)).not.toBe('Great')
+  })
+
+  it('blocked: ordinary recapture-style gap that would have wrongly fired under the old >=10 threshold', () => {
+    // bestCp=300, secondBestCp=100 → gap≈16.01
+    expect(classifyMove(0, true, undefined, 75.1126, 300, 100)).not.toBe('Great')
+  })
+
+  it('fires: 2nd-best alternative is forced mate', () => {
+    // bestCp=50 → winPctBefore=54.59 (<85); secondBestCp=-10000 (mate sentinel) → winPct≈0; gap≈54.59
+    expect(classifyMove(0, true, undefined, 54.5896, 50, -10000)).toBe('Great')
+  })
+
+  it('blocked: not the engine\'s best move', () => {
+    expect(classifyMove(0, false, undefined, 67.6212, 200, -400)).not.toBe('Great')
+  })
+
+  it('blocked: position already comfortably winning (winPctBefore >= 85)', () => {
+    // bestCp=900 → winPctBefore=96.49 (>=85)
+    expect(classifyMove(0, true, undefined, 96.4902, 900, -400)).not.toBe('Great')
+  })
+
+  it('blocked: secondBestCp is null (no throw, no false positive)', () => {
+    expect(classifyMove(0, true, undefined, 67.6212, 200, null)).not.toBe('Great')
+  })
+})
+
 describe('buildMoveAnalyses — Vorzeichen-Logik', () => {
   it('white blunder: cp drops from 0 to -500 → Blunder', () => {
     const [a] = buildMoveAnalyses([mv('d4')], [ev(0), ev(-500)])
@@ -163,6 +268,27 @@ describe('buildMoveAnalyses — Vorzeichen-Logik', () => {
     const [a] = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)])
     expect(a.accuracy).toBeGreaterThanOrEqual(0)
     expect(a.accuracy).toBeLessThanOrEqual(100)
+  })
+})
+
+describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
+  it('sacrifice played from a losing position is NOT Brilliant, even with tiny loss', () => {
+    // cpBefore=-300 (winPct≈24.89), cpAfter=-320 (winPct≈23.54) → loss≈1.35, still losing after
+    const [a] = buildMoveAnalyses([sacMv('Qxh7')], [ev(-300), ev(-320)])
+    expect(a.classification).not.toBe('Brilliant')
+    expect(a.classification).toBe('Excellent')
+  })
+
+  it('sacrifice played while staying afloat IS Brilliant', () => {
+    // cpBefore=200 (winPct≈67.62), cpAfter=180 (winPct≈65.99) → loss≈1.63, still >=50 after
+    const [a] = buildMoveAnalyses([sacMv('Qxh7')], [ev(200), ev(180)])
+    expect(a.classification).toBe('Brilliant')
+  })
+
+  it('Great fires end-to-end via secondBestCp on the EvalResult', () => {
+    // bestCp=200 (winPctBefore≈67.62<85), secondBestCp=-400 (winPct≈18.65<50) → gap≈48.97
+    const [a] = buildMoveAnalyses([mv('Nf3')], [ev(200, 'Nf3', -400), ev(180)])
+    expect(a.classification).toBe('Great')
   })
 })
 
