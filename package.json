@@ -1,8 +1,23 @@
 {
-  "name": "game-review",
-  "private": true,
-  "version": "0.0.0",
+  "name": "chess-game-review",
+  "description": "A web-based chess game analysis tool with real-time Stockfish engine evaluation, move classification, and coaching insights",
+  "version": "1.0.0",
   "type": "module",
+  "author": "Johan Bruns",
+  "license": "MIT",
+  "homepage": "https://github.com/JohanBruns/chess-game-review",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JohanBruns/chess-game-review.git"
+  },
+  "keywords": [
+    "chess",
+    "analysis",
+    "stockfish",
+    "game-review",
+    "pgn",
+    "chess.com"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
