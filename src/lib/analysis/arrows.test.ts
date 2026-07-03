@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getBestMoveArrow, getAttackArrows } from './arrows'
+import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './arrows'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -18,6 +18,20 @@ describe('getBestMoveArrow', () => {
 
   it('returns null for a SAN that is illegal in the given position', () => {
     expect(getBestMoveArrow(START_FEN, 'e5')).toBeNull()
+  })
+})
+
+describe('getThreatArrow', () => {
+  it('resolves the opponent/side-to-move best-move SAN to from/to squares', () => {
+    expect(getThreatArrow(START_FEN, 'e4')).toEqual({ from: 'e2', to: 'e4' })
+  })
+
+  it('returns null when the threat SAN is null', () => {
+    expect(getThreatArrow(START_FEN, null)).toBeNull()
+  })
+
+  it('returns null for a SAN that is illegal in the given position', () => {
+    expect(getThreatArrow(START_FEN, 'e5')).toBeNull()
   })
 })
 

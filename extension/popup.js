@@ -41,15 +41,23 @@ btn.addEventListener('click', async () => {
       username: userInput.value.trim() || null,
     })
     const pgn = response?.pgn
+    const username = response?.username
+
+    const baseUrl = (urlInput.value || 'https://chess-game-review-drab.vercel.app').replace(/\/$/, '')
 
     if (!pgn) {
-      status.className = 'error'
-      status.textContent = 'PGN nicht gefunden. Seite vollständig laden und nochmal versuchen.'
+      const fallbackUrl = username
+        ? `${baseUrl}/?username=${encodeURIComponent(username)}&autofetch=1`
+        : baseUrl
+      await chrome.tabs.create({ url: fallbackUrl })
+      status.className = ''
+      status.textContent = username
+        ? `PGN nicht gefunden — App geöffnet, bitte Partie für "${username}" auswählen ✓`
+        : 'PGN nicht gefunden — App geöffnet, bitte Partie auswählen ✓'
       btn.disabled = false
       return
     }
 
-    const baseUrl = (urlInput.value || 'https://chess-game-review-drab.vercel.app').replace(/\/$/, '')
     const url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
 
     // URL-Längenlimit (~8000 Zeichen); bei Überschreitung Warnung

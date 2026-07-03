@@ -19,6 +19,8 @@ interface ChessComGame {
 interface GamePickerProps {
   onLoad: (pgn: string) => void
   error: string | null
+  initialUsername?: string | null
+  autoFetch?: boolean
 }
 
 const TIME_ICON: Record<string, string> = {
@@ -66,7 +68,7 @@ async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
     .slice(0, 20)
 }
 
-export function GamePicker({ onLoad, error }: GamePickerProps) {
+export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePickerProps) {
   const [username, setUsername] = useState<string>(
     () => localStorage.getItem('chess-username') ?? '',
   )
@@ -112,6 +114,25 @@ export function GamePicker({ onLoad, error }: GamePickerProps) {
       setIsLoading(false)
     }
   }, [username])
+
+  // initialUsername arrives one render after mount (via the app's own URL-param effect),
+  // so a lazy useState initializer alone won't catch it. Guard on a ref so it's only applied once.
+  const appliedInitialUsernameRef = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (initialUsername && appliedInitialUsernameRef.current !== initialUsername) {
+      appliedInitialUsernameRef.current = initialUsername
+      setUsername(initialUsername)
+      localStorage.setItem('chess-username', initialUsername)
+    }
+  }, [initialUsername])
+
+  const autoFetchedRef = useRef(false)
+  useEffect(() => {
+    if (autoFetch && !autoFetchedRef.current && username.trim()) {
+      autoFetchedRef.current = true
+      handleFetch()
+    }
+  }, [autoFetch, username, handleFetch])
 
   const handleSelectGame = (pgn: string) => {
     onLoad(pgn)

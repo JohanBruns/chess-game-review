@@ -1,19 +1,24 @@
 // Injected into chess.com/game/* pages.
 // Tries multiple strategies to extract PGN.
 
+// Username: provided by popup > URL query param > page DOM
+function resolveUsername(providedUsername = null) {
+  return (
+    providedUsername ||
+    new URLSearchParams(location.search).get('username') ||
+    document.querySelector('[data-username]')?.dataset?.username ||
+    document.querySelector('.user-username-component')?.textContent?.trim() ||
+    null
+  )
+}
+
 async function extractPgn(providedUsername = null) {
   const urlMatch = location.pathname.match(/\/game\/(?:(live|daily|chess960)\/)?(\d+)/)
   if (!urlMatch) return null
   const gameType = urlMatch[1] ?? 'live'
   const gameId = urlMatch[2]
 
-  // Username: provided by popup > URL query param > page DOM
-  const username =
-    providedUsername ||
-    new URLSearchParams(location.search).get('username') ||
-    document.querySelector('[data-username]')?.dataset?.username ||
-    document.querySelector('.user-username-component')?.textContent?.trim() ||
-    null
+  const username = resolveUsername(providedUsername)
 
   // Strategy 1: Official public API — requires username, returns full PGN
   if (username) {
@@ -95,6 +100,8 @@ function extractFromNextData() {
 // Listen for message from popup
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type !== 'GET_PGN') return
-  extractPgn(msg.username ?? null).then(pgn => sendResponse({ pgn }))
+  extractPgn(msg.username ?? null).then(pgn => {
+    sendResponse({ pgn, username: resolveUsername(msg.username ?? null) })
+  })
   return true // keep channel open for async response
 })

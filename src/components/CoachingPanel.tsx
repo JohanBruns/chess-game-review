@@ -11,6 +11,9 @@ interface CoachingPanelProps {
   canShowBestMove: boolean
   showBestMoveArrow: boolean
   onToggleBestMoveArrow: () => void
+  canShowThreat: boolean
+  showThreatArrow: boolean
+  onToggleThreatArrow: () => void
 }
 
 export function CoachingPanel({
@@ -24,6 +27,9 @@ export function CoachingPanel({
   canShowBestMove,
   showBestMoveArrow,
   onToggleBestMoveArrow,
+  canShowThreat,
+  showThreatArrow,
+  onToggleThreatArrow,
 }: CoachingPanelProps) {
   const [draft, setDraft] = useState('')
 
@@ -31,18 +37,32 @@ export function CoachingPanel({
     <div className="bg-cc-panel rounded p-3 text-sm flex flex-col gap-2">
       <div className="flex items-center justify-between">
         <div className="text-cc-text-dim font-semibold text-xs uppercase tracking-wide">Coaching</div>
-        <button
-          onClick={onToggleBestMoveArrow}
-          disabled={!canShowBestMove}
-          aria-pressed={showBestMoveArrow}
-          className={`px-3 py-1 rounded text-xs disabled:opacity-40 transition-colors ${
-            showBestMoveArrow
-              ? 'bg-cc-green text-white hover:bg-cc-green-hover'
-              : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
-          }`}
-        >
-          Best
-        </button>
+        <div className="flex gap-1">
+          <button
+            onClick={onToggleBestMoveArrow}
+            disabled={!canShowBestMove}
+            aria-pressed={showBestMoveArrow}
+            className={`px-3 py-1 rounded text-xs disabled:opacity-40 transition-colors ${
+              showBestMoveArrow
+                ? 'bg-cc-green text-white hover:bg-cc-green-hover'
+                : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
+            }`}
+          >
+            Best
+          </button>
+          <button
+            onClick={onToggleThreatArrow}
+            disabled={!canShowThreat}
+            aria-pressed={showThreatArrow}
+            className={`px-3 py-1 rounded text-xs disabled:opacity-40 transition-colors ${
+              showThreatArrow
+                ? 'bg-cc-red text-white hover:bg-cc-red-hover'
+                : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
+            }`}
+          >
+            Threats
+          </button>
+        </div>
       </div>
 
       {apiKey === '' ? (

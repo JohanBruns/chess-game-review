@@ -11,6 +11,8 @@ interface BoardPanelProps {
   bestMoveArrow?: { from: string; to: string }
   // Squares the played move now attacks / is attacked by (pure board geometry).
   attackArrows?: { attacks: string[]; attackedBy: string[] }
+  // Engine's best move in the current position — the standing threat, shown as a red arrow.
+  threatArrow?: { from: string; to: string }
 }
 
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
@@ -18,6 +20,7 @@ interface BoardPanelProps {
 const BEST_MOVE_ARROW_COLOR = '#81b64c'
 const ATTACKS_ARROW_COLOR = '#e2903f'
 const ATTACKED_BY_ARROW_COLOR = '#e5533d'
+const THREAT_ARROW_COLOR = '#e02c2c'
 
 const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Brilliant:  'brilliant_128x.png',
@@ -67,6 +70,7 @@ export function BoardPanel({
   classification,
   bestMoveArrow,
   attackArrows,
+  threatArrow,
 }: BoardPanelProps) {
   const squareStyles: Record<string, React.CSSProperties> = {}
   if (lastMoveFrom && lastMoveTo && classification) {
@@ -86,6 +90,9 @@ export function BoardPanel({
     for (const attacker of attackArrows.attackedBy) {
       arrows.push({ startSquare: attacker, endSquare: lastMoveTo, color: ATTACKED_BY_ARROW_COLOR })
     }
+  }
+  if (threatArrow) {
+    arrows.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
   }
 
   const badge =

@@ -18,6 +18,12 @@ export function getBestMoveArrow(fenBefore: string, bestMoveSan: string | null):
   }
 }
 
+// The engine's best move in the current position — the standing threat. Reuses
+// getBestMoveArrow's SAN parse; same {from,to} contract.
+export function getThreatArrow(fenAfterPlayedMove: string, opponentBestSan: string | null): ArrowSquares | null {
+  return getBestMoveArrow(fenAfterPlayedMove, opponentBestSan)
+}
+
 export interface AttackArrows {
   attacks: Square[]     // enemy squares the moved piece now attacks
   attackedBy: Square[]  // enemy squares that attack the moved piece's destination
