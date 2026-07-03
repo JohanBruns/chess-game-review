@@ -33,7 +33,14 @@ javascript:(async()=>{
     }
   }
 
-  if (!pgn) { alert('PGN nicht gefunden. Seite vollständig laden und nochmal versuchen.'); return; }
+  if (!pgn) {
+    const username = new URLSearchParams(location.search).get('username');
+    const fallbackUrl = username
+      ? `${APP}/?username=${encodeURIComponent(username)}&autofetch=1`
+      : APP;
+    window.open(fallbackUrl, '_blank');
+    return;
+  }
 
   const url = `${APP}/?pgn=${encodeURIComponent(pgn)}`;
   if (url.length > 8000) { alert(`PGN zu lang für URL (${url.length} Zeichen).`); return; }

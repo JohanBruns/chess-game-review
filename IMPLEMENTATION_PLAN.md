@@ -1,0 +1,192 @@
+# Implementation Plan — chess.com-parity features for `chess-game-review`
+
+> For Claude Code **Plan Mode**. Read this whole file, inspect the referenced source,
+> then produce a step-by-step plan. Implement task by task, run `vitest` after each,
+> keep commits small. Do NOT refactor unrelated code.
+
+## Repo ground truth (already exists — build on it, don't reinvent)
+
+- `src/lib/analysis/classify.ts`
+  - `type MoveClass = 'Book'|'Brilliant'|'Great'|'Best'|'Excellent'|'Good'|'Inaccuracy'|'Mistake'|'Blunder'`
+  - `winPct(cp: number): number` — Lichess sigmoid (const `0.00368208`)
+  - `moveAccuracy(lossInWinPct): number` — Lichess per-move accuracy
+  - `playerAccuracy(analyses, player): number|null` — currently a **plain arithmetic mean**
+  - `isSacrifice(move: Move): boolean` — exchange-sac OR piece hangs on destination
+  - `classifyMove(loss, isEngineBestMove, move?, winPctBefore?, bestCp?, secondBestCp?): MoveClass`
+  - `buildMoveAnalyses(moves, evalResults, openingPly): MoveAnalysis[]`
+- `src/lib/analysis/arrows.ts`
+  - `getBestMoveArrow(fenBefore, bestMoveSan): { from, to } | null`
+  - `getAttackArrows(fenAfter, moveTo, moverColor): { attacks, attackedBy }` — pure geometry
+- `src/lib/engine/useEngine.ts`
+  - `EvalResult { cp, mate, bestMoveSan, pv, secondBestCp }`, MultiPV=2, `go depth 15`, 10s timeout
+- `src/components/BoardPanel.tsx`
+  - Renders arrows via **react-chessboard's built-in `arrows: Arrow[]` prop** (NOT a custom SVG overlay)
+  - Props already present: `bestMoveArrow`, `attackArrows`
+  - Colors: `BEST_MOVE_ARROW_COLOR='#81b64c'`, `ATTACKS_ARROW_COLOR='#e2903f'`, `ATTACKED_BY_ARROW_COLOR='#e5533d'`
+- Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts` (Vitest)
+- Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book. **No `miss` asset, no `forced` asset.**
+
+## Global constraints
+
+- TypeScript strict, no `any`. Keep functions pure/testable where the current code is.
+- Every new/changed classification or arrow function gets Vitest cases.
+- Threat & new classes must degrade gracefully when `evalResults[i+1]` or `secondBestCp` is `null`.
+- Do NOT build a separate `<BoardArrows/>` SVG overlay — extend the existing `arrows` array.
+- Do NOT raise MultiPV or engine depth in these tasks (none of them require it).
+
+---
+
+## T1 — Real engine-derived THREAT arrow (replaces the "attack = threat" confusion)
+
+**Why:** `getAttackArrows` is board geometry, not chess.com's "Show Threats". chess.com's
+threat = the opponent's best reply in the current position (engine-derived). That data is
+already computed as `evalResults[i+1].bestMoveSan`.
+
+**Do:**
+1. Add `src/lib/analysis/arrows.ts` → `getThreatArrow(fenAfterPlayedMove, opponentBestSan): { from, to } | null`
+   — thin wrapper reusing the same SAN→squares parse pattern as `getBestMoveArrow`
+   (opponentBestSan = `evalResults[currentPly + 1]?.bestMoveSan`).
+2. In the board container (wherever `bestMoveArrow`/`attackArrows` props are assembled),
+   compute the threat arrow for the current ply and pass it down as a new
+   `threatArrow?: { from: string; to: string }` prop.
+3. In `BoardPanel.tsx`: add `const THREAT_ARROW_COLOR = '#e02c2c'` and push the threat arrow
+   into the existing `arrows` array (after best-move so red renders on top).
+4. Keep `attackArrows` but treat them as an optional separate "learning overlay", never
+   labeled "threat".
+
+**Acceptance:**
+- With `showThreats` on, a red arrow shows the opponent's best reply to the current position.
+- Suppressed when `threatArrow` is null (e.g. game over, or no next eval yet).
+- `arrows.test.ts`: given a FEN + opponent best SAN → correct `{from,to}`; null SAN → null.
+
+**Optional (only if you want exact chess.com "threat-before-they-move" semantics):**
+- Add `getNullMoveThreat(fen, engine)`: build a null-move FEN (flip `side-to-move`, clear
+  en-passant), guard against illegal positions (side-to-move-not-in-check check), run one
+  engine search, return its bestmove squares. Gate behind a flag; default off.
+
+## T2 — `Miss` classification (Missed Win)
+
+**Definition (chess.com):** you had a winning opportunity created by the opponent's mistake
+and instead ended up equal or worse.
+
+**Do:**
+1. Extend `MoveClass` union with `'Miss'`.
+2. In `classifyMove`, BEFORE the `Mistake`/`Blunder` fallthrough, add:
+   - `winPct(bestCp) >= MISS_WIN_AVAILABLE` (default `80`) — a win was on the board, AND
+   - `winPctAfter <= MISS_RESULT_CEILING` (default `55`) — you ended equal/worse, AND
+   - not already trivially winning without the move (`winPctBefore < 80` guard so it's a
+     *newly available* win, mirroring "capitalize on opponent's mistake").
+   - → return `'Miss'` (takes priority over Mistake/Blunder for this case).
+3. Expose the two thresholds as named consts at top of file.
+4. Add a `miss` mark asset reference; if no PNG exists, use a placeholder + TODO note in the
+   PR (don't block on art).
+
+**Acceptance:**
+- A position where best move wins (winPct≈85) but the played move drops to ≈50 → `Miss`,
+  not `Mistake`. Covered by a new `classify.test.ts` case.
+- Does not fire when the player was already winning big beforehand.
+
+## T3 — `Forced` / Only-move classification
+
+**Do:**
+1. Extend `MoveClass` union with `'Forced'`.
+2. In `buildMoveAnalyses`, before eval-based classification, if the position before the move
+   has exactly one legal move (`new Chess(fenBefore).moves().length === 1`) → classify `Forced`,
+   `accuracy: 100`, and EXCLUDE from `playerAccuracy` (same treatment as `Book`).
+3. Update `playerAccuracy` filter to also drop `'Forced'` (and later `'Book'` stays dropped).
+
+**Acceptance:**
+- Only-legal-move positions classify as `Forced` and don't distort accuracy.
+- Test with a simple forced-recapture / only-king-move FEN.
+
+## T4 — Brilliant / Great refinements (closer to chess.com V2)
+
+**Brilliant — tighten `isSacrifice` + `classifyMove`:**
+1. Add a "sac actually loses for the opponent" guard: after the hypothetical opponent capture
+   on `move.to`, a shallow static check (or reuse eval) should NOT leave the mover worse than
+   `winPctAfter` by more than a small margin. Goal: exclude plain hangs that the engine merely
+   tolerates.
+2. Exclude when a **more valuable** friendly piece is simultaneously hanging for free
+   (that's a blunder, not a brilliancy).
+3. Keep existing gates (`loss<=2`, `winPctBefore<90`, `winPctAfter>=50`).
+
+**Great — broaden beyond only-move:**
+1. Replace strict `isEngineBestMove` with near-best tolerance: `loss <= 1.5`.
+2. Keep the existing "only good move" branch (gap ≥30 win%, 2nd-best <50).
+3. ADD swing branches (best/near-best required):
+   - lost→equal: `winPctBefore < 50 && winPctAfter >= 50`
+   - equal→winning: `winPctBefore <= 55 && winPctAfter >= 75`
+4. Precedence: `Brilliant` > `Great` > `Best` (keep current order).
+
+**Optional rating-awareness:**
+- Add optional `playerRating?: number` to `classifyMove`; when provided, loosen Brilliant/Great
+  thresholds slightly below ~1600 and tighten above ~2000. Default behavior unchanged when omitted.
+
+**Acceptance:**
+- New `classify.test.ts` cases: a real queen-sac best move → `Brilliant`; a free hang the engine
+  dislikes → NOT Brilliant; a lost→equal only-move → `Great`; a "slightly-less-good while still
+  winning" move → NOT Great.
+
+## T5 — Accuracy aggregation (Lichess/chess.com-style, not plain mean)
+
+**Why:** per-move formulas are already Lichess; the *game* number should use the same aggregation.
+
+**Do:** rewrite `playerAccuracy` to return the mean of two sub-scores over the player's
+non-Book/non-Forced moves:
+1. **Volatility-weighted mean**: weight each move's accuracy by the local win% volatility
+   (std-dev of the win% sequence in a sliding window, e.g. ±2 plies, min weight 0.5).
+   → needs the per-move win% trajectory; derive from `evalResults` (already available to the caller)
+   and pass it in, or compute win% inside `buildMoveAnalyses` and store it on `MoveAnalysis`.
+2. **Harmonic mean** of the same per-move accuracies.
+3. Return `(weightedMean + harmonicMean) / 2`, clamped to [0,100].
+
+**Acceptance:**
+- A game with one big blunder among strong moves scores meaningfully lower than the old plain
+  mean (harmonic mean punishes the low outlier). Add a `classify.test.ts` case asserting the
+  new value < old arithmetic mean for a crafted sequence.
+
+## T6 — Arrow rendering polish (from the attached arrow spec, reconciled to react-chessboard)
+
+**Do:**
+1. Best-move arrow: SUPPRESS when best == played (same from & to) — add the guard where the
+   `bestMoveArrow` prop is assembled.
+2. Toggles: `showBestMove` (default true), `showThreats` (default false) wired to a small
+   settings state/context; feed both into the arrows assembly.
+3. Played-move indicator: highlight from/to squares in the classification color via
+   react-chessboard `customSquareStyles` (NOT a separate overlay). Optional
+   `playedMoveAsArrow` flag (default false).
+4. Board flip / knight / castling / promotion: already handled by react-chessboard's arrow
+   layer — no custom geometry needed; just verify visually after flip.
+
+**Color constants (single source of truth, `BoardPanel.tsx` or a `colors.ts`):**
+```
+best-move  #81b64c   threat  #e02c2c
+brilliant #1baca6  great #5c8bb0  best #81b64c  excellent #81b64c  good #95b776
+book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431  forced #808080
+```
+> These match chess.com closely but are community-referenced, not official. Verify against a
+> live chess.com Game Review in DevTools and note any changed hex in the PR description.
+
+## T7 — (Stretch, optional) chess.com-flavor extras
+
+- Phase accuracy: split analyses into opening/middlegame/endgame and expose three accuracy
+  numbers (reuse `openingPly` for the opening boundary; simple move-count/material heuristic
+  for mid/end).
+- Retry-at-key-moments: at each `findKeyMoments` ply, let the user attempt the best move and
+  give pass/fail feedback (ties into existing `coaching.ts`).
+- Candidate arrows: only if you later raise MultiPV to 3 — best green, alternatives dimmed.
+
+---
+
+## Final verification checklist (run before opening the PR)
+
+- [ ] `npx vitest run` green; new cases for T2/T3/T4/T5 present.
+- [ ] `npx tsc --noEmit` clean; `MoveClass` union updated everywhere it's switched on
+      (mark rendering, legend `ClassLegend.tsx`, coaching).
+- [ ] Threat arrow shows opponent's best reply (red) with toggle; suppressed when null.
+- [ ] Best-move arrow suppressed when it equals the played move.
+- [ ] Miss / Forced classify correctly and are excluded from accuracy.
+- [ ] Game accuracy uses weighted+harmonic aggregation.
+- [ ] No separate SVG overlay introduced; all arrows go through react-chessboard.
+- [ ] PR description lists any hex values changed after DevTools verification and flags the
+      missing `miss`/`forced` mark assets.

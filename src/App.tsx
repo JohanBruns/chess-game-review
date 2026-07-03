@@ -8,7 +8,7 @@ import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
-import { getBestMoveArrow, getAttackArrows } from './lib/analysis/arrows'
+import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './lib/analysis/arrows'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
@@ -94,6 +94,7 @@ function App() {
   const { explanation, isLoading: coachingLoading, error: coachingError, apiKey, saveApiKey, explainMove, reset: resetCoaching } = useCoaching()
 
   const [showBestMoveArrow, setShowBestMoveArrow] = useState(false)
+  const [showThreatArrow, setShowThreatArrow] = useState(false)
 
   const prevPlyRef = useRef<number>(currentPly)
   useEffect(() => {
@@ -101,6 +102,7 @@ function App() {
       prevPlyRef.current = currentPly
       resetCoaching()
       setShowBestMoveArrow(false)
+      setShowThreatArrow(false)
     }
   }, [currentPly, resetCoaching])
 
@@ -111,6 +113,14 @@ function App() {
     if (!bestMoveSan || bestMoveSan === moves[currentPly - 1].san) return undefined
     return getBestMoveArrow(fens[currentPly - 1], bestMoveSan) ?? undefined
   }, [showBestMoveArrow, currentPly, evalResults, moves, fens])
+
+  // Red threat arrow — the engine's best move in the CURRENT position (side-to-move's
+  // strongest reply). Meaningful at ply 0 too, so no currentPly > 0 gate.
+  const threatArrow = useMemo(() => {
+    if (!showThreatArrow) return undefined
+    const threatSan = evalResults[currentPly]?.bestMoveSan
+    return getThreatArrow(currentFen, threatSan ?? null) ?? undefined
+  }, [showThreatArrow, currentPly, evalResults, currentFen])
 
   // Attack/attacked-by arrows — pure board geometry, always shown for the current move.
   const attackArrows = useMemo(() => {
@@ -144,9 +154,14 @@ function App() {
     moveAnalyses[currentPly - 1]?.classification !== 'Book'
 
   const canShowBestMove = currentPly > 0 && evalResults[currentPly - 1]?.bestMoveSan != null
+  const canShowThreat = evalResults[currentPly]?.bestMoveSan != null
 
   const handleToggleBestMoveArrow = useCallback(() => {
     setShowBestMoveArrow(v => !v)
+  }, [])
+
+  const handleToggleThreatArrow = useCallback(() => {
+    setShowThreatArrow(v => !v)
   }, [])
 
   const handleExplain = useCallback(() => {
@@ -170,9 +185,23 @@ function App() {
     loadPgn(pgn)
   }, [clearAnalysis, loadPgn])
 
+  const [initialUsername, setInitialUsername] = useState<string | null>(null)
+  const [autoFetch, setAutoFetch] = useState(false)
+  const urlParamsHandledRef = useRef(false)
+
   useEffect(() => {
-    const pgn = new URLSearchParams(window.location.search).get('pgn')
-    if (pgn) handleLoadPgn(pgn)
+    const params = new URLSearchParams(window.location.search)
+    const pgn = params.get('pgn')
+    const username = params.get('username')
+
+    if (!urlParamsHandledRef.current && pgn) {
+      urlParamsHandledRef.current = true
+      handleLoadPgn(pgn)
+    } else if (!urlParamsHandledRef.current && username) {
+      urlParamsHandledRef.current = true
+      setInitialUsername(username)
+      setAutoFetch(params.get('autofetch') === '1')
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally runs once on mount
 
@@ -190,7 +219,12 @@ function App() {
 
   return (
     <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
-      <GamePicker onLoad={handleLoadPgn} error={error} />
+      <GamePicker
+        onLoad={handleLoadPgn}
+        error={error}
+        initialUsername={initialUsername}
+        autoFetch={autoFetch}
+      />
 
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap) ── */}
@@ -205,6 +239,7 @@ function App() {
                 classification={currentPly > 0 ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
                 bestMoveArrow={bestMoveArrow}
                 attackArrows={attackArrows}
+                threatArrow={threatArrow}
               />
             </div>
           </div>
@@ -267,6 +302,9 @@ function App() {
               canShowBestMove={canShowBestMove}
               showBestMoveArrow={showBestMoveArrow}
               onToggleBestMoveArrow={handleToggleBestMoveArrow}
+              canShowThreat={canShowThreat}
+              showThreatArrow={showThreatArrow}
+              onToggleThreatArrow={handleToggleThreatArrow}
             />
           </div>
         </div>
