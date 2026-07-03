@@ -29,7 +29,7 @@ export function useCoaching() {
     evalAfter: EvalResult
     analysis: MoveAnalysis
   }) => {
-    if (!apiKey || params.analysis.classification === 'Book') return
+    if (!apiKey || params.analysis.classification === 'Book' || params.analysis.classification === 'Forced') return
     setState({ explanation: null, isLoading: true, error: null })
     const prompt = buildCoachingPrompt(params)
     try {

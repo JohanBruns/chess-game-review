@@ -151,7 +151,8 @@ function App() {
     evalResults[currentPly - 1] != null &&
     evalResults[currentPly] != null &&
     moveAnalyses != null &&
-    moveAnalyses[currentPly - 1]?.classification !== 'Book'
+    moveAnalyses[currentPly - 1]?.classification !== 'Book' &&
+    moveAnalyses[currentPly - 1]?.classification !== 'Forced'
 
   const canShowBestMove = currentPly > 0 && evalResults[currentPly - 1]?.bestMoveSan != null
   const canShowThreat = evalResults[currentPly]?.bestMoveSan != null
