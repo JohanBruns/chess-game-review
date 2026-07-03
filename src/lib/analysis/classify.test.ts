@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { Chess, type Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
 import { winPct, classifyMove, isSacrifice, buildMoveAnalyses, moveAccuracy, playerAccuracy, findKeyMoments } from './classify'
-import type { MoveAnalysis } from './classify'
+import type { MoveAnalysis, MoveClass } from './classify'
 
 // Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
 const mv = (san: string) => ({ san } as unknown as Move)
@@ -159,6 +159,18 @@ describe('classifyMove — Brilliant', () => {
     const notASac = mv('Nf3')
     expect(classifyMove(1, false, notASac, 67.6212, null, null)).not.toBe('Brilliant')
   })
+
+  it('blocked: a MORE valuable own piece hangs free at the same time (hasCostlierHangingPiece veto)', () => {
+    // Rxc6 (rook takes knight, PIECE_VAL[n]=3 < PIECE_VAL[r]=5 -> isSacrifice true).
+    // After the move, White's queen on d5 is undefended and attacked by the black
+    // bishop on f7 (f7-e6-d5 diagonal) — a piece MORE valuable (9) than the rook (5)
+    // just committed. This is a blunder that happens to also be a sacrifice, not a
+    // brilliancy.
+    const chess = new Chess('6k1/5b2/2n5/3Q4/8/8/8/2R3K1 w - - 0 1')
+    const move = chess.move({ from: 'c1', to: 'c6' })
+    expect(isSacrifice(move)).toBe(true)
+    expect(classifyMove(1, false, move, 67.6212, null, null)).not.toBe('Brilliant')
+  })
 })
 
 describe('classifyMove — Great', () => {
@@ -193,6 +205,55 @@ describe('classifyMove — Great', () => {
 
   it('blocked: secondBestCp is null (no throw, no false positive)', () => {
     expect(classifyMove(0, true, undefined, 67.6212, 200, null)).not.toBe('Great')
+  })
+})
+
+describe('classifyMove — Great swing branches', () => {
+  it('fires: lost -> equal via a near-best move (winPctAfterRaw, not the loss-derived reconstruction)', () => {
+    // winPctBefore=40 (lost), loss=1 (near-best, isNearBest), winPctAfterRaw=52 (equal) —
+    // only reachable via the explicit winPctAfterRaw param, since winPctBefore - loss = 39
+    // could never reach 52 (that's exactly the bug this param fixes).
+    expect(classifyMove(1, false, undefined, 40, null, null, undefined, 52)).toBe('Great')
+  })
+
+  it('fires: equal -> winning via a near-best move', () => {
+    expect(classifyMove(1, false, undefined, 52, null, null, undefined, 78)).toBe('Great')
+  })
+
+  it('blocked: near-best but no swing (still comfortably winning either way)', () => {
+    // winPctBefore=70 doesn't qualify for either swing bracket (<50 or <=55)
+    expect(classifyMove(1, false, undefined, 70, null, null, undefined, 71)).not.toBe('Great')
+  })
+
+  it('blocked: swing-shaped values but loss too big (not near-best)', () => {
+    expect(classifyMove(5, false, undefined, 40, null, null, undefined, 52)).not.toBe('Great')
+  })
+
+  it('blocked: winPctAfterRaw omitted — swing branch does not fire (safe default)', () => {
+    expect(classifyMove(1, false, undefined, 40, null, null)).not.toBe('Great')
+  })
+})
+
+describe('classifyMove — Miss', () => {
+  it('fires: opponent handed you a win (winPctPrior<80), you let it slip to equal/worse', () => {
+    // winPctBefore=85, loss=35 → winPctAfter=50 (<=55); winPctPrior=60 (<80)
+    expect(classifyMove(35, false, undefined, 85, null, null, 60)).toBe('Miss')
+  })
+
+  it('blocked: was already winning big before the opponent\'s move (winPctPrior>=80)', () => {
+    // Same before/after as the firing case, but winPctPrior=90 → not a freshly created win
+    expect(classifyMove(35, false, undefined, 85, null, null, 90)).not.toBe('Miss')
+    expect(classifyMove(35, false, undefined, 85, null, null, 90)).toBe('Blunder')
+  })
+
+  it('blocked: result didn\'t drop far enough (winPctAfter above the ceiling)', () => {
+    // winPctBefore=85, loss=15 → winPctAfter=70 (>55, not "let slip")
+    expect(classifyMove(15, false, undefined, 85, null, null, 60)).not.toBe('Miss')
+    expect(classifyMove(15, false, undefined, 85, null, null, 60)).toBe('Mistake')
+  })
+
+  it('winPctPrior omitted (undefined) still fires on the two core conditions', () => {
+    expect(classifyMove(35, false, undefined, 85, null, null)).toBe('Miss')
   })
 })
 
@@ -292,6 +353,19 @@ describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
   })
 })
 
+describe('buildMoveAnalyses — Miss end-to-end', () => {
+  it('opponent blunder creates a fresh win that the mover then lets slip → Miss, not Blunder', () => {
+    // m0 (white, arbitrary) → m1 (black blunders: white's cp jumps 100→470, winPct≈59→85,
+    // i.e. a fresh win appears) → m2 (white fails to convert: cp drops back to 50, winPct≈55).
+    // Without the winPctPrior guard this would just be a 30-point-loss Blunder.
+    const moves = [mv('Nf3'), mv('Bad??'), mv('Meh')]
+    const evals = [ev(0), ev(100), ev(470), ev(50)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    const whiteMove = analyses.find(a => a.moveIndex === 2)!
+    expect(whiteMove.classification).toBe('Miss')
+  })
+})
+
 describe('moveAccuracy', () => {
   it('returns ~100 at loss=0 (perfect move)', () => {
     expect(moveAccuracy(0)).toBeCloseTo(100, 0)
@@ -343,6 +417,22 @@ describe('buildMoveAnalyses — Book classification', () => {
   it('openingPly=0 means no Book moves', () => {
     const analyses = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)], 0)
     expect(analyses[0].classification).not.toBe('Book')
+  })
+})
+
+describe('buildMoveAnalyses — Forced classification', () => {
+  it('marks the only legal move in a position as Forced', () => {
+    // king + rook vs. lone king, black to move — Ka7 is the only legal move
+    const [onlyMove] = new Chess('k7/8/8/8/8/8/8/1R5K b - - 0 1').moves({ verbose: true })
+    const analyses = buildMoveAnalyses([onlyMove], [ev(0), ev(0)])
+    expect(analyses[0].classification).toBe('Forced')
+    expect(analyses[0].accuracy).toBe(100)
+    expect(analyses[0].lossInWinPct).toBe(0)
+  })
+
+  it('a normal move with multiple legal alternatives is not Forced', () => {
+    const analyses = buildMoveAnalyses([mv('e4')], [ev(0), ev(0)])
+    expect(analyses[0].classification).not.toBe('Forced')
   })
 })
 
@@ -400,6 +490,54 @@ describe('playerAccuracy', () => {
     const analyses = buildMoveAnalyses([mv('e4'), mv('e5')], [ev(0), ev(0), ev(0)], 2)
     expect(playerAccuracy(analyses, 'white')).toBeNull()
     expect(playerAccuracy(analyses, 'black')).toBeNull()
+  })
+
+  it('Forced moves are excluded from accuracy calculation', () => {
+    // White: one Forced move (accuracy 100, would skew toward 100) + one Blunder (accuracy 10).
+    // If Forced were included, the mean would be ~55; excluded, it must equal the Blunder alone.
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0, classification: 'Forced', accuracy: 100 },
+      { moveIndex: 2, lossInWinPct: 30, classification: 'Blunder', accuracy: 10 },
+    ]
+    expect(playerAccuracy(analyses, 'white')).toBe(10)
+  })
+
+  it('scores a big blunder among strong moves below the old arithmetic mean', () => {
+    // Equal winPctAfterRaw across all moves → uniform volatility weights → weightedMean
+    // equals the old plain arithmetic mean; the harmonic-mean term is what drags the
+    // combined score below it (T5 acceptance: punish the outlier instead of averaging it away).
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70 },
+      { moveIndex: 2, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70 },
+      { moveIndex: 4, lossInWinPct: 30, classification: 'Blunder', accuracy: 20, winPctAfterRaw: 70 },
+      { moveIndex: 6, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70 },
+    ]
+    const oldArithmeticMean = (99 + 99 + 20 + 99) / 4 // 79.25
+    const acc = playerAccuracy(analyses, 'white')!
+    expect(acc).toBeLessThan(oldArithmeticMean)
+    expect(acc).toBeCloseTo(64.5, 0)
+  })
+
+  it('weights a blunder in a volatile position more heavily than in a calm one', () => {
+    // White moves: index 0 (acc 100) and index 6 (acc 40). Odd indices are black fillers
+    // (auto-excluded from white) used only to shape the win% trajectory around index 6.
+    // winPctAfterRaw is MOVER-perspective, so an odd (black) index storing X yields a
+    // White-perspective trajectory value of 100-X.
+    const base = (
+      moveIndex: number, accuracy: number, cls: MoveClass, winPctAfterRaw: number,
+    ): MoveAnalysis => ({ moveIndex, lossInWinPct: 0, classification: cls, accuracy, winPctAfterRaw })
+
+    // Calm: white-perspective trajectory is flat (50) around index 6 → weight floors at 0.5.
+    const calm: MoveAnalysis[] = [
+      base(0, 100, 'Best', 50), base(1, 0, 'Good', 50),
+      base(5, 0, 'Good', 50), base(6, 40, 'Blunder', 50), base(7, 0, 'Good', 50),
+    ]
+    // Volatile: white-perspective trajectory swings 80/50/20 around index 6 → high std-dev.
+    const volatile: MoveAnalysis[] = [
+      base(0, 100, 'Best', 50), base(1, 0, 'Good', 50),
+      base(5, 0, 'Good', 80), base(6, 40, 'Blunder', 50), base(7, 0, 'Good', 20),
+    ]
+    expect(playerAccuracy(volatile, 'white')!).toBeLessThan(playerAccuracy(calm, 'white')!)
   })
 })
 
