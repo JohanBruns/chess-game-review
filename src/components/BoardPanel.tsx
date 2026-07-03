@@ -31,6 +31,8 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Inaccuracy: 'inaccuracy_128x.png',
   Mistake:    'mistake_128x.png',
   Blunder:    'blunder_128x.png',
+  Miss:       'incorrect_128x.png',  // TODO: dedicated miss icon
+  Forced:     'forced_128x.png',
 }
 
 // rgb() triples so the square-highlight alpha can be applied uniformly
@@ -44,6 +46,8 @@ const CLASS_COLOR: Record<MoveClass, string> = {
   Inaccuracy: '240, 177, 85',
   Mistake:    '226, 144, 63',
   Blunder:    '229, 83, 61',    // var(--color-cc-red)
+  Miss:       '238, 107, 85',
+  Forced:     '128, 128, 128',
 }
 
 const IMG: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain' }

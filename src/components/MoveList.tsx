@@ -20,6 +20,8 @@ const CLASS_ICON: Record<MoveClass, string> = {
   Inaccuracy:  '/marks/inaccuracy_128x.png',
   Mistake:     '/marks/mistake_128x.png',
   Blunder:     '/marks/blunder_128x.png',
+  Miss:        '/marks/incorrect_128x.png',
+  Forced:      '/marks/forced_128x.png',
 }
 
 export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments }: MoveListProps) {
