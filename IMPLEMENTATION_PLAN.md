@@ -3,14 +3,15 @@
 > For Claude Code **Plan Mode**. Read this whole file, inspect the referenced source,
 > then produce a step-by-step plan. Implement task by task, run `vitest` after each,
 > keep commits small. Do NOT refactor unrelated code.
-
+IMPORTANT: if you think that a certain feature can be implemented in a better/easier way than descibed in the plan, feel free to act independently from this guide!
 ## Repo ground truth (already exists — build on it, don't reinvent)
 
 - `src/lib/analysis/classify.ts`
-  - `type MoveClass = 'Book'|'Brilliant'|'Great'|'Best'|'Excellent'|'Good'|'Inaccuracy'|'Mistake'|'Blunder'`
+  - `type MoveClass = 'Book'|'Brilliant'|'Great'|'Best'|'Excellent'|'Good'|'Inaccuracy'|'Mistake'|'Blunder'|'Miss'|'Forced'`
   - `winPct(cp: number): number` — Lichess sigmoid (const `0.00368208`)
   - `moveAccuracy(lossInWinPct): number` — Lichess per-move accuracy
-  - `playerAccuracy(analyses, player): number|null` — currently a **plain arithmetic mean**
+  - `playerAccuracy(analyses, player): number|null` — volatility-weighted mean + harmonic mean
+    (mean of the two), over non-Book/non-Forced moves (T5 done)
   - `isSacrifice(move: Move): boolean` — exchange-sac OR piece hangs on destination
   - `classifyMove(loss, isEngineBestMove, move?, winPctBefore?, bestCp?, secondBestCp?): MoveClass`
   - `buildMoveAnalyses(moves, evalResults, openingPly): MoveAnalysis[]`
@@ -24,7 +25,9 @@
   - Props already present: `bestMoveArrow`, `attackArrows`
   - Colors: `BEST_MOVE_ARROW_COLOR='#81b64c'`, `ATTACKS_ARROW_COLOR='#e2903f'`, `ATTACKED_BY_ARROW_COLOR='#e5533d'`
 - Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts` (Vitest)
-- Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book. **No `miss` asset, no `forced` asset.**
+- Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book/forced.
+  `Board&Game/marks/` (staging folder, not yet copied to `public/marks/`) has further assets
+  including `missed_win_128x.png` — copy/rename into `public/marks/` when wiring up `Miss`'s icon.
 
 ## Global constraints
 
@@ -137,6 +140,9 @@ non-Book/non-Forced moves:
    (std-dev of the win% sequence in a sliding window, e.g. ±2 plies, min weight 0.5).
    → needs the per-move win% trajectory; derive from `evalResults` (already available to the caller)
    and pass it in, or compute win% inside `buildMoveAnalyses` and store it on `MoveAnalysis`.
+   **Reuse note (from T4):** `buildMoveAnalyses` already computes a local, unclamped
+   `winPctAfterRaw = winPct(cpAfter)` per move (added for the Great swing branches) — store
+   that on `MoveAnalysis` instead of re-deriving the win% trajectory from scratch.
 2. **Harmonic mean** of the same per-move accuracies.
 3. Return `(weightedMean + harmonicMean) / 2`, clamped to [0,100].
 
@@ -181,8 +187,9 @@ book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431
 ## Final verification checklist (run before opening the PR)
 
 - [ ] `npx vitest run` green; new cases for T2/T3/T4/T5 present.
-- [ ] `npx tsc --noEmit` clean; `MoveClass` union updated everywhere it's switched on
-      (mark rendering, legend `ClassLegend.tsx`, coaching).
+- [ ] `npx tsc -b` clean (**not** `tsc --noEmit` — silent no-op in this repo, root
+      `tsconfig.json` has `"files": []` + project references); `MoveClass` union updated
+      everywhere it's switched on (mark rendering, legend `ClassLegend.tsx`, coaching).
 - [ ] Threat arrow shows opponent's best reply (red) with toggle; suppressed when null.
 - [ ] Best-move arrow suppressed when it equals the played move.
 - [ ] Miss / Forced classify correctly and are excluded from accuracy.
@@ -190,3 +197,9 @@ book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431
 - [ ] No separate SVG overlay introduced; all arrows go through react-chessboard.
 - [ ] PR description lists any hex values changed after DevTools verification and flags the
       missing `miss`/`forced` mark assets.
+
+---
+
+Nach Abschluss jedes `Tx`-Blocks sollen dieses Dokument und `Anweisungen.md` durchgesehen und
+aktualisiert bzw. verbessert werden (z. B. veraltete Ground-Truth-Angaben korrigieren, neu
+gewonnene Spec-vs-Code-Erkenntnisse festhalten) — nicht erst am Ende der gesamten Milestone.
