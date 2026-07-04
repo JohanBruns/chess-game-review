@@ -151,7 +151,7 @@ export function useEngine() {
           lastCpRef.current = cp
           lastMateRef.current = mate
           const pvMatch = line.match(/ pv (.+)$/)
-          if (pvMatch) lastPvRef.current = pvMatch[1].trim().split(' ').slice(0, 5)
+          if (pvMatch) lastPvRef.current = pvMatch[1].trim().split(' ').slice(0, 10)
 
           // Skip intermediate state updates during batch analysis to avoid excessive re-renders
           if (!analysisQueueRef.current) {

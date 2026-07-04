@@ -8,15 +8,14 @@ import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
-import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './lib/analysis/arrows'
-import { getEngineLines } from './lib/analysis/lines'
-import { EngineLines } from './components/EngineLines'
+import type { MoveClass } from './lib/analysis/classify'
+import { getBestMoveArrow, getAttackArrows } from './lib/analysis/arrows'
+import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
-import { useCoaching } from './hooks/useCoaching'
-import { CoachingPanel } from './components/CoachingPanel'
+import { ReviewPanel } from './components/ReviewPanel'
 import { ClassLegend } from './components/ClassLegend'
 import { RetryPanel } from './components/RetryPanel'
 
@@ -42,34 +41,14 @@ function App() {
 
   const {
     isReady,
-    isEvaluating,
     isAnalyzing,
     result,
     evalResults,
     analysisProgress,
     error: engineError,
-    evaluate,
     analyzeGame,
     clearAnalysis,
   } = useEngine()
-
-  const autoEvalRef = useRef(false)
-  // Tracks which ply was last auto-evaluated to prevent re-triggering when isEvaluating flips
-  const autoEvalPlyRef = useRef<number>(-1)
-
-  useEffect(() => {
-    if (!autoEvalRef.current) return
-    if (!isReady || !isLoaded || isAnalyzing || isEvaluating) return
-    if (autoEvalPlyRef.current === currentPly) return   // already evaluated this ply
-    autoEvalPlyRef.current = currentPly
-    evaluate(currentFen)
-  }, [currentPly, currentFen, isReady, isLoaded, isAnalyzing, isEvaluating, evaluate])
-
-  const handleEvaluate = useCallback(() => {
-    autoEvalRef.current = true
-    autoEvalPlyRef.current = currentPly   // prevent effect from double-evaluating on first click
-    evaluate(currentFen)
-  }, [evaluate, currentFen, currentPly])
 
   const openingResult = useMemo(
     () => (fens.length > 0 ? detectOpening(fens) : null),
@@ -105,12 +84,10 @@ function App() {
     [moveAnalyses],
   )
 
-  const { explanation, isLoading: coachingLoading, error: coachingError, apiKey, saveApiKey, explainMove, reset: resetCoaching } = useCoaching()
-
-  const [showBestMoveArrow, setShowBestMoveArrow] = useState(false)
-  const [showThreatArrow, setShowThreatArrow] = useState(false)
-  const [showEngineLines, setShowEngineLines] = useState(false)
-  const [hoveredLineSan, setHoveredLineSan] = useState<string | null>(null)
+  // Guided review sub-mode: idle (default per-move view), explain (steps through the
+  // engine's PV on the board), best (previews the engine's best move on the board).
+  const [reviewSub, setReviewSub] = useState<'idle' | 'explain' | 'best'>('idle')
+  const [explainStep, setExplainStep] = useState(0)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
@@ -126,11 +103,8 @@ function App() {
   useEffect(() => {
     if (prevPlyRef.current !== currentPly) {
       prevPlyRef.current = currentPly
-      resetCoaching()
-      setShowBestMoveArrow(false)
-      setShowThreatArrow(false)
-      setShowEngineLines(false)
-      setHoveredLineSan(null)
+      setReviewSub('idle')
+      setExplainStep(0)
       // Don't clear retry state when the ply change IS the retry entry itself (handleRetry
       // sets retryMoveIndex and calls goToPly in the same batch, so they land together here).
       // Any other navigation (Prev/Next/jump) changes currentPly without retryMoveIndex
@@ -141,40 +115,16 @@ function App() {
         setAttemptResult(null)
       }
     }
-  }, [currentPly, resetCoaching, retryMoveIndex])
+  }, [currentPly, retryMoveIndex])
 
-  // Green suggestion arrow — only meaningful when the played move differs from the engine's best.
+  // Green suggestion arrow — shown automatically (chess.com-style) whenever the played move
+  // differs from the engine's best move. Only meaningful in the idle sub-mode.
   const bestMoveArrow = useMemo(() => {
-    if (!showBestMoveArrow || currentPly === 0) return undefined
+    if (currentPly === 0) return undefined
     const bestMoveSan = evalResults[currentPly - 1]?.bestMoveSan
     if (!bestMoveSan || bestMoveSan === moves[currentPly - 1].san) return undefined
     return getBestMoveArrow(fens[currentPly - 1], bestMoveSan) ?? undefined
-  }, [showBestMoveArrow, currentPly, evalResults, moves, fens])
-
-  // Red threat arrow — the engine's best move in the CURRENT position (side-to-move's
-  // strongest reply). Meaningful at ply 0 too, so no currentPly > 0 gate.
-  const threatArrow = useMemo(() => {
-    if (!showThreatArrow) return undefined
-    const threatSan = evalResults[currentPly]?.bestMoveSan
-    return getThreatArrow(currentFen, threatSan ?? null) ?? undefined
-  }, [showThreatArrow, currentPly, evalResults, currentFen])
-
-  // T7c engine-lines panel: the current position's top-3 MultiPV candidates (chess.com's
-  // analysis-mode "Number of Lines"), best first. Uses evalResults[currentPly] when the
-  // full game has been analyzed, falling back to the single-position `result` otherwise.
-  const engineLines = useMemo(
-    () => getEngineLines(evalResults[currentPly] ?? result),
-    [evalResults, currentPly, result],
-  )
-
-  // Single green arrow for whichever line is hovered (or the best line by default) — chess.com
-  // never draws more than one candidate arrow simultaneously, see IMPLEMENTATION_PLAN.md T7c.
-  const candidateArrow = useMemo(() => {
-    if (!showEngineLines) return undefined
-    const san = hoveredLineSan ?? engineLines[0]?.san
-    if (!san) return undefined
-    return getBestMoveArrow(currentFen, san) ?? undefined
-  }, [showEngineLines, hoveredLineSan, engineLines, currentFen])
+  }, [currentPly, evalResults, moves, fens])
 
   // Attack/attacked-by arrows — pure board geometry, always shown for the current move.
   const attackArrows = useMemo(() => {
@@ -237,40 +187,74 @@ function App() {
     if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
   }, [currentPly, moves])
 
-  const canExplain =
-    currentPly > 0 &&
-    evalResults[currentPly - 1] != null &&
-    evalResults[currentPly] != null &&
-    moveAnalyses != null &&
-    moveAnalyses[currentPly - 1]?.classification !== 'Book' &&
-    moveAnalyses[currentPly - 1]?.classification !== 'Forced'
+  // Guided review derivations. analysis/bestSan/playedSan describe the move that was just
+  // played (ply currentPly, i.e. moves[currentPly - 1]); bestPreview/lineSteps preview what
+  // the engine recommends from that same position.
+  const analysis = moveAnalyses?.[currentPly - 1] ?? null
+  const bestSan = currentPly > 0 ? evalResults[currentPly - 1]?.bestMoveSan ?? null : null
+  const playedSan = currentPly > 0 ? moves[currentPly - 1].san : null
+  const isEnginesBest = bestSan != null && playedSan === bestSan
 
-  const canShowBestMove = currentPly > 0 && evalResults[currentPly - 1]?.bestMoveSan != null
-  const canShowThreat = evalResults[currentPly]?.bestMoveSan != null
-  const canShowLines = (evalResults[currentPly] ?? result)?.bestMoveSan != null
+  const bestPreview = useMemo(
+    () => (currentPly > 0 ? buildBestPreview(fens[currentPly - 1], bestSan) : null),
+    [currentPly, fens, bestSan],
+  )
+  const lineSteps = useMemo(
+    () => (currentPly > 0 ? buildLineSteps(fens[currentPly - 1], evalResults[currentPly - 1]?.pv ?? null) : []),
+    [currentPly, fens, evalResults],
+  )
 
-  const handleToggleBestMoveArrow = useCallback(() => {
-    setShowBestMoveArrow(v => !v)
-  }, [])
+  const reviewActive = moveAnalyses != null && currentPly > 0 && evalResults[currentPly - 1] != null
+  const canBest =
+    reviewSub === 'idle' &&
+    analysis != null &&
+    analysis.classification !== 'Book' &&
+    analysis.classification !== 'Forced' &&
+    bestSan != null &&
+    !isEnginesBest
+  const canExplain = lineSteps.length > 0
 
-  const handleToggleThreatArrow = useCallback(() => {
-    setShowThreatArrow(v => !v)
-  }, [])
+  const reviewHeadlineText =
+    reviewSub === 'idle'
+      ? playedSan != null && analysis != null
+        ? reviewHeadline(playedSan, analysis.classification, isEnginesBest)
+        : ''
+      : reviewSub === 'best'
+        ? bestSan != null
+          ? reviewHeadline(bestSan, 'Best', true)
+          : ''
+        : bestSan != null
+          ? `Explaining ${bestSan}`
+          : ''
 
-  const handleToggleEngineLines = useCallback(() => {
-    setShowEngineLines(v => !v)
-  }, [])
+  const reviewEvalBadge = formatEvalBadge(
+    reviewSub === 'idle' ? evalResults[currentPly] ?? null : evalResults[currentPly - 1] ?? null,
+  )
 
   const handleExplain = useCallback(() => {
-    if (!canExplain || !moveAnalyses) return
-    explainMove({
-      fenBefore: fens[currentPly - 1],
-      sanPlayed: moves[currentPly - 1].san,
-      evalBefore: evalResults[currentPly - 1]!,
-      evalAfter: evalResults[currentPly]!,
-      analysis: moveAnalyses[currentPly - 1],
-    })
-  }, [canExplain, moveAnalyses, fens, moves, evalResults, currentPly, explainMove])
+    setReviewSub('explain')
+    setExplainStep(0)
+  }, [])
+
+  const handleBest = useCallback(() => {
+    setReviewSub('best')
+  }, [])
+
+  const handleLinePrev = useCallback(() => {
+    setExplainStep(s => Math.max(0, s - 1))
+  }, [])
+
+  const handleLineNext = useCallback(() => {
+    setExplainStep(s => Math.min(lineSteps.length - 1, s + 1))
+  }, [lineSteps.length])
+
+  const handleGotIt = useCallback(() => {
+    setReviewSub('idle')
+  }, [])
+
+  const handleResume = useCallback(() => {
+    setReviewSub('idle')
+  }, [])
 
   const handleAnalyzeGame = useCallback(
     () => analyzeGame(fens),
@@ -315,6 +299,34 @@ function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip])
 
+  // Board view for the current retry/review sub-mode. Defaults to the plain "current
+  // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
+  // preview the engine's recommendation instead of the position that's actually loaded.
+  // Retry mode always wins (unrelated feature, takes precedence over review sub-modes).
+  let viewFen = trialFen ?? currentFen
+  let viewClass: MoveClass | undefined = retryMoveIndex === null ? analysis?.classification : undefined
+  let viewFrom: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined
+  let viewTo: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined
+  let viewArrow = retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow
+  let viewAttack = attackArrows
+
+  if (retryMoveIndex === null && reviewSub === 'best' && bestPreview) {
+    viewFen = bestPreview.fen
+    viewClass = 'Best'
+    viewFrom = bestPreview.from
+    viewTo = bestPreview.to
+    viewArrow = { from: bestPreview.from, to: bestPreview.to }
+    viewAttack = undefined
+  } else if (retryMoveIndex === null && reviewSub === 'explain' && lineSteps[explainStep]) {
+    const step = lineSteps[explainStep]
+    viewFen = step.fen
+    viewClass = 'Book'
+    viewFrom = step.from
+    viewTo = step.to
+    viewArrow = undefined
+    viewAttack = undefined
+  }
+
   return (
     <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
       <GamePicker
@@ -331,14 +343,12 @@ function App() {
             <EvalBar evalResult={evalResults[currentPly] ?? result} />
             <div className="aspect-square h-full">
               <BoardPanel
-                fen={trialFen ?? currentFen}
-                lastMoveFrom={retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined}
-                lastMoveTo={retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined}
-                classification={retryMoveIndex === null ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
-                bestMoveArrow={retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow}
-                attackArrows={attackArrows}
-                threatArrow={threatArrow}
-                candidateArrow={candidateArrow}
+                fen={viewFen}
+                lastMoveFrom={viewFrom}
+                lastMoveTo={viewTo}
+                classification={viewClass}
+                bestMoveArrow={viewArrow}
+                attackArrows={viewAttack}
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}
@@ -363,7 +373,6 @@ function App() {
           <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
             <EvalPanel
               isReady={isReady}
-              isEvaluating={isEvaluating}
               isAnalyzing={isAnalyzing}
               analysisProgress={analysisProgress}
               result={result}
@@ -373,15 +382,9 @@ function App() {
               blackAccuracy={blackAccuracy}
               whitePhaseAccuracy={whitePhaseAccuracy}
               blackPhaseAccuracy={blackPhaseAccuracy}
-              onEvaluate={handleEvaluate}
               onAnalyzeGame={handleAnalyzeGame}
             />
           </div>
-          {showEngineLines && engineLines.length > 0 && (
-            <div className="shrink-0 px-2 pb-2">
-              <EngineLines lines={engineLines} onHoverLine={setHoveredLineSan} />
-            </div>
-          )}
           <MoveList
             moves={moves}
             currentPly={currentPly}
@@ -412,24 +415,24 @@ function App() {
               />
             </div>
           )}
-          <div className="shrink-0 border-t border-cc-border">
-            <CoachingPanel
-              apiKey={apiKey}
-              onSaveApiKey={saveApiKey}
+          <div className="shrink-0 border-t border-cc-border p-2">
+            <ReviewPanel
+              active={reviewActive}
+              headline={reviewHeadlineText}
+              evalBadge={reviewEvalBadge}
+              sub={reviewSub}
+              canBest={canBest}
               canExplain={canExplain}
+              canNext={canGoNext}
+              lineSans={lineSteps.map(s => s.san)}
+              lineStep={explainStep}
               onExplain={handleExplain}
-              explanation={explanation}
-              isLoading={coachingLoading}
-              error={coachingError}
-              canShowBestMove={canShowBestMove}
-              showBestMoveArrow={showBestMoveArrow}
-              onToggleBestMoveArrow={handleToggleBestMoveArrow}
-              canShowThreat={canShowThreat}
-              showThreatArrow={showThreatArrow}
-              onToggleThreatArrow={handleToggleThreatArrow}
-              canShowLines={canShowLines}
-              showEngineLines={showEngineLines}
-              onToggleEngineLines={handleToggleEngineLines}
+              onBest={handleBest}
+              onNext={goToNext}
+              onLinePrev={handleLinePrev}
+              onLineNext={handleLineNext}
+              onGotIt={handleGotIt}
+              onResume={handleResume}
             />
           </div>
         </div>
