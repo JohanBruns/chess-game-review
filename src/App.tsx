@@ -95,6 +95,8 @@ function App() {
 
   const [showBestMoveArrow, setShowBestMoveArrow] = useState(false)
   const [showThreatArrow, setShowThreatArrow] = useState(false)
+  const [orientation, setOrientation] = useState<'white' | 'black'>('white')
+  const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
   const prevPlyRef = useRef<number>(currentPly)
   useEffect(() => {
@@ -213,10 +215,11 @@ function App() {
       else if (e.key === 'ArrowRight') { e.preventDefault(); goToNext() }
       else if (e.key === 'Home') { e.preventDefault(); goToFirst() }
       else if (e.key === 'End') { e.preventDefault(); goToLast() }
+      else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); handleFlip() }
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [goToFirst, goToPrev, goToNext, goToLast])
+  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip])
 
   return (
     <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
@@ -241,6 +244,7 @@ function App() {
                 bestMoveArrow={bestMoveArrow}
                 attackArrows={attackArrows}
                 threatArrow={threatArrow}
+                orientation={orientation}
               />
             </div>
           </div>
@@ -249,6 +253,7 @@ function App() {
             onPrev={goToPrev}
             onNext={goToNext}
             onLast={goToLast}
+            onFlip={handleFlip}
             canGoPrev={canGoPrev}
             canGoNext={canGoNext}
             isLoaded={isLoaded}
