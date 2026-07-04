@@ -12,9 +12,17 @@ IMPORTANT: if you think that a certain feature can be implemented in a better/ea
   - `moveAccuracy(lossInWinPct): number` — Lichess per-move accuracy
   - `playerAccuracy(analyses, player): number|null` — volatility-weighted mean + harmonic mean
     (mean of the two), over non-Book/non-Forced moves (T5 done)
+  - `phaseAccuracy(analyses, player): { opening, middlegame, endgame: number|null }` — same
+    aggregation core as `playerAccuracy` (shared private `aggregate` helper), split by each
+    move's `phase` field; a phase with no qualifying moves returns `null` for that phase (T7
+    phase-accuracy done)
   - `isSacrifice(move: Move): boolean` — exchange-sac OR piece hangs on destination
   - `classifyMove(loss, isEngineBestMove, move?, winPctBefore?, bestCp?, secondBestCp?): MoveClass`
-  - `buildMoveAnalyses(moves, evalResults, openingPly): MoveAnalysis[]`
+  - `buildMoveAnalyses(moves, evalResults, openingPly): MoveAnalysis[]` — also stamps each
+    move with `phase?: 'opening'|'middlegame'|'endgame'`. Opening runs to
+    `max(openingPly, 20 plies)` (not just the book-match length, since book moves are excluded
+    from accuracy); endgame is a sticky trigger once combined non-pawn material (both sides,
+    kings excluded) drops to ≤20.
 - `src/lib/analysis/arrows.ts`
   - `getBestMoveArrow(fenBefore, bestMoveSan): { from, to } | null`
   - `getAttackArrows(fenAfter, moveTo, moverColor): { attacks, attackedBy }` — pure geometry
@@ -179,12 +187,19 @@ book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431
 
 ## T7 — (Stretch, optional) chess.com-flavor extras
 
-- Phase accuracy: split analyses into opening/middlegame/endgame and expose three accuracy
-  numbers (reuse `openingPly` for the opening boundary; simple move-count/material heuristic
-  for mid/end).
-- Retry-at-key-moments: at each `findKeyMoments` ply, let the user attempt the best move and
-  give pass/fail feedback (ties into existing `coaching.ts`).
-- Candidate arrows: only if you later raise MultiPV to 3 — best green, alternatives dimmed.
+Three independent sub-features; user chose to do only the first one for now.
+
+- [x] **Phase accuracy** — done. `phaseAccuracy` in `classify.ts`, wired into `EvalPanel`'s
+  Open/Mid/End grid. Note the opening boundary is NOT plain `openingPly` — see the ground
+  truth section above for why (book moves are excluded from accuracy, so the opening phase
+  has to extend past the book match or it'd always be `null`).
+- [ ] Retry-at-key-moments: at each `findKeyMoments` ply, let the user attempt the best move
+  and give pass/fail feedback (ties into existing `coaching.ts`). Largest lift of the three —
+  the board is currently display-only (`allowDragging: false`, no move-input handler in
+  `BoardPanel.tsx`); this needs actual move input, a "try mode", and validation.
+- [ ] Candidate arrows: only if you later raise MultiPV to 3 — best green, alternatives dimmed.
+  `EvalResult` currently has no `secondBestMoveSan` (only `secondBestCp`); the `useEngine.ts`
+  info-line parser would need extending to capture the 2nd/3rd PV's first move.
 
 ---
 

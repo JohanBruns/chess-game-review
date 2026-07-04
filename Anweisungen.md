@@ -35,7 +35,10 @@ eine globale Checkliste ganz am Ende). Status also aktiv ermitteln, nicht annehm
   - T6: ist die Best-Move-Pfeil-Unterdrückung bei Gleichheit + Toggle-States (`showBestMove`
     / `showThreats`) vorhanden? Und hat `BoardPanel` eine `orientation`-Prop (Board-Flip,
     inkl. gespiegelter Badge-Geometrie)?
-  - T7: optional/Stretch — nur angehen, wenn explizit gewünscht.
+  - T7: optional/Stretch, drei unabhängige Teile — nur angehen, wenn explizit gewünscht.
+    Enthält `classify.ts` bereits `phaseAccuracy` (Opening/Middlegame/Endgame-Split)? Wenn ja,
+    ist nur dieser Teil erledigt — Retry-at-key-moments und Candidate-Arrows bleiben offen,
+    bis explizit gewünscht (siehe T7-Abschnitt in `IMPLEMENTATION_PLAN.md` für Details/Stand).
 - Den ersten Block, der weder committed noch im Code vorhanden ist, als nächstes bearbeiten.
 - **Clean-Slate-Check, bevor der nächste Block geplant wird:** `npx tsc -b` laufen lassen
   (nicht `npx tsc --noEmit` — siehe Warnung in der Ausführungsphase). Ein vorheriger Block
