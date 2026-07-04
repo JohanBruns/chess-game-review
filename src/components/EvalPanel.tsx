@@ -2,7 +2,6 @@ import type { EvalResult } from '../lib/engine/useEngine'
 
 interface EvalPanelProps {
   isReady: boolean
-  isEvaluating: boolean
   isAnalyzing: boolean
   analysisProgress: { current: number; total: number } | null
   result: EvalResult | null
@@ -12,7 +11,6 @@ interface EvalPanelProps {
   blackAccuracy: number | null
   whitePhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
   blackPhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
-  onEvaluate: () => void
   onAnalyzeGame: () => void
 }
 
@@ -35,7 +33,6 @@ function formatEval(result: EvalResult): string {
 
 export function EvalPanel({
   isReady,
-  isEvaluating,
   isAnalyzing,
   analysisProgress,
   result,
@@ -45,23 +42,13 @@ export function EvalPanel({
   blackAccuracy,
   whitePhaseAccuracy,
   blackPhaseAccuracy,
-  onEvaluate,
   onAnalyzeGame,
 }: EvalPanelProps) {
-  const busy = isEvaluating || isAnalyzing
-  const evalDisabled = !isReady || !isGameLoaded || busy
-  const analyzeDisabled = !isReady || !isGameLoaded || busy
+  const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <button
-          onClick={onEvaluate}
-          disabled={evalDisabled}
-          className="flex-1 px-3 py-2 rounded bg-cc-green-dark hover:bg-cc-green disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
-        >
-          Evaluate Position
-        </button>
         <button
           onClick={onAnalyzeGame}
           disabled={analyzeDisabled}
@@ -88,11 +75,7 @@ export function EvalPanel({
         </div>
       )}
 
-      {isEvaluating && (
-        <p className="text-cc-text-dim text-sm animate-pulse">Evaluating…</p>
-      )}
-
-      {!busy && result && (
+      {!isAnalyzing && result && (
         <div className="flex justify-between text-sm px-1">
           <span className="font-semibold">{formatEval(result)}</span>
           {result.bestMoveSan && (
