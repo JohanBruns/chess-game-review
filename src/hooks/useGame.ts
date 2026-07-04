@@ -8,6 +8,8 @@ interface GameData {
   moves: Move[]
   error: string | null
   isLoaded: boolean
+  whiteElo?: number
+  blackElo?: number
 }
 
 const INITIAL_GAME: GameData = {
@@ -15,6 +17,14 @@ const INITIAL_GAME: GameData = {
   moves: [],
   error: null,
   isLoaded: false,
+}
+
+// PGN Elo tags are strings and chess.com uses "?" (or occasionally "0") for unrated/unknown
+// games — both should behave as "no rating" (neutral classification thresholds), not as a
+// literal 0 rating.
+function parseElo(v: string | null | undefined): number | undefined {
+  const n = Number(v)
+  return Number.isFinite(n) && n > 0 ? n : undefined
 }
 
 export function useGame() {
@@ -38,7 +48,10 @@ export function useGame() {
         return
       }
       const fens = [moves[0].before, ...moves.map((m) => m.after)]
-      setGame({ fens, moves, error: null, isLoaded: true })
+      const headers = chess.header()
+      const whiteElo = parseElo(headers.WhiteElo)
+      const blackElo = parseElo(headers.BlackElo)
+      setGame({ fens, moves, error: null, isLoaded: true, whiteElo, blackElo })
       setCurrentPly(0)
     } catch (e) {
       setGame((prev) => ({ ...prev, error: String(e) }))
@@ -71,6 +84,8 @@ export function useGame() {
     currentPly,
     error: game.error,
     isLoaded: game.isLoaded,
+    whiteElo: game.whiteElo,
+    blackElo: game.blackElo,
     canGoPrev: currentPly > 0,
     canGoNext: currentPly < game.fens.length - 1,
     loadPgn,

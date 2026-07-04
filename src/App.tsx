@@ -28,6 +28,8 @@ function App() {
     currentPly,
     error,
     isLoaded,
+    whiteElo,
+    blackElo,
     canGoPrev,
     canGoNext,
     loadPgn,
@@ -77,8 +79,8 @@ function App() {
 
   const moveAnalyses = useMemo(() => {
     if (evalResults.length === 0) return null
-    return buildMoveAnalyses(moves, evalResults, openingPly)
-  }, [moves, evalResults, openingPly])
+    return buildMoveAnalyses(moves, evalResults, openingPly, whiteElo, blackElo)
+  }, [moves, evalResults, openingPly, whiteElo, blackElo])
 
   const keyMoments = useMemo(
     () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),

@@ -219,6 +219,48 @@ describe('classifyMove — Great', () => {
   })
 })
 
+describe('classifyMove — rating-aware Brilliant/Great thresholds', () => {
+  it('lenient (<1600) loosens the Brilliant loss gate', () => {
+    // loss=2.5 is between the neutral max (2) and the lenient max (3).
+    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined)).not.toBe('Brilliant')
+    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1400)).toBe('Brilliant')
+    // A rating inside the neutral band (1600-2000) behaves exactly like no rating at all.
+    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1800)).not.toBe('Brilliant')
+  })
+
+  it('strict (>2000) tightens the Brilliant loss gate', () => {
+    // loss=1.5 is between the strict max (1) and the neutral max (2).
+    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined)).toBe('Brilliant')
+    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 2200)).not.toBe('Brilliant')
+  })
+
+  it('lenient (<1600) loosens the Great "only good move" gap requirement', () => {
+    // bestCp=300 (winPct≈75.11), secondBestCp=-20 (winPct≈48.16) → gap≈26.95:
+    // below the neutral min (30), but above the lenient min (25).
+    expect(classifyMove(0, true, undefined, 75.1126, 300, -20)).not.toBe('Great')
+    expect(classifyMove(0, true, undefined, 75.1126, 300, -20, undefined, undefined, 1400)).toBe('Great')
+  })
+
+  it('lenient (<1600) loosens the Great swing branches\' near-best tolerance', () => {
+    // loss=2.0 is between the neutral max (1.5) and the lenient max (2.5).
+    expect(classifyMove(2.0, false, undefined, 40, null, null, undefined, 52)).not.toBe('Great')
+    expect(classifyMove(2.0, false, undefined, 40, null, null, undefined, 52, 1400)).toBe('Great')
+  })
+
+  it('strict (>2000) tightens the Great swing branches\' near-best tolerance', () => {
+    // loss=1.2 is between the strict max (1.0) and the neutral max (1.5).
+    expect(classifyMove(1.2, false, undefined, 40, null, null, undefined, 52)).toBe('Great')
+    expect(classifyMove(1.2, false, undefined, 40, null, null, undefined, 52, 2200)).not.toBe('Great')
+  })
+
+  it('tier boundaries are inclusive of neutral: exactly 1600 and exactly 2000 behave as no rating', () => {
+    // 1600 must NOT get lenient treatment (loss=2.5 stays blocked, same as the lenient test above).
+    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1600)).not.toBe('Brilliant')
+    // 2000 must NOT get strict treatment (loss=1.5 stays Brilliant, same as the strict test above).
+    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 2000)).toBe('Brilliant')
+  })
+})
+
 describe('classifyMove — Great swing branches', () => {
   it('fires: lost -> equal via a near-best move (winPctAfterRaw, not the loss-derived reconstruction)', () => {
     // winPctBefore=40 (lost), loss=1 (near-best, isNearBest), winPctAfterRaw=52 (equal) —
@@ -361,6 +403,20 @@ describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
     // bestCp=200 (winPctBefore≈67.62<85), secondBestCp=-400 (winPct≈18.65<50) → gap≈48.97
     const [a] = buildMoveAnalyses([mv('Nf3')], [ev(200, 'Nf3', -400), ev(180)])
     expect(a.classification).toBe('Great')
+  })
+
+  it('rating-aware: whiteRating/blackRating are threaded through per-mover, not swapped', () => {
+    // cpBefore=200 (winPct≈67.62), cpAfter=165 (winPct≈64.74) → loss≈2.88 for White's sac —
+    // too big for neutral (max 2) but within the lenient band (max 3, whiteRating < 1600).
+    const moves = [sacMv('Qxh7')]
+    const evals = [ev(200), ev(165)]
+
+    const [noRating] = buildMoveAnalyses(moves, evals)
+    expect(noRating.classification).not.toBe('Brilliant')
+
+    // blackRating=2200 (strict) must have no effect on White's move — only whiteRating matters here.
+    const [whiteLenient] = buildMoveAnalyses(moves, evals, 0, 1400, 2200)
+    expect(whiteLenient.classification).toBe('Brilliant')
   })
 })
 
