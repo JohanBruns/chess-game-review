@@ -197,7 +197,7 @@ book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431
 
 ## T7 — (Stretch, optional) chess.com-flavor extras
 
-Three independent sub-features; user chose to do only the first one for now.
+Three independent sub-features. All three are now done (2026-07-04) — see below.
 
 - [x] **Phase accuracy** — done. `phaseAccuracy` in `classify.ts`, wired into `EvalPanel`'s
   Open/Mid/End grid. Note the opening boundary is NOT plain `openingPly` — see the ground
