@@ -7,7 +7,7 @@ import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
-import { buildMoveAnalyses, playerAccuracy, findKeyMoments } from './lib/analysis/classify'
+import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
 import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './lib/analysis/arrows'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
@@ -88,6 +88,14 @@ function App() {
   )
   const blackAccuracy = useMemo(
     () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'black') : null),
+    [moveAnalyses],
+  )
+  const whitePhaseAccuracy = useMemo(
+    () => (moveAnalyses ? phaseAccuracy(moveAnalyses, 'white') : null),
+    [moveAnalyses],
+  )
+  const blackPhaseAccuracy = useMemo(
+    () => (moveAnalyses ? phaseAccuracy(moveAnalyses, 'black') : null),
     [moveAnalyses],
   )
 
@@ -274,6 +282,8 @@ function App() {
               isGameLoaded={isLoaded}
               whiteAccuracy={whiteAccuracy}
               blackAccuracy={blackAccuracy}
+              whitePhaseAccuracy={whitePhaseAccuracy}
+              blackPhaseAccuracy={blackPhaseAccuracy}
               onEvaluate={handleEvaluate}
               onAnalyzeGame={handleAnalyzeGame}
             />

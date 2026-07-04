@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { Chess, type Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
-import { winPct, classifyMove, isSacrifice, buildMoveAnalyses, moveAccuracy, playerAccuracy, findKeyMoments } from './classify'
+import { winPct, classifyMove, isSacrifice, buildMoveAnalyses, moveAccuracy, playerAccuracy, phaseAccuracy, findKeyMoments } from './classify'
 import type { MoveAnalysis, MoveClass } from './classify'
 
 // Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
 const mv = (san: string) => ({ san } as unknown as Move)
+
+// A fake move carrying only .after (the post-move FEN) — enough to drive buildMoveAnalyses'
+// phase detection (nonPawnMaterial reads the FEN's piece-placement field) without needing a
+// real, legal move sequence. isForcedMove/isSacrifice both bail out safely on the missing
+// .before/.piece fields, so classification falls through to the normal eval-based path.
+const mvAfter = (san: string, after: string) => ({ san, after } as unknown as Move)
+const HIGH_MATERIAL_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' // 62 non-pawn
+const LOW_MATERIAL_FEN = '4k3/8/8/8/8/8/8/4K3 w - - 0 1'                           // 0 non-pawn
 const ev = (cp: number, bestMoveSan: string | null = null, secondBestCp: number | null = null): EvalResult => ({
   cp,
   mate: null,
@@ -436,6 +444,40 @@ describe('buildMoveAnalyses — Forced classification', () => {
   })
 })
 
+describe('buildMoveAnalyses — phase', () => {
+  it('opening phase extends to at least ply 20 even when openingPly (book match) is shorter', () => {
+    // openingPly=2 (book match ends early), but material stays high throughout — the opening
+    // phase must still cover plies 0..19 (OPENING_MIN_PLIES), not just the 2 book plies.
+    const moves = Array.from({ length: 25 }, () => mvAfter('Nf3', HIGH_MATERIAL_FEN))
+    const evals = Array.from({ length: 26 }, () => ev(0))
+    const analyses = buildMoveAnalyses(moves, evals, 2)
+    expect(analyses[19].phase).toBe('opening')
+    expect(analyses[20].phase).toBe('middlegame')
+  })
+
+  it('switches to endgame once non-pawn material drops at/below the threshold, and stays there', () => {
+    const moves = [
+      ...Array.from({ length: 20 }, () => mvAfter('Nf3', HIGH_MATERIAL_FEN)), // plies 0-19
+      mvAfter('Qxd8', LOW_MATERIAL_FEN),  // ply 20: material collapses here
+      mvAfter('Kxd8', LOW_MATERIAL_FEN),  // ply 21: stays endgame (sticky)
+    ]
+    const evals = Array.from({ length: 23 }, () => ev(0))
+    const analyses = buildMoveAnalyses(moves, evals, 0)
+    expect(analyses[19].phase).toBe('opening')  // still within OPENING_MIN_PLIES
+    expect(analyses[20].phase).toBe('endgame')
+    expect(analyses[21].phase).toBe('endgame')
+  })
+
+  it('Book and Forced moves still get a phase assigned', () => {
+    const moves = [mv('e4'), mv('e5')]
+    const evals = [ev(0), ev(0), ev(0)]
+    const analyses = buildMoveAnalyses(moves, evals, 2)
+    expect(analyses[0].classification).toBe('Book')
+    expect(analyses[0].phase).toBe('opening')
+    expect(analyses[1].phase).toBe('opening')
+  })
+})
+
 describe('playerAccuracy', () => {
   it('returns null when analyses is empty', () => {
     expect(playerAccuracy([], 'white')).toBeNull()
@@ -538,6 +580,58 @@ describe('playerAccuracy', () => {
       base(5, 0, 'Good', 80), base(6, 40, 'Blunder', 50), base(7, 0, 'Good', 20),
     ]
     expect(playerAccuracy(volatile, 'white')!).toBeLessThan(playerAccuracy(calm, 'white')!)
+  })
+})
+
+describe('phaseAccuracy', () => {
+  it('returns null for every phase when analyses is empty', () => {
+    expect(phaseAccuracy([], 'white')).toEqual({ opening: null, middlegame: null, endgame: null })
+  })
+
+  it('returns null for a phase with no qualifying moves (e.g. a game with no endgame)', () => {
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0, classification: 'Best', accuracy: 100, phase: 'opening' },
+      { moveIndex: 2, lossInWinPct: 5, classification: 'Good', accuracy: 90, phase: 'middlegame' },
+    ]
+    const result = phaseAccuracy(analyses, 'white')
+    expect(result.opening).not.toBeNull()
+    expect(result.middlegame).not.toBeNull()
+    expect(result.endgame).toBeNull()
+  })
+
+  it('splits accuracy per phase and ignores the other phases', () => {
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0,  classification: 'Best',    accuracy: 100, phase: 'opening' },
+      { moveIndex: 2, lossInWinPct: 30, classification: 'Blunder', accuracy: 10,  phase: 'middlegame' },
+      { moveIndex: 4, lossInWinPct: 0,  classification: 'Best',    accuracy: 100, phase: 'endgame' },
+    ]
+    const result = phaseAccuracy(analyses, 'white')
+    expect(result.opening).toBeCloseTo(100, 0)
+    expect(result.middlegame).toBeCloseTo(10, 0)
+    expect(result.endgame).toBeCloseTo(100, 0)
+  })
+
+  it('excludes Book/Forced moves within a phase, same as playerAccuracy', () => {
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0, classification: 'Book',    accuracy: 100, phase: 'opening' },
+      { moveIndex: 2, lossInWinPct: 0, classification: 'Forced',  accuracy: 100, phase: 'opening' },
+      { moveIndex: 4, lossInWinPct: 30, classification: 'Blunder', accuracy: 10, phase: 'opening' },
+    ]
+    // If Book/Forced counted, the mean would sit near (100+100+10)/3 ≈ 70; excluded, it must
+    // equal the Blunder's own accuracy.
+    expect(phaseAccuracy(analyses, 'white').opening).toBe(10)
+  })
+
+  it('agrees with playerAccuracy when every move shares the same phase (consistency check)', () => {
+    const analyses: MoveAnalysis[] = [
+      { moveIndex: 0, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70, phase: 'middlegame' },
+      { moveIndex: 2, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70, phase: 'middlegame' },
+      { moveIndex: 4, lossInWinPct: 30,  classification: 'Blunder',   accuracy: 20, winPctAfterRaw: 70, phase: 'middlegame' },
+      { moveIndex: 6, lossInWinPct: 0.1, classification: 'Excellent', accuracy: 99, winPctAfterRaw: 70, phase: 'middlegame' },
+    ]
+    const overall = playerAccuracy(analyses, 'white')!
+    const middlegame = phaseAccuracy(analyses, 'white').middlegame!
+    expect(middlegame).toBeCloseTo(overall, 5)
   })
 })
 

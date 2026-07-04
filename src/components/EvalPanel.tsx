@@ -10,8 +10,14 @@ interface EvalPanelProps {
   isGameLoaded: boolean
   whiteAccuracy: number | null
   blackAccuracy: number | null
+  whitePhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
+  blackPhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
   onEvaluate: () => void
   onAnalyzeGame: () => void
+}
+
+function formatPhase(v: number | null): string {
+  return v === null ? '–' : v.toFixed(1)
 }
 
 function formatEval(result: EvalResult): string {
@@ -37,6 +43,8 @@ export function EvalPanel({
   isGameLoaded,
   whiteAccuracy,
   blackAccuracy,
+  whitePhaseAccuracy,
+  blackPhaseAccuracy,
   onEvaluate,
   onAnalyzeGame,
 }: EvalPanelProps) {
@@ -105,6 +113,25 @@ export function EvalPanel({
             <span className="text-cc-text-dim">Black </span>
             <span className="font-semibold text-cc-text-dim">{blackAccuracy.toFixed(1)}%</span>
           </span>
+        </div>
+      )}
+
+      {whitePhaseAccuracy && blackPhaseAccuracy && (
+        <div className="grid grid-cols-4 gap-1 text-xs px-1 py-1 bg-cc-panel rounded text-center">
+          <span></span>
+          <span className="text-cc-text-dim">Open</span>
+          <span className="text-cc-text-dim">Mid</span>
+          <span className="text-cc-text-dim">End</span>
+
+          <span className="text-cc-text-dim text-left">White</span>
+          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.opening)}</span>
+          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.middlegame)}</span>
+          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.endgame)}</span>
+
+          <span className="text-cc-text-dim text-left">Black</span>
+          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.opening)}</span>
+          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.middlegame)}</span>
+          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.endgame)}</span>
         </div>
       )}
 
