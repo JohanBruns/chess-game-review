@@ -33,7 +33,8 @@ eine globale Checkliste ganz am Ende). Status also aktiv ermitteln, nicht annehm
   - T5: ist `playerAccuracy` bereits eine Volatilitäts-gewichtete + harmonische
     Aggregation statt eines simplen arithmetischen Mittels?
   - T6: ist die Best-Move-Pfeil-Unterdrückung bei Gleichheit + Toggle-States (`showBestMove`
-    / `showThreats`) vorhanden?
+    / `showThreats`) vorhanden? Und hat `BoardPanel` eine `orientation`-Prop (Board-Flip,
+    inkl. gespiegelter Badge-Geometrie)?
   - T7: optional/Stretch — nur angehen, wenn explizit gewünscht.
 - Den ersten Block, der weder committed noch im Code vorhanden ist, als nächstes bearbeiten.
 - **Clean-Slate-Check, bevor der nächste Block geplant wird:** `npx tsc -b` laufen lassen
