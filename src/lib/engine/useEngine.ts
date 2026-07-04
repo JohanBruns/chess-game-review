@@ -7,6 +7,9 @@ export interface EvalResult {
   bestMoveSan: string | null
   pv: string | null
   secondBestCp: number | null
+  secondBestMoveSan: string | null
+  thirdBestCp: number | null
+  thirdBestMoveSan: string | null
 }
 
 interface AnalysisQueue {
@@ -47,6 +50,9 @@ export function useEngine() {
   const lastMateRef = useRef<number | null>(null)
   const lastPvRef = useRef<string[]>([])
   const lastSecondBestCpRef = useRef<number | null>(null)
+  const lastSecondBestUciRef = useRef<string | null>(null)
+  const lastThirdBestCpRef = useRef<number | null>(null)
+  const lastThirdBestUciRef = useRef<string | null>(null)
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
@@ -59,6 +65,9 @@ export function useEngine() {
     lastMateRef.current = null
     lastPvRef.current = []
     lastSecondBestCpRef.current = null
+    lastSecondBestUciRef.current = null
+    lastThirdBestCpRef.current = null
+    lastThirdBestUciRef.current = null
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
     workerRef.current.postMessage(`position fen ${fen}`)
     workerRef.current.postMessage('go depth 15')
@@ -111,7 +120,7 @@ export function useEngine() {
 
       if (initPhaseRef.current === 'isready' && line === 'readyok') {
         initPhaseRef.current = 'ready'
-        worker.postMessage('setoption name MultiPV value 2')
+        worker.postMessage('setoption name MultiPV value 3')
         setState(prev => ({ ...prev, isReady: true }))
         return
       }
@@ -148,11 +157,26 @@ export function useEngine() {
           if (!analysisQueueRef.current) {
             setState(prev => ({
               ...prev,
-              result: { cp, mate, bestMoveSan: prev.result?.bestMoveSan ?? null, pv: prev.result?.pv ?? null, secondBestCp: lastSecondBestCpRef.current },
+              result: {
+                cp,
+                mate,
+                bestMoveSan: prev.result?.bestMoveSan ?? null,
+                pv: prev.result?.pv ?? null,
+                secondBestCp: lastSecondBestCpRef.current,
+                secondBestMoveSan: prev.result?.secondBestMoveSan ?? null,
+                thirdBestCp: lastThirdBestCpRef.current,
+                thirdBestMoveSan: prev.result?.thirdBestMoveSan ?? null,
+              },
             }))
           }
         } else if (multipvIdx === 2 && cp !== null) {
           lastSecondBestCpRef.current = cp
+          const pvMatch = line.match(/ pv (\S+)/)
+          if (pvMatch) lastSecondBestUciRef.current = pvMatch[1]
+        } else if (multipvIdx === 3 && cp !== null) {
+          lastThirdBestCpRef.current = cp
+          const pvMatch = line.match(/ pv (\S+)/)
+          if (pvMatch) lastThirdBestUciRef.current = pvMatch[1]
         }
         return
       }
@@ -169,25 +193,23 @@ export function useEngine() {
           }
           return sans.join(' ')
         }
+        // Single-move UCI → SAN, used for the best move and the 2nd/3rd MultiPV lines' first move.
+        function uciToSan(fen: string | null, uci: string | null): string | null {
+          if (!uci || uci === '(none)' || !fen) return null
+          try {
+            const chess = new Chess(fen)
+            const m = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] ?? undefined })
+            return m?.san ?? null
+          } catch {
+            return null
+          }
+        }
         if (timeoutRef.current !== null) {
           clearTimeout(timeoutRef.current)
           timeoutRef.current = null
         }
         const uciMove = line.split(' ')[1]
-        let bestMoveSan: string | null = null
-        if (uciMove && uciMove !== '(none)' && evaluatingFenRef.current) {
-          try {
-            const chess = new Chess(evaluatingFenRef.current)
-            const m = chess.move({
-              from: uciMove.slice(0, 2),
-              to: uciMove.slice(2, 4),
-              promotion: uciMove[4] ?? undefined,
-            })
-            bestMoveSan = m?.san ?? null
-          } catch {
-            bestMoveSan = null
-          }
-        }
+        const bestMoveSan = uciToSan(evaluatingFenRef.current, uciMove)
 
         const pv = lastPvRef.current.length > 0 && evaluatingFenRef.current
           ? uciPvToSan(evaluatingFenRef.current, lastPvRef.current)
@@ -199,6 +221,9 @@ export function useEngine() {
           bestMoveSan,
           pv,
           secondBestCp: lastSecondBestCpRef.current,
+          secondBestMoveSan: uciToSan(evaluatingFenRef.current, lastSecondBestUciRef.current),
+          thirdBestCp: lastThirdBestCpRef.current,
+          thirdBestMoveSan: uciToSan(evaluatingFenRef.current, lastThirdBestUciRef.current),
         }
 
         const queue = analysisQueueRef.current

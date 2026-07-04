@@ -13,6 +13,9 @@ interface BoardPanelProps {
   attackArrows?: { attacks: string[]; attackedBy: string[] }
   // Engine's best move in the current position — the standing threat, shown as a red arrow.
   threatArrow?: { from: string; to: string }
+  // T7c engine-lines panel: the (best, or hovered) candidate move for the current position.
+  // chess.com only ever draws one such arrow at a time — never all lines simultaneously.
+  candidateArrow?: { from: string; to: string }
   // Which side's perspective the board is drawn from. react-chessboard flips pieces, arrows,
   // and squareStyles automatically; only the manual badge-overlay geometry below needs mirroring.
   orientation?: 'white' | 'black'
@@ -39,6 +42,8 @@ const BEST_MOVE_ARROW_SEVERE_COLOR = '#F8553F' // Mistake / Blunder
 const ATTACKS_ARROW_COLOR = '#FFAA00'
 const ATTACKED_BY_ARROW_COLOR = '#e5533d'
 const THREAT_ARROW_COLOR = '#e02c2c'
+// chess.com's analysis-mode engine-lines arrow — same green as its "best move" square/line highlight.
+const CANDIDATE_ARROW_COLOR = '#81b64c'
 
 function bestMoveArrowColor(classification?: MoveClass): string {
   return classification === 'Mistake' || classification === 'Blunder'
@@ -104,6 +109,7 @@ export function BoardPanel({
   bestMoveArrow,
   attackArrows,
   threatArrow,
+  candidateArrow,
   orientation = 'white',
   interactive = false,
   onPieceDrop,
@@ -129,6 +135,9 @@ export function BoardPanel({
   }
   if (threatArrow) {
     arrows.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
+  }
+  if (candidateArrow) {
+    arrows.push({ startSquare: candidateArrow.from, endSquare: candidateArrow.to, color: CANDIDATE_ARROW_COLOR })
   }
 
   const badge =

@@ -14,6 +14,9 @@ interface CoachingPanelProps {
   canShowThreat: boolean
   showThreatArrow: boolean
   onToggleThreatArrow: () => void
+  canShowLines: boolean
+  showEngineLines: boolean
+  onToggleEngineLines: () => void
 }
 
 export function CoachingPanel({
@@ -30,6 +33,9 @@ export function CoachingPanel({
   canShowThreat,
   showThreatArrow,
   onToggleThreatArrow,
+  canShowLines,
+  showEngineLines,
+  onToggleEngineLines,
 }: CoachingPanelProps) {
   const [draft, setDraft] = useState('')
 
@@ -61,6 +67,18 @@ export function CoachingPanel({
             }`}
           >
             Threats
+          </button>
+          <button
+            onClick={onToggleEngineLines}
+            disabled={!canShowLines}
+            aria-pressed={showEngineLines}
+            className={`px-3 py-1 rounded text-xs disabled:opacity-40 transition-colors ${
+              showEngineLines
+                ? 'bg-cc-green text-white hover:bg-cc-green-hover'
+                : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
+            }`}
+          >
+            Lines
           </button>
         </div>
       </div>

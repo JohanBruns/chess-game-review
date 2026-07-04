@@ -35,12 +35,14 @@ eine globale Checkliste ganz am Ende). Status also aktiv ermitteln, nicht annehm
   - T6: ist die Best-Move-Pfeil-Unterdrückung bei Gleichheit + Toggle-States (`showBestMove`
     / `showThreats`) vorhanden? Und hat `BoardPanel` eine `orientation`-Prop (Board-Flip,
     inkl. gespiegelter Badge-Geometrie)?
-  - T7: optional/Stretch, drei unabhängige Teile — nur angehen, wenn explizit gewünscht.
-    Enthält `classify.ts` bereits `phaseAccuracy` (Opening/Middlegame/Endgame-Split)? Existiert
-    `src/lib/analysis/retry.ts` (`attemptMove`/`isBestMove`) und hat `BoardPanel` eine
-    `interactive`/`onPieceDrop`-Prop? Wenn beides ja, sind zwei der drei Teile erledigt —
-    Candidate-Arrows bleibt offen, bis explizit gewünscht (siehe T7-Abschnitt in
-    `IMPLEMENTATION_PLAN.md` für Details/Stand).
+  - T7: optional/Stretch, drei unabhängige Teile. Alle drei sind erledigt: `phaseAccuracy`
+    (Opening/Middlegame/Endgame-Split) in `classify.ts`; `src/lib/analysis/retry.ts`
+    (`attemptMove`/`isBestMove`) + `BoardPanel`s `interactive`/`onPieceDrop`; und die
+    Engine-Linien (`src/lib/analysis/lines.ts` `getEngineLines`, `EngineLines.tsx`,
+    MultiPV=3). Wichtig: die Linien sind **kein** simultaner Mehrfach-Pfeil-Overlay — live
+    gegen chess.com verifiziert (2026-07-04), dass dort nur EIN Pfeil gleichzeitig gezeichnet
+    wird (best oder gehoverte Zeile), die Kandidaten selbst als Text-Liste (Eval+SAN). Details
+    im T7-Abschnitt von `IMPLEMENTATION_PLAN.md`.
 - Den ersten Block, der weder committed noch im Code vorhanden ist, als nächstes bearbeiten.
 - **Clean-Slate-Check, bevor der nächste Block geplant wird:** `npx tsc -b` laufen lassen
   (nicht `npx tsc --noEmit` — siehe Warnung in der Ausführungsphase). Ein vorheriger Block

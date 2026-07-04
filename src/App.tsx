@@ -9,6 +9,8 @@ import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
 import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './lib/analysis/arrows'
+import { getEngineLines } from './lib/analysis/lines'
+import { EngineLines } from './components/EngineLines'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
@@ -105,6 +107,8 @@ function App() {
 
   const [showBestMoveArrow, setShowBestMoveArrow] = useState(false)
   const [showThreatArrow, setShowThreatArrow] = useState(false)
+  const [showEngineLines, setShowEngineLines] = useState(false)
+  const [hoveredLineSan, setHoveredLineSan] = useState<string | null>(null)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
@@ -123,6 +127,8 @@ function App() {
       resetCoaching()
       setShowBestMoveArrow(false)
       setShowThreatArrow(false)
+      setShowEngineLines(false)
+      setHoveredLineSan(null)
       // Don't clear retry state when the ply change IS the retry entry itself (handleRetry
       // sets retryMoveIndex and calls goToPly in the same batch, so they land together here).
       // Any other navigation (Prev/Next/jump) changes currentPly without retryMoveIndex
@@ -150,6 +156,23 @@ function App() {
     const threatSan = evalResults[currentPly]?.bestMoveSan
     return getThreatArrow(currentFen, threatSan ?? null) ?? undefined
   }, [showThreatArrow, currentPly, evalResults, currentFen])
+
+  // T7c engine-lines panel: the current position's top-3 MultiPV candidates (chess.com's
+  // analysis-mode "Number of Lines"), best first. Uses evalResults[currentPly] when the
+  // full game has been analyzed, falling back to the single-position `result` otherwise.
+  const engineLines = useMemo(
+    () => getEngineLines(evalResults[currentPly] ?? result),
+    [evalResults, currentPly, result],
+  )
+
+  // Single green arrow for whichever line is hovered (or the best line by default) — chess.com
+  // never draws more than one candidate arrow simultaneously, see IMPLEMENTATION_PLAN.md T7c.
+  const candidateArrow = useMemo(() => {
+    if (!showEngineLines) return undefined
+    const san = hoveredLineSan ?? engineLines[0]?.san
+    if (!san) return undefined
+    return getBestMoveArrow(currentFen, san) ?? undefined
+  }, [showEngineLines, hoveredLineSan, engineLines, currentFen])
 
   // Attack/attacked-by arrows — pure board geometry, always shown for the current move.
   const attackArrows = useMemo(() => {
@@ -222,6 +245,7 @@ function App() {
 
   const canShowBestMove = currentPly > 0 && evalResults[currentPly - 1]?.bestMoveSan != null
   const canShowThreat = evalResults[currentPly]?.bestMoveSan != null
+  const canShowLines = (evalResults[currentPly] ?? result)?.bestMoveSan != null
 
   const handleToggleBestMoveArrow = useCallback(() => {
     setShowBestMoveArrow(v => !v)
@@ -229,6 +253,10 @@ function App() {
 
   const handleToggleThreatArrow = useCallback(() => {
     setShowThreatArrow(v => !v)
+  }, [])
+
+  const handleToggleEngineLines = useCallback(() => {
+    setShowEngineLines(v => !v)
   }, [])
 
   const handleExplain = useCallback(() => {
@@ -308,6 +336,7 @@ function App() {
                 bestMoveArrow={retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow}
                 attackArrows={attackArrows}
                 threatArrow={threatArrow}
+                candidateArrow={candidateArrow}
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}
@@ -346,6 +375,11 @@ function App() {
               onAnalyzeGame={handleAnalyzeGame}
             />
           </div>
+          {showEngineLines && engineLines.length > 0 && (
+            <div className="shrink-0 px-2 pb-2">
+              <EngineLines lines={engineLines} onHoverLine={setHoveredLineSan} />
+            </div>
+          )}
           <MoveList
             moves={moves}
             currentPly={currentPly}
@@ -391,6 +425,9 @@ function App() {
               canShowThreat={canShowThreat}
               showThreatArrow={showThreatArrow}
               onToggleThreatArrow={handleToggleThreatArrow}
+              canShowLines={canShowLines}
+              showEngineLines={showEngineLines}
+              onToggleEngineLines={handleToggleEngineLines}
             />
           </div>
         </div>
