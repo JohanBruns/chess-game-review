@@ -14,12 +14,15 @@ export type MoveClass =
   | 'Miss'
   | 'Forced'
 
+export type GamePhase = 'opening' | 'middlegame' | 'endgame'
+
 export interface MoveAnalysis {
   moveIndex: number
   lossInWinPct: number
   classification: MoveClass
   accuracy: number
   winPctAfterRaw?: number   // mover-perspective post-move win%; feeds T5 volatility trajectory
+  phase?: GamePhase         // T7: opening/middlegame/endgame split, for phaseAccuracy
 }
 
 export function moveAccuracy(lossInWinPct: number): number {
@@ -35,27 +38,13 @@ function stdDev(values: number[]): number {
   return Math.sqrt(variance)
 }
 
-// Lichess/chess.com-style game accuracy: mean of a volatility-weighted mean and a harmonic
-// mean over the player's non-Book/non-Forced moves, instead of a plain arithmetic mean.
-// The harmonic mean punishes a single big blunder among otherwise-strong moves; the
-// volatility weighting gives more weight to accuracy in sharp (high win%-swing) positions.
-export function playerAccuracy(
-  analyses: MoveAnalysis[],
-  player: 'white' | 'black',
-): number | null {
-  // White-perspective win% trajectory across every ply that has a post-move eval.
-  // winPctAfterRaw is stored MOVER-perspective; convert to one (White) perspective so the
-  // volatility window measures real swing, not the per-ply side flip.
-  const trajectory = new Map<number, number>()
-  for (const a of analyses) {
-    if (a.winPctAfterRaw == null) continue
-    trajectory.set(a.moveIndex, a.moveIndex % 2 === 0 ? a.winPctAfterRaw : 100 - a.winPctAfterRaw)
-  }
-
-  const playerMoves = analyses.filter(a =>
-    (player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0) &&
-    a.classification !== 'Book' && a.classification !== 'Forced',
-  )
+// Shared core of the Lichess/chess.com-style aggregation: mean of a volatility-weighted mean
+// and a harmonic mean over a given set of moves, instead of a plain arithmetic mean. The
+// harmonic mean punishes a single big blunder among otherwise-strong moves; the volatility
+// weighting gives more weight to accuracy in sharp (high win%-swing) positions. `trajectory`
+// is the full-game White-perspective win% map (see playerAccuracy) so the ±2-ply volatility
+// window can see across whatever slice `playerMoves` is (e.g. a single game phase).
+function aggregate(trajectory: Map<number, number>, playerMoves: MoveAnalysis[]): number | null {
   if (playerMoves.length === 0) return null
 
   // (a) Volatility-weighted mean: weight each accuracy by local win% std-dev (±2 plies),
@@ -82,6 +71,53 @@ export function playerAccuracy(
   return Math.min(100, Math.max(0, (weightedMean + harmonicMean) / 2))
 }
 
+// White-perspective win% trajectory across every ply that has a post-move eval.
+// winPctAfterRaw is stored MOVER-perspective; convert to one (White) perspective so the
+// volatility window measures real swing, not the per-ply side flip.
+function buildTrajectory(analyses: MoveAnalysis[]): Map<number, number> {
+  const trajectory = new Map<number, number>()
+  for (const a of analyses) {
+    if (a.winPctAfterRaw == null) continue
+    trajectory.set(a.moveIndex, a.moveIndex % 2 === 0 ? a.winPctAfterRaw : 100 - a.winPctAfterRaw)
+  }
+  return trajectory
+}
+
+export function playerAccuracy(
+  analyses: MoveAnalysis[],
+  player: 'white' | 'black',
+): number | null {
+  const trajectory = buildTrajectory(analyses)
+  const playerMoves = analyses.filter(a =>
+    (player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0) &&
+    a.classification !== 'Book' && a.classification !== 'Forced',
+  )
+  return aggregate(trajectory, playerMoves)
+}
+
+// T7: same aggregation as playerAccuracy, split into opening/middlegame/endgame using each
+// move's `phase` (set by buildMoveAnalyses). Book/Forced stay excluded, consistent with the
+// overall accuracy number. A phase with no qualifying moves (e.g. a short game with no
+// endgame) reports `null` for that phase.
+export function phaseAccuracy(
+  analyses: MoveAnalysis[],
+  player: 'white' | 'black',
+): { opening: number | null; middlegame: number | null; endgame: number | null } {
+  const trajectory = buildTrajectory(analyses)
+  const isPlayerMove = (a: MoveAnalysis) =>
+    (player === 'white' ? a.moveIndex % 2 === 0 : a.moveIndex % 2 !== 0) &&
+    a.classification !== 'Book' && a.classification !== 'Forced'
+
+  const forPhase = (phase: GamePhase) =>
+    aggregate(trajectory, analyses.filter(a => isPlayerMove(a) && a.phase === phase))
+
+  return {
+    opening: forPhase('opening'),
+    middlegame: forPhase('middlegame'),
+    endgame: forPhase('endgame'),
+  }
+}
+
 export function winPct(cp: number): number {
   return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1)
 }
@@ -98,6 +134,22 @@ const MISS_RESULT_CEILING = 55  // and the played move let it slip to at/below t
 
 // Piece values for sacrifice detection
 const PIECE_VAL: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
+
+// T7 game-phase thresholds
+const OPENING_MIN_PLIES = 20          // opening phase runs at least to move 10 regardless of book length
+const ENDGAME_NONPAWN_MATERIAL = 20   // both sides combined, kings excluded; starting value is 62
+
+// Sum of non-pawn, non-king material (both sides) from a FEN's piece-placement field —
+// used as a simple, sticky endgame trigger. No Chess() instantiation needed.
+function nonPawnMaterial(fen: string): number {
+  const placement = fen.split(' ')[0]
+  let sum = 0
+  for (const ch of placement) {
+    const lower = ch.toLowerCase()
+    if (lower === 'n' || lower === 'b' || lower === 'r' || lower === 'q') sum += PIECE_VAL[lower]
+  }
+  return sum
+}
 
 // A move is a sacrifice when material is given without immediate equal compensation.
 // Two cases:
@@ -246,14 +298,27 @@ export function buildMoveAnalyses(
   openingPly = 0,
 ): MoveAnalysis[] {
   const analyses: MoveAnalysis[] = []
+  // Opening phase runs at least to move 10, even if the opening-DB match (openingPly) is
+  // shorter — otherwise "opening" would coincide exactly with the Book moves, which
+  // playerAccuracy/phaseAccuracy exclude, making opening accuracy structurally always null.
+  const openingEndPly = Math.max(openingPly, OPENING_MIN_PLIES)
+  let endgameStarted = false
 
   for (let i = 0; i < moves.length; i++) {
+    // Sticky: once material drops to the endgame threshold it stays "endgame" even if a
+    // later ply's FEN is unavailable. Evaluated for every move (including skipped/Book ones)
+    // so the phase boundary doesn't depend on which plies got engine evals.
+    if (!endgameStarted && moves[i].after && nonPawnMaterial(moves[i].after) <= ENDGAME_NONPAWN_MATERIAL) {
+      endgameStarted = true
+    }
+    const phase: GamePhase = i < openingEndPly ? 'opening' : endgameStarted ? 'endgame' : 'middlegame'
+
     if (i < openingPly) {
-      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100 })
+      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100, phase })
       continue
     }
     if (isForcedMove(moves[i])) {
-      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Forced', accuracy: 100 })
+      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Forced', accuracy: 100, phase })
       continue
     }
     const evalBefore = evalResults[i]
@@ -301,6 +366,7 @@ export function buildMoveAnalyses(
       ),
       accuracy: moveAccuracy(loss),
       winPctAfterRaw,
+      phase,
     })
   }
 
