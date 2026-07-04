@@ -9,12 +9,14 @@ import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
 import { getBestMoveArrow, getAttackArrows, getThreatArrow } from './lib/analysis/arrows'
+import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { useCoaching } from './hooks/useCoaching'
 import { CoachingPanel } from './components/CoachingPanel'
 import { ClassLegend } from './components/ClassLegend'
+import { RetryPanel } from './components/RetryPanel'
 
 function App() {
   const {
@@ -106,6 +108,14 @@ function App() {
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
+  // Retry-at-key-moments. retryMoveIndex is the 0-based moveIndex being retried (fens[moveIndex]
+  // is the position BEFORE that move — the position the user tries an alternative from).
+  // trialFen overlays the board with the user's attempted position; useGame's currentPly/fens
+  // are never mutated by a retry attempt.
+  const [retryMoveIndex, setRetryMoveIndex] = useState<number | null>(null)
+  const [trialFen, setTrialFen] = useState<string | null>(null)
+  const [attemptResult, setAttemptResult] = useState<{ san: string; isCorrect: boolean | null } | null>(null)
+
   const prevPlyRef = useRef<number>(currentPly)
   useEffect(() => {
     if (prevPlyRef.current !== currentPly) {
@@ -113,8 +123,17 @@ function App() {
       resetCoaching()
       setShowBestMoveArrow(false)
       setShowThreatArrow(false)
+      // Don't clear retry state when the ply change IS the retry entry itself (handleRetry
+      // sets retryMoveIndex and calls goToPly in the same batch, so they land together here).
+      // Any other navigation (Prev/Next/jump) changes currentPly without retryMoveIndex
+      // following it, which is exactly when retry mode should end.
+      if (currentPly !== retryMoveIndex) {
+        setRetryMoveIndex(null)
+        setTrialFen(null)
+        setAttemptResult(null)
+      }
     }
-  }, [currentPly, resetCoaching])
+  }, [currentPly, resetCoaching, retryMoveIndex])
 
   // Green suggestion arrow — only meaningful when the played move differs from the engine's best.
   const bestMoveArrow = useMemo(() => {
@@ -138,6 +157,43 @@ function App() {
     const move = moves[currentPly - 1]
     return getAttackArrows(currentFen, move.to, move.color)
   }, [currentPly, moves, currentFen])
+
+  // Retry-at-key-moments: reveals the engine's best move once an attempt has been made,
+  // reusing getBestMoveArrow exactly as the normal-mode bestMoveArrow above does.
+  const retryRevealArrow = useMemo(() => {
+    if (retryMoveIndex === null || attemptResult === null) return undefined
+    const bestSan = evalResults[retryMoveIndex]?.bestMoveSan
+    if (!bestSan) return undefined
+    return getBestMoveArrow(fens[retryMoveIndex], bestSan) ?? undefined
+  }, [retryMoveIndex, attemptResult, evalResults, fens])
+
+  const handleRetry = useCallback((moveIndex: number) => {
+    setRetryMoveIndex(moveIndex)
+    setTrialFen(null)
+    setAttemptResult(null)
+    goToPly(moveIndex)
+  }, [goToPly])
+
+  const handleTrialDrop = useCallback((from: string, to: string): boolean => {
+    if (retryMoveIndex === null) return false
+    const result = attemptMove(currentFen, from, to)
+    if (!result) return false
+    const bestSan = evalResults[retryMoveIndex]?.bestMoveSan ?? null
+    setTrialFen(result.fenAfter)
+    setAttemptResult({ san: result.san, isCorrect: isBestMove(result.san, bestSan) })
+    return true
+  }, [retryMoveIndex, currentFen, evalResults])
+
+  const handleRetryAgain = useCallback(() => {
+    setTrialFen(null)
+    setAttemptResult(null)
+  }, [])
+
+  const handleExitRetry = useCallback(() => {
+    setRetryMoveIndex(null)
+    setTrialFen(null)
+    setAttemptResult(null)
+  }, [])
 
   // Sound effects
   const captureAudioRef = useRef<HTMLAudioElement | null>(null)
@@ -245,14 +301,16 @@ function App() {
             <EvalBar evalResult={evalResults[currentPly] ?? result} />
             <div className="aspect-square h-full">
               <BoardPanel
-                fen={currentFen}
-                lastMoveFrom={currentPly > 0 ? moves[currentPly - 1].from : undefined}
-                lastMoveTo={currentPly > 0 ? moves[currentPly - 1].to : undefined}
-                classification={currentPly > 0 ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
-                bestMoveArrow={bestMoveArrow}
+                fen={trialFen ?? currentFen}
+                lastMoveFrom={retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined}
+                lastMoveTo={retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined}
+                classification={retryMoveIndex === null ? moveAnalyses?.[currentPly - 1]?.classification : undefined}
+                bestMoveArrow={retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow}
                 attackArrows={attackArrows}
                 threatArrow={threatArrow}
                 orientation={orientation}
+                interactive={retryMoveIndex !== null && trialFen === null}
+                onPieceDrop={handleTrialDrop}
               />
             </div>
           </div>
@@ -294,6 +352,7 @@ function App() {
             onSelectPly={goToPly}
             moveAnalyses={moveAnalyses}
             keyMoments={keyMoments}
+            onRetry={handleRetry}
           />
           {evalResults.length > 0 && (
             <div className="shrink-0 border-t border-cc-border">
@@ -306,6 +365,17 @@ function App() {
             </div>
           )}
           <ClassLegend moveAnalyses={moveAnalyses} />
+          {retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] && (
+            <div className="shrink-0 border-t border-cc-border p-2">
+              <RetryPanel
+                originalSan={moves[retryMoveIndex].san}
+                originalClassification={moveAnalyses[retryMoveIndex].classification}
+                attempt={attemptResult}
+                onRetryAgain={handleRetryAgain}
+                onExit={handleExitRetry}
+              />
+            </div>
+          )}
           <div className="shrink-0 border-t border-cc-border">
             <CoachingPanel
               apiKey={apiKey}
