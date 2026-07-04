@@ -11,7 +11,7 @@ const LEGEND: { classification: MoveClass; src: string; label: string }[] = [
   { classification: 'Inaccuracy', src: '/marks/inaccuracy_128x.png', label: 'Inaccuracy'     },
   { classification: 'Mistake',    src: '/marks/mistake_128x.png',    label: 'Mistake'        },
   { classification: 'Blunder',    src: '/marks/blunder_128x.png',    label: 'Blunder'        },
-  { classification: 'Miss',       src: '/marks/incorrect_128x.png',  label: 'Miss'           },
+  { classification: 'Miss',       src: '/marks/miss_128x.png',       label: 'Miss'           },
   { classification: 'Forced',     src: '/marks/forced_128x.png',     label: 'Forced'         },
 ]
 
