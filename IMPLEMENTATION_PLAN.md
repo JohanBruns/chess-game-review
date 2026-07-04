@@ -22,12 +22,16 @@ IMPORTANT: if you think that a certain feature can be implemented in a better/ea
   - `EvalResult { cp, mate, bestMoveSan, pv, secondBestCp }`, MultiPV=2, `go depth 15`, 10s timeout
 - `src/components/BoardPanel.tsx`
   - Renders arrows via **react-chessboard's built-in `arrows: Arrow[]` prop** (NOT a custom SVG overlay)
-  - Props already present: `bestMoveArrow`, `attackArrows`
-  - Colors: `BEST_MOVE_ARROW_COLOR='#81b64c'`, `ATTACKS_ARROW_COLOR='#e2903f'`, `ATTACKED_BY_ARROW_COLOR='#e5533d'`
+  - Props already present: `bestMoveArrow`, `attackArrows`, `threatArrow`, `orientation` (`'white'|'black'`,
+    default `'white'`; drives react-chessboard's `boardOrientation` AND the manual classification-badge
+    overlay geometry, which is mirrored by hand since it isn't drawn through react-chessboard)
+  - Colors: `BEST_MOVE_ARROW_COLOR='#81b64c'`, `ATTACKS_ARROW_COLOR='#e2903f'`, `ATTACKED_BY_ARROW_COLOR='#e5533d'`,
+    `THREAT_ARROW_COLOR='#e02c2c'`
 - Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts` (Vitest)
 - Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book/forced.
   `Board&Game/marks/` (staging folder, not yet copied to `public/marks/`) has further assets
-  including `missed_win_128x.png` — copy/rename into `public/marks/` when wiring up `Miss`'s icon.
+  including `missed_win_128x.png` — copy/rename into `public/marks/` when wiring up `Miss`'s icon
+  (currently falls back to `incorrect_128x.png` as a placeholder in `BoardPanel.tsx`'s `MARK_FILE`).
 
 ## Global constraints
 
@@ -186,17 +190,19 @@ book #a88865  inaccuracy #f0c15c  mistake #e58f2a  miss #ee6b55  blunder #ca3431
 
 ## Final verification checklist (run before opening the PR)
 
-- [ ] `npx vitest run` green; new cases for T2/T3/T4/T5 present.
-- [ ] `npx tsc -b` clean (**not** `tsc --noEmit` — silent no-op in this repo, root
+- [x] `npx vitest run` green; new cases for T2/T3/T4/T5 present.
+- [x] `npx tsc -b` clean (**not** `tsc --noEmit` — silent no-op in this repo, root
       `tsconfig.json` has `"files": []` + project references); `MoveClass` union updated
       everywhere it's switched on (mark rendering, legend `ClassLegend.tsx`, coaching).
-- [ ] Threat arrow shows opponent's best reply (red) with toggle; suppressed when null.
-- [ ] Best-move arrow suppressed when it equals the played move.
-- [ ] Miss / Forced classify correctly and are excluded from accuracy.
-- [ ] Game accuracy uses weighted+harmonic aggregation.
-- [ ] No separate SVG overlay introduced; all arrows go through react-chessboard.
-- [ ] PR description lists any hex values changed after DevTools verification and flags the
-      missing `miss`/`forced` mark assets.
+- [x] Threat arrow shows opponent's best reply (red) with toggle; suppressed when null.
+- [x] Best-move arrow suppressed when it equals the played move.
+- [x] Miss / Forced classify correctly and are excluded from accuracy.
+- [x] Game accuracy uses weighted+harmonic aggregation.
+- [x] No separate SVG overlay introduced; all arrows go through react-chessboard.
+- [ ] PR description lists any hex values changed after DevTools verification against a live
+      chess.com Game Review (not yet done — current `CLASS_COLOR`/arrow hexes are
+      community-referenced, unverified) and flags that `forced` now has a real mark asset but
+      `miss` still falls back to the `incorrect_128x.png` placeholder.
 
 ---
 
