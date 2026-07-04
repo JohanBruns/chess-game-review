@@ -3,6 +3,7 @@ interface NavControlsProps {
   onPrev: () => void
   onNext: () => void
   onLast: () => void
+  onFlip: () => void
   canGoPrev: boolean
   canGoNext: boolean
   isLoaded: boolean
@@ -13,6 +14,7 @@ export function NavControls({
   onPrev,
   onNext,
   onLast,
+  onFlip,
   canGoPrev,
   canGoNext,
   isLoaded,
@@ -53,6 +55,14 @@ export function NavControls({
         title="Last Move (End)"
       >
         ⏭
+      </button>
+      <button
+        className={base}
+        onClick={onFlip}
+        disabled={!isLoaded}
+        title="Flip Board (F)"
+      >
+        ⇅
       </button>
     </div>
   )

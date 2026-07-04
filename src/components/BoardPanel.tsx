@@ -13,6 +13,9 @@ interface BoardPanelProps {
   attackArrows?: { attacks: string[]; attackedBy: string[] }
   // Engine's best move in the current position — the standing threat, shown as a red arrow.
   threatArrow?: { from: string; to: string }
+  // Which side's perspective the board is drawn from. react-chessboard flips pieces, arrows,
+  // and squareStyles automatically; only the manual badge-overlay geometry below needs mirroring.
+  orientation?: 'white' | 'black'
 }
 
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
@@ -75,6 +78,7 @@ export function BoardPanel({
   bestMoveArrow,
   attackArrows,
   threatArrow,
+  orientation = 'white',
 }: BoardPanelProps) {
   const squareStyles: Record<string, React.CSSProperties> = {}
   if (lastMoveFrom && lastMoveTo && classification) {
@@ -104,9 +108,13 @@ export function BoardPanel({
       ? (() => {
           const file = lastMoveTo.charCodeAt(0) - 97  // 0 = a … 7 = h
           const rank = parseInt(lastMoveTo[1])          // 1–8
+          const flipped = orientation === 'black'
+          // Badge sits at the destination square's top-right *screen* corner. White screen
+          // col=file, row=8-rank; Black screen col=7-file, row=rank-1 (board mirrored on
+          // both axes) — the +1 on the White right-edge case becomes (8-file) for Black.
           return {
-            left: (file + 1) / 8 * 100,
-            top:  (8 - rank) / 8 * 100,
+            left: flipped ? (8 - file) / 8 * 100 : (file + 1) / 8 * 100,
+            top:  flipped ? (rank - 1) / 8 * 100 : (8 - rank) / 8 * 100,
             src:  `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
           }
         })()
@@ -117,6 +125,7 @@ export function BoardPanel({
       <Chessboard
         options={{
           position: fen,
+          boardOrientation: orientation,
           allowDragging: false,
           pieces: CUSTOM_PIECES,
           boardStyle: {
