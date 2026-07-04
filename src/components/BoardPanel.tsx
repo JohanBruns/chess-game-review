@@ -26,10 +26,25 @@ interface BoardPanelProps {
 
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
 // hardcoded because react-chessboard renders these as raw SVG fill/stroke attributes.
-const BEST_MOVE_ARROW_COLOR = '#81b64c'
-const ATTACKS_ARROW_COLOR = '#e2903f'
+//
+// Verified 2026-07-04 against a live chess.com Game Review: the "you should have played
+// this" suggestion arrow is NOT a fixed color there — it's green after a Miss/Inaccuracy/Good,
+// red-orange after a Mistake/Blunder (severity-coded, not tied 1:1 to CLASS_COLOR). See
+// bestMoveArrowColor() below. ATTACKS_ARROW_COLOR is chess.com's separate "why is this move
+// great" explanatory arrow (e.g. "g5 is a great move" pointed the bishop at the piece it now
+// attacks) — matched to the measured #FFAA00. ATTACKED_BY_ARROW_COLOR/THREAT_ARROW_COLOR have
+// no directly observed chess.com equivalent (no live example surfaced one) — left unchanged.
+const BEST_MOVE_ARROW_GOOD_COLOR = '#9FCF3F'   // Miss / Inaccuracy / Good (and anything else)
+const BEST_MOVE_ARROW_SEVERE_COLOR = '#F8553F' // Mistake / Blunder
+const ATTACKS_ARROW_COLOR = '#FFAA00'
 const ATTACKED_BY_ARROW_COLOR = '#e5533d'
 const THREAT_ARROW_COLOR = '#e02c2c'
+
+function bestMoveArrowColor(classification?: MoveClass): string {
+  return classification === 'Mistake' || classification === 'Blunder'
+    ? BEST_MOVE_ARROW_SEVERE_COLOR
+    : BEST_MOVE_ARROW_GOOD_COLOR
+}
 
 const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Brilliant:  'brilliant_128x.png',
@@ -44,18 +59,23 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Forced:     'forced_128x.png',
 }
 
-// rgb() triples so the square-highlight alpha can be applied uniformly
+// rgb() triples so the square-highlight alpha can be applied uniformly.
+// Verified 2026-07-04 against a live chess.com Game Review (DevTools computed styles) —
+// Brilliant/Great/Good/Inaccuracy/Mistake/Miss/Blunder updated to the measured values.
+// Book and Forced have no chess.com equivalent to check against (Book here is a neutral
+// last-move tint, not chess.com's own book-brown; Forced is our own proprietary class) —
+// left unchanged.
 const CLASS_COLOR: Record<MoveClass, string> = {
-  Brilliant:  '27, 170, 166',
-  Great:      '92, 139, 176',
+  Brilliant:  '38, 194, 163',
+  Great:      '116, 155, 191',
   Best:       '129, 182, 76',   // var(--color-cc-green)
   Excellent:  '129, 182, 76',
-  Good:       '147, 167, 110',
+  Good:       '149, 183, 118',
   Book:       '240, 210, 100',  // neutral last-move tint, not a classification color
-  Inaccuracy: '240, 177, 85',
-  Mistake:    '226, 144, 63',
-  Blunder:    '229, 83, 61',    // var(--color-cc-red)
-  Miss:       '238, 107, 85',
+  Inaccuracy: '247, 198, 49',
+  Mistake:    '255, 164, 89',
+  Blunder:    '250, 65, 45',
+  Miss:       '255, 119, 105',
   Forced:     '128, 128, 128',
 }
 
@@ -97,7 +117,7 @@ export function BoardPanel({
 
   const arrows: Arrow[] = []
   if (bestMoveArrow) {
-    arrows.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: BEST_MOVE_ARROW_COLOR })
+    arrows.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: bestMoveArrowColor(classification) })
   }
   if (attackArrows && lastMoveTo) {
     for (const target of attackArrows.attacks) {

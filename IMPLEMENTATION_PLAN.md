@@ -230,9 +230,33 @@ Three independent sub-features; user chose to do only the first one for now.
 - [x] Game accuracy uses weighted+harmonic aggregation.
 - [x] No separate SVG overlay introduced; all arrows go through react-chessboard.
 - [x] `forced` and `miss` both have real mark assets (no more placeholder fallback).
-- [ ] PR description lists any hex values changed after DevTools verification against a live
-      chess.com Game Review (not yet done — current `CLASS_COLOR`/arrow hexes are
-      community-referenced, unverified).
+- [x] Hex values verified against a live chess.com Game Review (2026-07-04, DevTools computed
+      styles on `chess.com/analysis/game/live/170988770322/review`). Changed:
+
+      | Class      | Old (ours) | New (measured on chess.com) |
+      |------------|------------|------------------------------|
+      | Brilliant  | `#1BAAA6`  | `#26C2A3`                    |
+      | Great      | `#5C8BB0`  | `#749BBF`                    |
+      | Good       | `#93A76E`  | `#95B776`                    |
+      | Inaccuracy | `#F0B155`  | `#F7C631`                    |
+      | Mistake    | `#E2903F`  | `#FFA459`                    |
+      | Blunder    | `#E5533D`  | `#FA412D`                    |
+      | Miss       | `#EE6B55`  | `#FF7769`                    |
+
+      Unchanged: Best/Excellent (`#81B64C`, already an exact match). Book and Forced have no
+      chess.com equivalent to check against (Book here is a neutral last-move tint, not
+      chess.com's book-brown; Forced is our own proprietary class) — left as-is.
+
+      Also discovered while comparing: chess.com's "you should have played this" suggestion
+      arrow is NOT a flat color — green (`#9FCF3F`) after a Miss/Inaccuracy/Good, red-orange
+      (`#F8553F`) after a Mistake/Blunder. Implemented as `bestMoveArrowColor()` in
+      `BoardPanel.tsx`, replacing the old flat `BEST_MOVE_ARROW_COLOR`. Separately, chess.com
+      has a second arrow type — an orange (`#FFAA00`) "why is this move great" explanatory
+      arrow shown on Great/Brilliant moves, pointing from the piece to what it now attacks
+      (e.g. "g5 is a great move" draws bishop→queen). That matches our existing `attackArrows`
+      concept, so `ATTACKS_ARROW_COLOR` was updated `#E2903F` → `#FFAA00` to match.
+      `ATTACKED_BY_ARROW_COLOR`/`THREAT_ARROW_COLOR` have no directly observed chess.com
+      equivalent (no live example surfaced one during this session) — left unchanged.
 
 ---
 
