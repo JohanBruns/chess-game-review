@@ -210,6 +210,31 @@ function isForcedMove(move: Move): boolean {
   }
 }
 
+// T4 optional rating-awareness: Brilliant/Great thresholds loosen for weaker players
+// (below RATING_LENIENT_MAX) and tighten for stronger ones (above RATING_STRICT_MIN).
+// Three tiers rather than a continuous curve — matches the spec's "slightly loosen/tighten"
+// framing and stays simple to test. Missing rating (or a rating inside the neutral band)
+// behaves exactly like before this feature existed.
+const RATING_LENIENT_MAX = 1600
+const RATING_STRICT_MIN = 2000
+
+interface RatingThresholds {
+  brilliantLossMax: number       // Brilliant gate, normally `loss <= 2`
+  greatOnlyMoveGapMin: number    // Great "only good move" branch, normally gap >= 30 win%
+  greatNearBestLossMax: number   // Great swing branches' isNearBest, normally `loss <= 1.5`
+}
+
+const NEUTRAL_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 2, greatOnlyMoveGapMin: 30, greatNearBestLossMax: 1.5 }
+const LENIENT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 3, greatOnlyMoveGapMin: 25, greatNearBestLossMax: 2.5 }
+const STRICT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 1, greatOnlyMoveGapMin: 35, greatNearBestLossMax: 1.0 }
+
+function ratingThresholds(rating?: number): RatingThresholds {
+  if (rating == null) return NEUTRAL_RATING_THRESHOLDS
+  if (rating < RATING_LENIENT_MAX) return LENIENT_RATING_THRESHOLDS
+  if (rating > RATING_STRICT_MIN) return STRICT_RATING_THRESHOLDS
+  return NEUTRAL_RATING_THRESHOLDS
+}
+
 // Optional params enable Brilliant/Great detection when full context is available.
 // Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
 export function classifyMove(
@@ -221,8 +246,10 @@ export function classifyMove(
   secondBestCp?: number | null,
   winPctPrior?: number,
   winPctAfterRaw?: number,
+  playerRating?: number,
 ): MoveClass {
   const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
+  const rt = ratingThresholds(playerRating)
 
   // Brilliant: sacrifice + nearly best + position not already trivially won
   // + you are NOT lost afterward (winPct >= 50 = at least equal)
@@ -230,7 +257,7 @@ export function classifyMove(
   //   blunder that happens to also give up material, not a brilliancy).
   if (
     move != null && winPctBefore != null && winPctAfter != null &&
-    loss <= 2 && winPctBefore < 90 &&
+    loss <= rt.brilliantLossMax && winPctBefore < 90 &&
     winPctAfter >= 50 &&
     isSacrifice(move) &&
     !hasCostlierHangingPiece(move)
@@ -245,7 +272,7 @@ export function classifyMove(
     isEngineBestMove &&
     bestCp != null && secondBestCp != null &&
     winPctBefore != null && winPctBefore < 85 &&
-    winPct(bestCp) - winPct(secondBestCp) >= 30 &&
+    winPct(bestCp) - winPct(secondBestCp) >= rt.greatOnlyMoveGapMin &&
     winPct(secondBestCp) < 50
   ) return 'Great'
 
@@ -257,7 +284,7 @@ export function classifyMove(
   // these branches permanently unreachable (loss-clamping erases exactly the
   // engine-search "swing" jump this is meant to detect, e.g. a sac whose point
   // the engine only sees once it's on the board).
-  const isNearBest = loss <= 1.5
+  const isNearBest = loss <= rt.greatNearBestLossMax
   if (
     isNearBest && winPctBefore != null && winPctAfterRaw != null &&
     (
@@ -296,6 +323,8 @@ export function buildMoveAnalyses(
   moves: Move[],
   evalResults: (EvalResult | null)[],
   openingPly = 0,
+  whiteRating?: number,
+  blackRating?: number,
 ): MoveAnalysis[] {
   const analyses: MoveAnalysis[] = []
   // Opening phase runs at least to move 10, even if the opening-DB match (openingPly) is
@@ -350,6 +379,7 @@ export function buildMoveAnalyses(
       ? (isWhite ? evalToCp(prevEval) : -evalToCp(prevEval))
       : null
     const winPctPrior = cpPrior != null ? winPct(cpPrior) : undefined
+    const playerRating = isWhite ? whiteRating : blackRating
 
     analyses.push({
       moveIndex: i,
@@ -363,6 +393,7 @@ export function buildMoveAnalyses(
         secondBestCpMover,
         winPctPrior,
         winPctAfterRaw,
+        playerRating,
       ),
       accuracy: moveAccuracy(loss),
       winPctAfterRaw,

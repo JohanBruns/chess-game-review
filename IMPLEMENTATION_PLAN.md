@@ -143,9 +143,24 @@ and instead ended up equal or worse.
    - equal→winning: `winPctBefore <= 55 && winPctAfter >= 75`
 4. Precedence: `Brilliant` > `Great` > `Best` (keep current order).
 
-**Optional rating-awareness:**
-- Add optional `playerRating?: number` to `classifyMove`; when provided, loosen Brilliant/Great
-  thresholds slightly below ~1600 and tighten above ~2000. Default behavior unchanged when omitted.
+**Optional rating-awareness — done (2026-07-04), fully wired end-to-end:**
+- `classifyMove` gained a 9th optional param `playerRating?: number`. Three tiers via
+  `ratingThresholds()`: `rating < 1600` → lenient, `rating > 2000` → strict, everything else
+  (including `undefined`) → neutral (= unchanged prior behavior). Tiers adjust exactly three
+  knobs: the Brilliant loss gate (neutral 2 / lenient 3 / strict 1), the Great "only good move"
+  win%-gap minimum (30 / 25 / 35), and the Great swing branches' near-best tolerance (1.5 / 2.5
+  / 1.0). All other Brilliant/Great gates (winPctBefore caps, sacrifice check, etc.) are
+  structural and untouched by rating.
+- `buildMoveAnalyses` gained `whiteRating?`/`blackRating?` params (after `openingPly`) and picks
+  the mover's own rating per ply (`isWhite ? whiteRating : blackRating`) before calling
+  `classifyMove`.
+- Rating source: `useGame.ts` now reads `chess.header()` after `loadPgn` and exposes
+  `whiteElo`/`blackElo` (parsed via a `parseElo` helper that treats chess.com's `"?"`/`"0"`
+  placeholders as "no rating", not a literal 0). This is a single choke point that covers every
+  load path (manual paste, chess.com `GamePicker` import, `?pgn=` URL param) since they all carry
+  standard `WhiteElo`/`BlackElo` PGN header tags — no need to separately thread through
+  `GamePicker`'s own structured chess.com rating data.
+- `App.tsx` passes `whiteElo`/`blackElo` straight into its existing `buildMoveAnalyses` call.
 
 **Acceptance:**
 - New `classify.test.ts` cases: a real queen-sac best move → `Brilliant`; a free hang the engine
