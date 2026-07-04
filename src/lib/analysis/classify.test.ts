@@ -20,6 +20,9 @@ const ev = (cp: number, bestMoveSan: string | null = null, secondBestCp: number 
   bestMoveSan,
   pv: null,
   secondBestCp,
+  secondBestMoveSan: null,
+  thirdBestCp: null,
+  thirdBestMoveSan: null,
 })
 
 // A synthetic capture-type "sacrifice" move — isSacrifice's capture branch only reads
@@ -327,7 +330,7 @@ describe('buildMoveAnalyses — Vorzeichen-Logik', () => {
 
   it('mate score treated as ±10000 cp', () => {
     // White announces mate: evalBefore has mate=2 (white mates in 2), evalAfter also mate=1
-    const mateEv = (mateIn: number): EvalResult => ({ cp: null, mate: mateIn, bestMoveSan: null, pv: null, secondBestCp: null })
+    const mateEv = (mateIn: number): EvalResult => ({ cp: null, mate: mateIn, bestMoveSan: null, pv: null, secondBestCp: null, secondBestMoveSan: null, thirdBestCp: null, thirdBestMoveSan: null })
     const [a] = buildMoveAnalyses([mv('Qh5+')], [mateEv(2), mateEv(1)])
     // Both map to +10000 from white's perspective → loss ≈ 0
     expect(a.lossInWinPct).toBe(0)

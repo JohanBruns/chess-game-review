@@ -212,9 +212,30 @@ Three independent sub-features; user chose to do only the first one for now.
   UI (auto-queens). New `RetryPanel` component shows pass/fail; the reveal-the-answer arrow
   reuses `getBestMoveArrow`. Retry state lives entirely in `App.tsx` (`retryMoveIndex`/
   `trialFen`/`attemptResult`); `useGame`/`fens`/`moves` are untouched.
-- [ ] Candidate arrows: only if you later raise MultiPV to 3 — best green, alternatives dimmed.
-  `EvalResult` currently has no `secondBestMoveSan` (only `secondBestCp`); the `useEngine.ts`
-  info-line parser would need extending to capture the 2nd/3rd PV's first move.
+- [x] **Engine lines (candidate moves)** — done. Live-verified against chess.com's Analysis
+  tab (2026-07-04, `Number of Lines` setting) before implementing: chess.com does NOT draw
+  several simultaneous "candidate arrows" with the best one green and alternatives dimmed —
+  it computes N MultiPV lines for the *current* position and renders them as a **text list**
+  (eval + SAN, best first), with only ONE arrow on the board at a time (the best line's, or
+  whichever line the user is hovering). Implemented that way instead of the original
+  "dimmed alternatives" idea:
+  - `useEngine.ts`: MultiPV raised 2 → 3. `EvalResult` gained `secondBestMoveSan`,
+    `thirdBestCp`, `thirdBestMoveSan` (the info-line parser now also captures the first UCI
+    move of MultiPV lines 2/3 and converts it to SAN via a shared `uciToSan` helper,
+    alongside the existing `secondBestCp`).
+  - `src/lib/analysis/lines.ts` (`getEngineLines`) — pure mapping from an `EvalResult` to an
+    ordered `{san, cp, mate}[]` for display; drops any line whose SAN is null. `mate` flags
+    the existing ±10000 cp sentinel (see `useEngine.ts`'s info-parser comment).
+  - `src/components/EngineLines.tsx` — the text-list panel; `onHoverLine(san | null)` lets the
+    caller pick which move gets the board arrow.
+  - `BoardPanel.tsx` gained `candidateArrow` (green, `#81b64c` — chess.com's line-arrow color)
+    pushed into the existing `arrows` array; no new arrow type/overlay.
+  - `App.tsx`: `showEngineLines`/`hoveredLineSan` state (reset on ply change, same pattern as
+    the other arrow toggles); `engineLines` from `evalResults[currentPly] ?? result` (current
+    position, not the position-before-the-move); `candidateArrow` resolves
+    `hoveredLineSan ?? engineLines[0]?.san` via the existing `getBestMoveArrow`. Third toggle
+    button ("Lines") added next to Best/Threats in `CoachingPanel.tsx`.
+  - Tests: `src/lib/analysis/lines.test.ts` (new).
 
 ---
 
