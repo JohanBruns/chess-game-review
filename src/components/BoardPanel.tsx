@@ -16,6 +16,12 @@ interface BoardPanelProps {
   // Which side's perspective the board is drawn from. react-chessboard flips pieces, arrows,
   // and squareStyles automatically; only the manual badge-overlay geometry below needs mirroring.
   orientation?: 'white' | 'black'
+  // Retry-at-key-moments: when true, the side to move's pieces can be dragged. The library
+  // has no chess-rules awareness — legality is validated by the caller in onPieceDrop.
+  interactive?: boolean
+  // Called with (from, to) on a drop; return true to accept (and update `fen` accordingly)
+  // or false to reject (piece snaps back). react-chessboard never commits the move itself.
+  onPieceDrop?: (from: string, to: string) => boolean
 }
 
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
@@ -79,6 +85,8 @@ export function BoardPanel({
   attackArrows,
   threatArrow,
   orientation = 'white',
+  interactive = false,
+  onPieceDrop,
 }: BoardPanelProps) {
   const squareStyles: Record<string, React.CSSProperties> = {}
   if (lastMoveFrom && lastMoveTo && classification) {
@@ -126,7 +134,14 @@ export function BoardPanel({
         options={{
           position: fen,
           boardOrientation: orientation,
-          allowDragging: false,
+          allowDragging: interactive,
+          canDragPiece: interactive
+            ? ({ piece }) => piece.pieceType[0] === fen.split(' ')[1]  // only the side to move
+            : undefined,
+          onPieceDrop: interactive && onPieceDrop
+            ? ({ sourceSquare, targetSquare }) =>
+                targetSquare !== null && onPieceDrop(sourceSquare, targetSquare)
+            : undefined,
           pieces: CUSTOM_PIECES,
           boardStyle: {
             backgroundImage: 'url(/pieces/brett.png)',

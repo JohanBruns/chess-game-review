@@ -8,6 +8,9 @@ interface MoveListProps {
   onSelectPly: (ply: number) => void
   moveAnalyses: MoveAnalysis[] | null
   keyMoments?: Set<number>
+  // Retry-at-key-moments: called with the move's 0-based moveIndex (the position BEFORE the
+  // move, unlike onSelectPly's 1-based ply which is the position after it).
+  onRetry?: (moveIndex: number) => void
 }
 
 const CLASS_ICON: Record<MoveClass, string> = {
@@ -24,7 +27,7 @@ const CLASS_ICON: Record<MoveClass, string> = {
   Forced:      '/marks/forced_128x.png',
 }
 
-export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments }: MoveListProps) {
+export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments, onRetry }: MoveListProps) {
   const selectedRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -66,6 +69,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
                   selectedRef={selectedRef}
                   analysis={moveAnalyses?.[whitePly - 1] ?? null}
                   isKeyMoment={keyMoments?.has(whitePly - 1) ?? false}
+                  onRetry={onRetry}
                 />
               </td>
               <td className="py-0 w-[46%]">
@@ -78,6 +82,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
                     selectedRef={selectedRef}
                     analysis={moveAnalyses?.[blackPly - 1] ?? null}
                     isKeyMoment={keyMoments?.has(blackPly - 1) ?? false}
+                    onRetry={onRetry}
                   />
                 )}
               </td>
@@ -97,33 +102,46 @@ interface MoveButtonProps {
   selectedRef: React.RefObject<HTMLButtonElement | null>
   analysis: MoveAnalysis | null
   isKeyMoment: boolean
+  onRetry?: (moveIndex: number) => void
 }
 
-function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKeyMoment }: MoveButtonProps) {
+function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKeyMoment, onRetry }: MoveButtonProps) {
   const isActive = ply === currentPly
 
   return (
-    <button
-      ref={isActive ? selectedRef : null}
-      className={`w-full text-left px-1.5 py-0.5 rounded font-mono text-xs leading-5 transition-colors ${
-        isActive
-          ? 'bg-cc-green text-white font-semibold'
-          : 'text-cc-text-dim hover:bg-cc-surface-hover/50'
-      }`}
-      onClick={() => onClick(ply)}
-    >
-      {san}
-      {analysis && (
-        <img
-          src={CLASS_ICON[analysis.classification]}
-          alt={analysis.classification}
-          title={analysis.classification}
-          className="inline w-4 h-4 ml-0.5 align-middle"
-        />
-      )}
+    <span className="flex items-center gap-0.5">
+      <button
+        ref={isActive ? selectedRef : null}
+        className={`text-left px-1.5 py-0.5 rounded font-mono text-xs leading-5 transition-colors ${
+          isActive
+            ? 'bg-cc-green text-white font-semibold'
+            : 'text-cc-text-dim hover:bg-cc-surface-hover/50'
+        }`}
+        onClick={() => onClick(ply)}
+      >
+        {san}
+        {analysis && (
+          <img
+            src={CLASS_ICON[analysis.classification]}
+            alt={analysis.classification}
+            title={analysis.classification}
+            className="inline w-4 h-4 ml-0.5 align-middle"
+          />
+        )}
+      </button>
       {isKeyMoment && (
-        <span className={`ml-0.5 ${isActive ? 'text-white/80' : 'text-cc-red'}`}>⚡</span>
+        onRetry ? (
+          <button
+            onClick={() => onRetry(ply - 1)}
+            title="Try this move yourself"
+            className="text-xs leading-5 text-cc-red hover:text-cc-red-hover"
+          >
+            ⚡
+          </button>
+        ) : (
+          <span className="text-xs leading-5 text-cc-red">⚡</span>
+        )
       )}
-    </button>
+    </span>
   )
 }
