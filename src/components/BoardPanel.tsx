@@ -40,7 +40,7 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Inaccuracy: 'inaccuracy_128x.png',
   Mistake:    'mistake_128x.png',
   Blunder:    'blunder_128x.png',
-  Miss:       'incorrect_128x.png',  // TODO: dedicated miss icon
+  Miss:       'miss_128x.png',
   Forced:     'forced_128x.png',
 }
 

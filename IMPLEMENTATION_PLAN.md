@@ -45,10 +45,11 @@ IMPORTANT: if you think that a certain feature can be implemented in a better/ea
     `THREAT_ARROW_COLOR='#e02c2c'`
 - `src/components/RetryPanel.tsx` (T7 retry) — pass/fail UI, `Try Again` / `Exit Retry`
 - Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts`, `retry.test.ts` (Vitest)
-- Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book/forced.
-  `Board&Game/marks/` (staging folder, not yet copied to `public/marks/`) has further assets
-  including `missed_win_128x.png` — copy/rename into `public/marks/` when wiring up `Miss`'s icon
-  (currently falls back to `incorrect_128x.png` as a placeholder in `BoardPanel.tsx`'s `MARK_FILE`).
+- Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book/forced/miss.
+  `Miss` uses `public/marks/miss_128x.png` (copied+renamed from `Board&Game/marks/missed_win_128x.png`),
+  wired into `BoardPanel.tsx`'s `MARK_FILE` and `ClassLegend.tsx`'s `LEGEND`.
+  `Board&Game/marks/` remains a staging folder with further not-yet-used assets
+  (`critical_128x.png`, `threat_128x.png`, `free_piece_128x.png`, etc.) for future classes.
 
 ## Global constraints
 
@@ -228,10 +229,10 @@ Three independent sub-features; user chose to do only the first one for now.
 - [x] Miss / Forced classify correctly and are excluded from accuracy.
 - [x] Game accuracy uses weighted+harmonic aggregation.
 - [x] No separate SVG overlay introduced; all arrows go through react-chessboard.
+- [x] `forced` and `miss` both have real mark assets (no more placeholder fallback).
 - [ ] PR description lists any hex values changed after DevTools verification against a live
       chess.com Game Review (not yet done — current `CLASS_COLOR`/arrow hexes are
-      community-referenced, unverified) and flags that `forced` now has a real mark asset but
-      `miss` still falls back to the `incorrect_128x.png` placeholder.
+      community-referenced, unverified).
 
 ---
 
