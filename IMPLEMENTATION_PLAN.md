@@ -26,16 +26,25 @@ IMPORTANT: if you think that a certain feature can be implemented in a better/ea
 - `src/lib/analysis/arrows.ts`
   - `getBestMoveArrow(fenBefore, bestMoveSan): { from, to } | null`
   - `getAttackArrows(fenAfter, moveTo, moverColor): { attacks, attackedBy }` — pure geometry
+- `src/lib/analysis/retry.ts` (T7 retry-at-key-moments)
+  - `attemptMove(fen, from, to): { san, fenAfter } | null` — chess.js wrapper, auto-queens
+    promotions, `null` on illegal moves
+  - `isBestMove(attemptedSan, bestMoveSan): boolean | null` — exact-SAN match (same rule as
+    classify.ts's `Best`); `null` (not `false`) when `bestMoveSan` is unknown
 - `src/lib/engine/useEngine.ts`
   - `EvalResult { cp, mate, bestMoveSan, pv, secondBestCp }`, MultiPV=2, `go depth 15`, 10s timeout
 - `src/components/BoardPanel.tsx`
   - Renders arrows via **react-chessboard's built-in `arrows: Arrow[]` prop** (NOT a custom SVG overlay)
   - Props already present: `bestMoveArrow`, `attackArrows`, `threatArrow`, `orientation` (`'white'|'black'`,
     default `'white'`; drives react-chessboard's `boardOrientation` AND the manual classification-badge
-    overlay geometry, which is mirrored by hand since it isn't drawn through react-chessboard)
+    overlay geometry, which is mirrored by hand since it isn't drawn through react-chessboard),
+    `interactive`/`onPieceDrop` (T7 retry — `allowDragging`/`canDragPiece`/`onPieceDrop` on the
+    underlying `<Chessboard>`; the library never commits a dropped move itself, the consumer
+    must update the `fen`/`position` prop on an accepted drop)
   - Colors: `BEST_MOVE_ARROW_COLOR='#81b64c'`, `ATTACKS_ARROW_COLOR='#e2903f'`, `ATTACKED_BY_ARROW_COLOR='#e5533d'`,
     `THREAT_ARROW_COLOR='#e02c2c'`
-- Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts` (Vitest)
+- `src/components/RetryPanel.tsx` (T7 retry) — pass/fail UI, `Try Again` / `Exit Retry`
+- Tests: `classify.test.ts`, `arrows.test.ts`, `coaching.test.ts`, `openings.test.ts`, `retry.test.ts` (Vitest)
 - Mark assets: `public/marks/*.png` — has best/excellent/good/inaccuracy/mistake/blunder/brilliant/great_find/book/forced.
   `Board&Game/marks/` (staging folder, not yet copied to `public/marks/`) has further assets
   including `missed_win_128x.png` — copy/rename into `public/marks/` when wiring up `Miss`'s icon
@@ -193,10 +202,15 @@ Three independent sub-features; user chose to do only the first one for now.
   Open/Mid/End grid. Note the opening boundary is NOT plain `openingPly` — see the ground
   truth section above for why (book moves are excluded from accuracy, so the opening phase
   has to extend past the book match or it'd always be `null`).
-- [ ] Retry-at-key-moments: at each `findKeyMoments` ply, let the user attempt the best move
-  and give pass/fail feedback (ties into existing `coaching.ts`). Largest lift of the three —
-  the board is currently display-only (`allowDragging: false`, no move-input handler in
-  `BoardPanel.tsx`); this needs actual move input, a "try mode", and validation.
+- [x] **Retry-at-key-moments** — done. Clicking the ⚡ key-moment marker in `MoveList` now
+  jumps to the position before that move and makes the board interactive
+  (`BoardPanel`'s new `interactive`/`onPieceDrop` props; `canDragPiece` restricts dragging to
+  the side to move). `src/lib/analysis/retry.ts` (`attemptMove`, `isBestMove`) validates the
+  drop via chess.js and compares the resulting SAN to `evalResults[moveIndex].bestMoveSan`
+  (same exact-match rule as classify.ts's `Best`) — no near-best tolerance, no promotion-choice
+  UI (auto-queens). New `RetryPanel` component shows pass/fail; the reveal-the-answer arrow
+  reuses `getBestMoveArrow`. Retry state lives entirely in `App.tsx` (`retryMoveIndex`/
+  `trialFen`/`attemptResult`); `useGame`/`fens`/`moves` are untouched.
 - [ ] Candidate arrows: only if you later raise MultiPV to 3 — best green, alternatives dimmed.
   `EvalResult` currently has no `secondBestMoveSan` (only `secondBestCp`); the `useEngine.ts`
   info-line parser would need extending to capture the 2nd/3rd PV's first move.
