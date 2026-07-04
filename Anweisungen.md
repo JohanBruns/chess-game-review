@@ -36,9 +36,11 @@ eine globale Checkliste ganz am Ende). Status also aktiv ermitteln, nicht annehm
     / `showThreats`) vorhanden? Und hat `BoardPanel` eine `orientation`-Prop (Board-Flip,
     inkl. gespiegelter Badge-Geometrie)?
   - T7: optional/Stretch, drei unabhängige Teile — nur angehen, wenn explizit gewünscht.
-    Enthält `classify.ts` bereits `phaseAccuracy` (Opening/Middlegame/Endgame-Split)? Wenn ja,
-    ist nur dieser Teil erledigt — Retry-at-key-moments und Candidate-Arrows bleiben offen,
-    bis explizit gewünscht (siehe T7-Abschnitt in `IMPLEMENTATION_PLAN.md` für Details/Stand).
+    Enthält `classify.ts` bereits `phaseAccuracy` (Opening/Middlegame/Endgame-Split)? Existiert
+    `src/lib/analysis/retry.ts` (`attemptMove`/`isBestMove`) und hat `BoardPanel` eine
+    `interactive`/`onPieceDrop`-Prop? Wenn beides ja, sind zwei der drei Teile erledigt —
+    Candidate-Arrows bleibt offen, bis explizit gewünscht (siehe T7-Abschnitt in
+    `IMPLEMENTATION_PLAN.md` für Details/Stand).
 - Den ersten Block, der weder committed noch im Code vorhanden ist, als nächstes bearbeiten.
 - **Clean-Slate-Check, bevor der nächste Block geplant wird:** `npx tsc -b` laufen lassen
   (nicht `npx tsc --noEmit` — siehe Warnung in der Ausführungsphase). Ein vorheriger Block
@@ -158,3 +160,18 @@ so in `CLAUDE.md`) — das Ziel ist **Effizienz**, nicht Vermeidung. Regel: bün
 zoomen, nicht bei jedem Zwischenschritt neu screenshotten, keine redundante
 "Doppelt-Prüfung" eines Zustands, den ein einzelner deterministischer Klick schon belegt
 hat.
+
+**Bekannte Lücke: Drag-and-Drop auf dem Brett (react-chessboard v5 / dnd-kit).** Weder
+`left_click_drag` noch manuell dispatchte `PointerEvent`-Sequenzen (pointerdown/move/up) auf
+dem `[role][tabindex]`-Draggable-Element lösen dnd-kits Pointer-Sensor zuverlässig aus — der
+Zug wird nie committet (`onPieceDrop` feuert nicht), obwohl `canDragPiece`/`aria-disabled`
+nachweislich korrekt sind. Aus T7 Retry-at-key-moments (siehe `IMPLEMENTATION_PLAN.md`)
+funktionierender Workaround: die echte `options.onPieceDrop`/`canDragPiece`-Funktion über die
+React-Fiber vom gemounteten `<Chessboard>` holen (`__reactFiber$...`-Key auf einem
+`[data-square]`-Element, dann `.return`-Kette nach `memoizedProps.options` mit
+`'boardOrientation' in options` durchsuchen) und direkt mit realistischen Argumenten aufrufen
+(`{ piece: {pieceType, isSparePiece}, sourceSquare, targetSquare }`). Das prüft exakt denselben
+App-Code-Pfad wie ein echter Drop, nur die dnd-kit-Gestenerkennung selbst bleibt ungetestet —
+für Logik-Verifikation ausreichend, für reines UI/Interaktions-Feingefühl (Cursor, Snap-back-
+Animation) müsste der User einmal manuell nachziehen. Bei künftigen Drag-Features diesen Weg
+zuerst versuchen, statt erneut Zeit in Maus-Simulation zu stecken.
