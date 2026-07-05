@@ -12,12 +12,60 @@ Der geführte Game-Review (Explain/Best/Next, chess.com-Stil) aus `IMPLEMENTATIO
 fertig umgesetzt (siehe dessen "Status"-Abschnitt). Diese Datei bleibt als Workflow-Vorlage für
 die **nächste** Änderung an diesem Feature oder für ein neues Feature in diesem Projekt.
 
+## Aktuell offene Blöcke (aus IMPLEMENTATION_PLAN.md)
+
+Zwei unabhängige, noch offene Fixes (Details/Codeschnipsel in `IMPLEMENTATION_PLAN.md`,
+Abschnitte "Block A" / "Block B"): **A** — roter/oranger Angriffs-Pfeil-Fächer entfernen;
+**B** — Navigations-Freeze-Fix (rAF-Bündelung in `useGame.ts`).
+
+**Reihenfolge: Block A zuerst, dann Block B.** Beide sind unabhängig genug für getrennte
+Plan-/Ausführungs-Durchgänge und getrennte Commits, müssen aber nicht in derselben Session
+laufen. Begründung: Block A ändert `BoardPanel.tsx` an derselben Stelle (die `arrows`-
+Konstruktion), die Block B ebenfalls anfasst — nach Block A ist die `useMemo`-Umstellung in
+Block B direkt gegen die bereits bereinigte (fächerlose) Version zu schreiben, statt sie
+zweimal anzufassen.
+
+Betroffene Dateien, beide Blöcke klein genug, dass **kein Explore-Agent nötig** ist — nur
+direktes Gegenlesen:
+- Block A: `App.tsx` (arrow-`useMemo`s + `view*`-`let`s + `<BoardPanel>`-Props),
+  `BoardPanel.tsx` (Props-Interface + Arrow-Baublock + Farb-Konstanten), `arrows.ts` (nur
+  lesen — bleibt unverändert).
+- Block B: `useGame.ts` (alle fünf `goTo*`-Funktionen + `currentPly`-State), `BoardPanel.tsx`
+  (Arrow-Bau-Block, nach Block A bereits bereinigt).
+
+Vorab-Checks pro Block:
+- **Vor Block A:** Grep nach `attackArrows`, `getAttackArrows`, `ATTACKS_ARROW_COLOR`,
+  `ATTACKED_BY_ARROW_COLOR` — sicherstellen, dass diese Symbole nirgends sonst referenziert
+  werden, bevor sie entfernt werden.
+- **Vor Block B:** prüfen, ob Block A bereits gelandet ist (`attackArrows`-Prop existiert
+  noch in `BoardPanel.tsx`?) — davon hängt ab, welche `useMemo`-Deps-Variante aus dem Plan
+  greift.
+- Bei Widerspruch zwischen Spec und aktuellem Code: **AskUserQuestion** mit konkreten
+  Code-Vorschau-Optionen, nicht einfach eine Interpretation wählen.
+
+**Browser ist bei beiden Blöcken Pflicht** — beide ändern Rendering/Laufzeitverhalten, reine
+Tests/Typecheck reichen nicht:
+- Block A: Partie laden → `Analyze Game` → durch Züge steppen, besonders zentralisierte
+  Dame/Turm/Läufer-Züge → Fächer weg, grüner/roter Best-Move-Pfeil bleibt.
+- Block B: den exakten Burst-Repro-Test aus dem Plan fahren (40× `ArrowRight` + 50×
+  `ArrowLeft` ohne Pause) → kein Freeze, keine „Maximum update depth exceeded"-Warnung,
+  Endzustand konsistent; zusätzlich Einzelschritt-Navigation auf spürbare Verzögerung prüfen
+  (soll keine geben).
+
+Nach Block B: Memory `project_stresstest.md` aktualisieren/löschen (das offene Finding aus
+Block 5.7 ist dann geschlossen) — nur nach expliziter Ansage des Users, dass der Fix
+committet ist.
+
 ## Vor dem nächsten Zyklus: Stand aktiv ermitteln
 
 Keine Fortschritts-Checkboxen pro Task hier — Status selbst prüfen, nicht annehmen:
 - `git log --oneline -10` — was ist schon committed?
-- Code direkt gegen `IMPLEMENTATION_PLAN.md`s "Repo ground truth"-Abschnitt prüfen — ein Block
-  kann fertig, aber uncommitted sein.
+- `git status --short` — uncommittete Änderungen sichten, bevor editiert wird.
+- Code direkt gegen `IMPLEMENTATION_PLAN.md`s "Repo ground truth"-Abschnitt (bzw. bei Block
+  A/B gegen deren "Kernänderungen"/"Implementierungsskizze") prüfen — ein Block kann fertig,
+  aber uncommitted sein. Falls sich Zeilennummern seit Planerstellung verschoben haben, nach
+  Symbolen suchen (`attackArrows`, `getAttackArrows`, `goToNext` etc.), nicht blind nach
+  Zeile gehen.
 - `npx tsc -b` laufen lassen, bevor ein neuer Block geplant wird (Clean-Slate-Check) — **nicht**
   `npx tsc --noEmit` (siehe unten).
 
@@ -76,4 +124,6 @@ einem `[data-square]`-Element, dann `.return`-Kette nach `memoizedProps.options`
 `'boardOrientation' in options` durchsuchen) und direkt mit realistischen Argumenten aufrufen
 (`{ piece: {pieceType, isSparePiece}, sourceSquare, targetSquare }`). Prüft denselben
 App-Code-Pfad wie ein echter Drop; für reines UI-Feingefühl (Cursor, Snap-back) müsste der User
-einmal manuell nachziehen.
+einmal manuell nachziehen. Nur relevant, falls Block B (siehe oben) versehentlich
+Drag-and-Drop-Verhalten berührt (sollte er nicht — er ändert nur Ply-Navigation, kein
+`onPieceDrop`).
