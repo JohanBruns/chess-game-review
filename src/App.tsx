@@ -337,9 +337,17 @@ function App() {
       />
 
       <div className="flex flex-1 min-h-0">
-        {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap) ── */}
-        <div className="shrink-0 flex flex-col p-3 gap-2" style={{ width: 'calc(100vh - 64px)' }}>
-          <div className="flex flex-row items-stretch" style={{ height: 'calc(100vh - 128px)' }}>
+        {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
+            Capped by min() against viewport width so a narrow-but-tall window can't force
+            the board wider than the screen and crush the sidebar (min 320px for it). ── */}
+        <div
+          className="shrink-0 flex flex-col p-3 gap-2"
+          style={{ width: 'min(calc(100vh - 64px), calc(100vw - 320px))' }}
+        >
+          <div
+            className="flex flex-row items-stretch"
+            style={{ height: 'min(calc(100vh - 128px), calc(100vw - 384px))' }}
+          >
             <EvalBar evalResult={evalResults[currentPly] ?? result} />
             <div className="aspect-square h-full">
               <BoardPanel
