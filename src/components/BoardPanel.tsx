@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Chessboard } from 'react-chessboard'
 import type { Arrow } from 'react-chessboard'
 import type { MoveClass } from '../lib/analysis/classify'
@@ -9,8 +10,6 @@ interface BoardPanelProps {
   classification?: MoveClass
   // Engine's recommended move, shown as a green arrow (toggled on by the caller).
   bestMoveArrow?: { from: string; to: string }
-  // Squares the played move now attacks / is attacked by (pure board geometry).
-  attackArrows?: { attacks: string[]; attackedBy: string[] }
   // Engine's best move in the current position — the standing threat, shown as a red arrow.
   threatArrow?: { from: string; to: string }
   // T7c engine-lines panel: the (best, or hovered) candidate move for the current position.
@@ -33,14 +32,10 @@ interface BoardPanelProps {
 // Verified 2026-07-04 against a live chess.com Game Review: the "you should have played
 // this" suggestion arrow is NOT a fixed color there — it's green after a Miss/Inaccuracy/Good,
 // red-orange after a Mistake/Blunder (severity-coded, not tied 1:1 to CLASS_COLOR). See
-// bestMoveArrowColor() below. ATTACKS_ARROW_COLOR is chess.com's separate "why is this move
-// great" explanatory arrow (e.g. "g5 is a great move" pointed the bishop at the piece it now
-// attacks) — matched to the measured #FFAA00. ATTACKED_BY_ARROW_COLOR/THREAT_ARROW_COLOR have
-// no directly observed chess.com equivalent (no live example surfaced one) — left unchanged.
+// bestMoveArrowColor() below. THREAT_ARROW_COLOR has no directly observed chess.com equivalent
+// (no live example surfaced one) — left unchanged.
 const BEST_MOVE_ARROW_GOOD_COLOR = '#9FCF3F'   // Miss / Inaccuracy / Good (and anything else)
 const BEST_MOVE_ARROW_SEVERE_COLOR = '#F8553F' // Mistake / Blunder
-const ATTACKS_ARROW_COLOR = '#FFAA00'
-const ATTACKED_BY_ARROW_COLOR = '#e5533d'
 const THREAT_ARROW_COLOR = '#e02c2c'
 // chess.com's analysis-mode engine-lines arrow — same green as its "best move" square/line highlight.
 const CANDIDATE_ARROW_COLOR = '#81b64c'
@@ -107,7 +102,6 @@ export function BoardPanel({
   lastMoveTo,
   classification,
   bestMoveArrow,
-  attackArrows,
   threatArrow,
   candidateArrow,
   orientation = 'white',
@@ -121,24 +115,22 @@ export function BoardPanel({
     squareStyles[lastMoveTo] = { backgroundColor: color }
   }
 
-  const arrows: Arrow[] = []
-  if (bestMoveArrow) {
-    arrows.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: bestMoveArrowColor(classification) })
-  }
-  if (attackArrows && lastMoveTo) {
-    for (const target of attackArrows.attacks) {
-      arrows.push({ startSquare: lastMoveTo, endSquare: target, color: ATTACKS_ARROW_COLOR })
+  // react-chessboard memoizes internal children off the `arrows` array reference — without
+  // useMemo a fresh literal on every render (e.g. during a rapid-navigation burst) would
+  // defeat that memoization on top of the extra render volume itself.
+  const arrows = useMemo<Arrow[]>(() => {
+    const result: Arrow[] = []
+    if (bestMoveArrow) {
+      result.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: bestMoveArrowColor(classification) })
     }
-    for (const attacker of attackArrows.attackedBy) {
-      arrows.push({ startSquare: attacker, endSquare: lastMoveTo, color: ATTACKED_BY_ARROW_COLOR })
+    if (threatArrow) {
+      result.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
     }
-  }
-  if (threatArrow) {
-    arrows.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
-  }
-  if (candidateArrow) {
-    arrows.push({ startSquare: candidateArrow.from, endSquare: candidateArrow.to, color: CANDIDATE_ARROW_COLOR })
-  }
+    if (candidateArrow) {
+      result.push({ startSquare: candidateArrow.from, endSquare: candidateArrow.to, color: CANDIDATE_ARROW_COLOR })
+    }
+    return result
+  }, [bestMoveArrow, classification, threatArrow, candidateArrow])
 
   const badge =
     lastMoveTo && classification && classification !== 'Book'

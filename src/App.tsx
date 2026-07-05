@@ -9,7 +9,7 @@ import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
 import type { MoveClass } from './lib/analysis/classify'
-import { getBestMoveArrow, getAttackArrows } from './lib/analysis/arrows'
+import { getBestMoveArrow } from './lib/analysis/arrows'
 import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
@@ -125,13 +125,6 @@ function App() {
     if (!bestMoveSan || bestMoveSan === moves[currentPly - 1].san) return undefined
     return getBestMoveArrow(fens[currentPly - 1], bestMoveSan) ?? undefined
   }, [currentPly, evalResults, moves, fens])
-
-  // Attack/attacked-by arrows — pure board geometry, always shown for the current move.
-  const attackArrows = useMemo(() => {
-    if (currentPly === 0) return undefined
-    const move = moves[currentPly - 1]
-    return getAttackArrows(currentFen, move.to, move.color)
-  }, [currentPly, moves, currentFen])
 
   // Retry-at-key-moments: reveals the engine's best move once an attempt has been made,
   // reusing getBestMoveArrow exactly as the normal-mode bestMoveArrow above does.
@@ -308,7 +301,6 @@ function App() {
   let viewFrom: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined
   let viewTo: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined
   let viewArrow = retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow
-  let viewAttack = attackArrows
 
   if (retryMoveIndex === null && reviewSub === 'best' && bestPreview) {
     viewFen = bestPreview.fen
@@ -316,7 +308,6 @@ function App() {
     viewFrom = bestPreview.from
     viewTo = bestPreview.to
     viewArrow = { from: bestPreview.from, to: bestPreview.to }
-    viewAttack = undefined
   } else if (retryMoveIndex === null && reviewSub === 'explain' && lineSteps[explainStep]) {
     const step = lineSteps[explainStep]
     viewFen = step.fen
@@ -324,7 +315,6 @@ function App() {
     viewFrom = step.from
     viewTo = step.to
     viewArrow = undefined
-    viewAttack = undefined
   }
 
   return (
@@ -356,7 +346,6 @@ function App() {
                 lastMoveTo={viewTo}
                 classification={viewClass}
                 bestMoveArrow={viewArrow}
-                attackArrows={viewAttack}
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}

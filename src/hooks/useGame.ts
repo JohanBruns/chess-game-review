@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Chess, type Move } from 'chess.js'
 
 const DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -31,6 +31,18 @@ export function useGame() {
   const [game, setGame] = useState<GameData>(INITIAL_GAME)
   const [currentPly, setCurrentPly] = useState(0)
 
+  // Holds the last COMMITTED ply for when queue() runs before any frame has flushed yet
+  // (pendingRef is still null then).
+  const currentPlyRef = useRef(currentPly)
+  useEffect(() => { currentPlyRef.current = currentPly }, [currentPly])
+
+  const pendingRef = useRef<number | null>(null)   // intended, not-yet-committed target ply
+  const rafRef = useRef<number | null>(null)
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current)
+  }, [])
+
   const loadPgn = useCallback((pgn: string) => {
     if (!pgn.trim()) {
       setGame((prev) => ({ ...prev, error: 'No PGN entered.' }))
@@ -52,30 +64,46 @@ export function useGame() {
       const whiteElo = parseElo(headers.WhiteElo)
       const blackElo = parseElo(headers.BlackElo)
       setGame({ fens, moves, error: null, isLoaded: true, whiteElo, blackElo })
+      // A new game replaces currentPly synchronously — drop any not-yet-flushed navigation
+      // intent from the previous game so it can't overwrite this reset on the next frame.
+      pendingRef.current = null
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current)
+        rafRef.current = null
+      }
       setCurrentPly(0)
     } catch (e) {
       setGame((prev) => ({ ...prev, error: String(e) }))
     }
   }, [])
 
-  const goToFirst = useCallback(() => setCurrentPly(0), [])
+  const flush = useCallback(() => {
+    rafRef.current = null
+    if (pendingRef.current !== null) {
+      setCurrentPly(pendingRef.current)
+      pendingRef.current = null
+    }
+  }, [])
 
-  const goToPrev = useCallback(
-    () => setCurrentPly((p) => Math.max(0, p - 1)),
-    [],
-  )
+  // Bundles a burst of navigation intents (e.g. OS key-repeat) into one commit per animation
+  // frame, so react-chessboard's per-position animation/layout effect never gets interrupted
+  // faster than the browser can paint. compute() receives the last intended-or-committed ply.
+  const queue = useCallback((compute: (base: number) => number) => {
+    const base = pendingRef.current ?? currentPlyRef.current
+    pendingRef.current = compute(base)
+    if (rafRef.current === null) rafRef.current = requestAnimationFrame(flush)
+  }, [flush])
 
+  const goToFirst = useCallback(() => queue(() => 0), [queue])
+  const goToPrev = useCallback(() => queue((p) => Math.max(0, p - 1)), [queue])
   const goToNext = useCallback(
-    () => setCurrentPly((p) => Math.min(game.fens.length - 1, p + 1)),
-    [game.fens.length],
+    () => queue((p) => Math.min(game.fens.length - 1, p + 1)),
+    [queue, game.fens.length],
   )
-
-  const goToLast = useCallback(
-    () => setCurrentPly(game.fens.length - 1),
-    [game.fens.length],
-  )
-
-  const goToPly = useCallback((ply: number) => setCurrentPly(ply), [])
+  const goToLast = useCallback(() => queue(() => game.fens.length - 1), [queue, game.fens.length])
+  // goToPly ignores base on purpose — jumping to a fixed ply always wins over a not-yet-
+  // flushed relative move, matching today's behavior where a move-list click jumps immediately.
+  const goToPly = useCallback((ply: number) => queue(() => ply), [queue])
 
   return {
     currentFen: game.fens[currentPly] ?? DEFAULT_POSITION,
