@@ -1,0 +1,9 @@
+To-do-Liste: Die folgenden Sachen müssten gefixt werden:
+
+3.1 Es gibt keinen Move-Sound. 
+3.2 Die Evaluationsleiste bewegt sich nicht mit der neuen Line mit. 
+3.2 Ich kann mich nicht mit den Pfeiltasten zum nächsten Zug begeben. Das geht nur über das manuelle Klicken. 
+4. Das Bild von dem Coach besteht nur aus zwei Emojis. Er setzte diese durch das hochgeladene PNG, was heißt „Chess Coach“. 
+5. Schau dir im Review-Ordner das Foto "Needs Rework" an. Das in Rot eingezeichnete Feld sollte größer werden sodass ich mehr Züge auf einmal sehen kann.
+Das in blau eingezeichnete Feld sollte kleiner werden. Außerdem sollten die Zahlen an der rechten Seite näher an den Beschreibungen der Züge stehen und größer sein. Um Platz zu sparen, da zu machen, kann man zum Beispiel das in zwei oder mehrere Spalten aufteilen. Oder du kannst ein Scroll Feature für die ganze rechte Ansicht hinzufügen. Das bezieht sich jetzt nicht nur auf die Legende sondern auf die ganze Ansicht. Entscheide du aber, was ästhetisch und funktional besser ist.
+ 

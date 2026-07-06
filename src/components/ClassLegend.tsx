@@ -42,27 +42,27 @@ export function ClassLegend({ moveAnalyses }: ClassLegendProps) {
   }, [moveAnalyses])
 
   return (
-    <div className="shrink-0 border-t border-cc-border px-3 py-2">
-      <div className="flex items-center justify-between text-[10px] text-cc-text-faint uppercase tracking-wide mb-1.5">
+    <div className="shrink-0 border-t border-cc-border px-3 py-1.5">
+      <div className="flex items-center justify-between text-[10px] text-cc-text-faint uppercase tracking-wide mb-1">
         <span>Legend</span>
         {moveAnalyses && (
-          <span className="flex gap-4 normal-case tracking-normal">
-            <span>White</span>
-            <span>Black</span>
+          <span className="flex gap-1.5 normal-case tracking-normal">
+            <span className="w-4 text-center">W</span>
+            <span className="w-4 text-center">B</span>
           </span>
         )}
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
         {LEGEND.map(({ classification, src, label }) => {
           const c = counts[classification]
           return (
             <div key={label} className="flex items-center gap-1.5 text-[11px]">
               <img src={src} alt={label} className="w-4 h-4 shrink-0" />
-              <span className="text-cc-text-dim flex-1 min-w-0 truncate">{label}</span>
+              <span className="text-cc-text-dim truncate">{label}</span>
               {moveAnalyses && (
-                <span className="flex gap-4 text-cc-text-dim tabular-nums shrink-0">
-                  <span className="w-3 text-right">{c.white}</span>
-                  <span className="w-3 text-right">{c.black}</span>
+                <span className="flex gap-1.5 text-cc-text-dim tabular-nums shrink-0 ml-auto text-xs font-medium">
+                  <span className="w-4 text-center">{c.white}</span>
+                  <span className="w-4 text-center">{c.black}</span>
                 </span>
               )}
             </div>
