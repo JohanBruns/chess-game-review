@@ -170,6 +170,10 @@ function App() {
     captureAudioRef.current = new Audio('/sounds/capture.mp3')
     moveAudioRef.current = new Audio('/sounds/move-self.mp3')
   }, [])
+  const playMoveSound = useCallback((captured: boolean) => {
+    const audio = captured ? captureAudioRef.current : moveAudioRef.current
+    if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
+  }, [])
   const soundPlyRef = useRef(currentPly)
   useEffect(() => {
     const prev = soundPlyRef.current
@@ -179,9 +183,8 @@ function App() {
     if (currentPly === prev || currentPly === 0) return
     const move = moves[currentPly - 1]
     if (!move) return
-    const audio = move.captured ? captureAudioRef.current : moveAudioRef.current
-    if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
-  }, [currentPly, moves])
+    playMoveSound(!!move.captured)
+  }, [currentPly, moves, playMoveSound])
 
   // Guided review derivations. analysis/bestSan/playedSan describe the move that was just
   // played (ply currentPly, i.e. moves[currentPly - 1]); bestPreview/lineSteps preview what
@@ -199,6 +202,20 @@ function App() {
     () => (currentPly > 0 ? buildLineSteps(fens[currentPly - 1], evalResults[currentPly - 1]?.pv ?? null) : []),
     [currentPly, fens, evalResults],
   )
+
+  // Explain-mode counterpart of the soundPlyRef effect above: stepping through the engine
+  // line moves explainStep (not currentPly), so it needs its own sound trigger. Also fires
+  // on entering explain mode, since the board jumps to the line's first move right then.
+  const soundExplainRef = useRef<{ sub: string; step: number }>({ sub: reviewSub, step: explainStep })
+  useEffect(() => {
+    const prev = soundExplainRef.current
+    soundExplainRef.current = { sub: reviewSub, step: explainStep }
+    if (reviewSub !== 'explain') return
+    if (prev.sub === 'explain' && prev.step === explainStep) return
+    const step = lineSteps[explainStep]
+    if (!step) return
+    playMoveSound(step.captured)
+  }, [reviewSub, explainStep, lineSteps, playMoveSound])
 
   const reviewActive = moveAnalyses != null && currentPly > 0 && evalResults[currentPly - 1] != null
   const canBest =
@@ -292,6 +309,8 @@ function App() {
       if (reviewSub === 'explain') {
         if (e.key === 'ArrowLeft') { e.preventDefault(); handleLinePrev(); return }
         if (e.key === 'ArrowRight') { e.preventDefault(); handleLineNext(); return }
+        // Enter = the "Got it!" button: leave the engine line, back to the idle review state.
+        if (e.key === 'Enter') { e.preventDefault(); handleGotIt(); return }
       }
       if (e.key === 'ArrowLeft') { e.preventDefault(); goToPrev() }
       else if (e.key === 'ArrowRight') { e.preventDefault(); goToNext() }
@@ -301,7 +320,7 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, handleLinePrev, handleLineNext])
+  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, handleLinePrev, handleLineNext, handleGotIt])
 
   // Board view for the current retry/review sub-mode. Defaults to the plain "current
   // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
@@ -393,6 +412,7 @@ function App() {
               result={result}
               error={engineError}
               isGameLoaded={isLoaded}
+              hasAnalysis={evalResults.length > 0 && engineError == null}
               whiteAccuracy={whiteAccuracy}
               blackAccuracy={blackAccuracy}
               whitePhaseAccuracy={whitePhaseAccuracy}
