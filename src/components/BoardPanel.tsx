@@ -29,22 +29,13 @@ interface BoardPanelProps {
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
 // hardcoded because react-chessboard renders these as raw SVG fill/stroke attributes.
 //
-// Verified 2026-07-04 against a live chess.com Game Review: the "you should have played
-// this" suggestion arrow is NOT a fixed color there — it's green after a Miss/Inaccuracy/Good,
-// red-orange after a Mistake/Blunder (severity-coded, not tied 1:1 to CLASS_COLOR). See
-// bestMoveArrowColor() below. THREAT_ARROW_COLOR has no directly observed chess.com equivalent
-// (no live example surfaced one) — left unchanged.
-const BEST_MOVE_ARROW_GOOD_COLOR = '#9FCF3F'   // Miss / Inaccuracy / Good (and anything else)
-const BEST_MOVE_ARROW_SEVERE_COLOR = '#F8553F' // Mistake / Blunder
+// The "you should have played this" suggestion arrow is always green on chess.com,
+// regardless of how bad the played move was (Mistake/Blunder included) — it's the
+// same "best move" color as the Best/Excellent square highlight, not severity-coded.
+const BEST_MOVE_ARROW_COLOR = '#9FCF3F'
 const THREAT_ARROW_COLOR = '#e02c2c'
 // chess.com's analysis-mode engine-lines arrow — same green as its "best move" square/line highlight.
 const CANDIDATE_ARROW_COLOR = '#81b64c'
-
-function bestMoveArrowColor(classification?: MoveClass): string {
-  return classification === 'Mistake' || classification === 'Blunder'
-    ? BEST_MOVE_ARROW_SEVERE_COLOR
-    : BEST_MOVE_ARROW_GOOD_COLOR
-}
 
 const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Brilliant:  'brilliant_128x.png',
@@ -121,7 +112,7 @@ export function BoardPanel({
   const arrows = useMemo<Arrow[]>(() => {
     const result: Arrow[] = []
     if (bestMoveArrow) {
-      result.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: bestMoveArrowColor(classification) })
+      result.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: BEST_MOVE_ARROW_COLOR })
     }
     if (threatArrow) {
       result.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
