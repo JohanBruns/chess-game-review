@@ -1,5 +1,6 @@
-import { Chess, type Move } from 'chess.js'
+import { Chess, type Move, type Square } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
+import { seeGain, PIECE_VAL } from './see'
 
 export type MoveClass =
   | 'Book'
@@ -132,9 +133,6 @@ function evalToCp(r: EvalResult): number {
 const MISS_WIN_AVAILABLE = 80   // a win was on the board at winPctBefore
 const MISS_RESULT_CEILING = 55  // and the played move let it slip to at/below this
 
-// Piece values for sacrifice detection
-const PIECE_VAL: Record<string, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }
-
 // T7 game-phase thresholds
 const OPENING_MIN_PLIES = 20          // opening phase runs at least to move 10 regardless of book length
 const ENDGAME_NONPAWN_MATERIAL = 20   // both sides combined, kings excluded; starting value is 62
@@ -151,26 +149,60 @@ function nonPawnMaterial(fen: string): number {
   return sum
 }
 
-// A move is a sacrifice when material is given without immediate equal compensation.
-// Two cases:
-//   a) Direct exchange sacrifice: captured piece worth less than moving piece
-//   b) Piece hangs on destination (non-pawn only — pawn advances to defended squares are normal play)
-export function isSacrifice(move: Move): boolean {
+// A move is a sacrifice when it leaves material en prise without equal compensation,
+// measured by real Static Exchange Evaluation instead of an attacked/defended flag.
+// After the move (opponent to move) every own non-king square is checked for what the
+// opponent could net there via the full capture sequence (seeGain). Two refinements:
+//   - For the moved piece's own square on a capture, the captured piece's value is
+//     immediate compensation and is subtracted (QxR that can be recaptured is a
+//     4-point sac; QxR with no recapture is just a win, not a sacrifice).
+//   - A piece that was already SEE-hanging before the move was lost anyway — giving
+//     it up (or leaving it) is not a fresh sacrifice.
+// `seeThreshold` is the minimum net material given up (2 = exchange-scale, 3 = a
+// full piece) — rating-scaled by the caller via RatingThresholds.sacrificeSeeMin.
+export function isSacrifice(move: Move, seeThreshold = 3): boolean {
   if (!move.piece || !move.color || !move.after) return false
-  const pieceVal = PIECE_VAL[move.piece] ?? 0
-
-  if (move.captured) {
-    return (PIECE_VAL[move.captured] ?? 0) < pieceVal
-  }
-
-  if (pieceVal <= 1) return false  // pawn non-capture: skip
   try {
-    const chess = new Chess(move.after)
-    const oppColor = move.color === 'w' ? 'b' : 'w'
-    // Genuinely hanging: opponent can take it AND the mover has nothing recapturing
-    // there. If the mover's own side also defends the square, any "capture" is just
-    // an even trade (e.g. a supported knight outpost) — not a sacrifice.
-    return chess.isAttacked(move.to, oppColor) && !chess.isAttacked(move.to, move.color)
+    const after = new Chess(move.after)
+    const capturedVal = move.captured ? (PIECE_VAL[move.captured] ?? 0) : 0
+    for (const row of after.board()) {
+      for (const sq of row) {
+        if (!sq || sq.color !== move.color || sq.type === 'k') continue
+        const gain = seeGain(move.after, sq.square)
+        const netSac = sq.square === move.to ? gain - capturedVal : gain
+        if (netSac < seeThreshold) continue
+        // The piece now on move.to sat on move.from before the move; everything
+        // else is on its original square. (Castling maps the rook imprecisely —
+        // its before-square was empty, harmlessly counting it as not-hanging.)
+        const beforeSquare = sq.square === move.to ? move.from : sq.square
+        if (wasHangingBefore(move, beforeSquare, seeThreshold)) continue
+        return true
+      }
+    }
+    return false
+  } catch {
+    return false
+  }
+}
+
+// Was this own piece already SEE-losing in the position before the move? Checked by
+// flipping the side to move in move.before (legal whenever the mover was not in
+// check: with the mover to move, the opponent's king cannot be in check either).
+// If the mover WAS in check, fall back to the simple attacked-and-undefended test.
+function wasHangingBefore(move: Move, square: Square, seeThreshold: number): boolean {
+  if (!move.before) return false
+  try {
+    const before = new Chess(move.before)
+    if (!before.isCheck()) {
+      const parts = move.before.split(' ')
+      parts[1] = parts[1] === 'w' ? 'b' : 'w'
+      parts[3] = '-' // en-passant target is meaningless for the flipped side
+      return seeGain(parts.join(' '), square) >= seeThreshold
+    }
+    const opp = move.color === 'w' ? 'b' : 'w'
+    const piece = before.get(square)
+    if (!piece || piece.color !== move.color) return false
+    return before.isAttacked(square, opp) && !before.isAttacked(square, move.color)
   } catch {
     return false
   }
@@ -222,11 +254,12 @@ interface RatingThresholds {
   brilliantLossMax: number       // Brilliant gate, normally `loss <= 2`
   greatOnlyMoveGapMin: number    // Great "only good move" branch, normally gap >= 30 win%
   greatNearBestLossMax: number   // Great swing branches' isNearBest, normally `loss <= 1.5`
+  sacrificeSeeMin: number        // min net material (pawn units) for isSacrifice: 2 = exchange-scale, 3 = full piece
 }
 
-const NEUTRAL_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 2, greatOnlyMoveGapMin: 30, greatNearBestLossMax: 1.5 }
-const LENIENT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 3, greatOnlyMoveGapMin: 25, greatNearBestLossMax: 2.5 }
-const STRICT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 1, greatOnlyMoveGapMin: 35, greatNearBestLossMax: 1.0 }
+const NEUTRAL_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 2, greatOnlyMoveGapMin: 30, greatNearBestLossMax: 1.5, sacrificeSeeMin: 3 }
+const LENIENT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 3, greatOnlyMoveGapMin: 25, greatNearBestLossMax: 2.5, sacrificeSeeMin: 2 }
+const STRICT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 1, greatOnlyMoveGapMin: 35, greatNearBestLossMax: 1.0, sacrificeSeeMin: 3 }
 
 function ratingThresholds(rating?: number): RatingThresholds {
   if (rating == null) return NEUTRAL_RATING_THRESHOLDS
@@ -234,6 +267,11 @@ function ratingThresholds(rating?: number): RatingThresholds {
   if (rating > RATING_STRICT_MIN) return STRICT_RATING_THRESHOLDS
   return NEUTRAL_RATING_THRESHOLDS
 }
+
+// Brilliant condition 4 ("you were not already completely winning anyway"): the
+// second-best engine line must not itself be winning by more than this — a sacrifice
+// that merely decorates an already-won position earns no exclamation marks.
+const BRILLIANT_SECOND_BEST_MAX_CP = 250
 
 // Optional params enable Brilliant/Great detection when full context is available.
 // Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
@@ -247,19 +285,26 @@ export function classifyMove(
   winPctPrior?: number,
   winPctAfterRaw?: number,
   playerRating?: number,
+  suppressBrilliant = false,
 ): MoveClass {
   const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
   const rt = ratingThresholds(playerRating)
 
-  // Brilliant: sacrifice + nearly best + position not already trivially won
+  // Brilliant: sacrifice (SEE-based) + nearly best + not already winning without it
   // + you are NOT lost afterward (winPct >= 50 = at least equal)
   // + no MORE valuable own piece hangs free at the same time (that would be a
   //   blunder that happens to also give up material, not a brilliancy).
+  // "Not already winning" is measured by the second-best line when available —
+  // the pre-move eval would wrongly block sacs whose own point pushes the eval
+  // past 90%, while the second-best line shows the position WITHOUT the sacrifice.
+  // Cheap numeric gates run first so the SEE board scan only touches candidates.
   if (
+    !suppressBrilliant &&
     move != null && winPctBefore != null && winPctAfter != null &&
-    loss <= rt.brilliantLossMax && winPctBefore < 90 &&
+    loss <= rt.brilliantLossMax &&
     winPctAfter >= 50 &&
-    isSacrifice(move) &&
+    (secondBestCp != null ? secondBestCp <= BRILLIANT_SECOND_BEST_MAX_CP : winPctBefore < 90) &&
+    isSacrifice(move, rt.sacrificeSeeMin) &&
     !hasCostlierHangingPiece(move)
   ) return 'Brilliant'
 
@@ -327,6 +372,10 @@ export function buildMoveAnalyses(
   blackRating?: number,
 ): MoveAnalysis[] {
   const analyses: MoveAnalysis[] = []
+  // Classification per ply, for the one-Brilliant-per-combination rule: consecutive
+  // sacrifices of the same combination get a single Brilliant (chess.com behavior),
+  // so a move whose previous own move (ply i-2) was Brilliant skips the Brilliant branch.
+  const classByPly = new Map<number, MoveClass>()
   // Opening phase runs at least to move 10, even if the opening-DB match (openingPly) is
   // shorter — otherwise "opening" would coincide exactly with the Book moves, which
   // playerAccuracy/phaseAccuracy exclude, making opening accuracy structurally always null.
@@ -381,20 +430,24 @@ export function buildMoveAnalyses(
     const winPctPrior = cpPrior != null ? winPct(cpPrior) : undefined
     const playerRating = isWhite ? whiteRating : blackRating
 
+    const classification = classifyMove(
+      loss,
+      isEngineBestMove,
+      moves[i],
+      winPct(cpBefore),
+      cpBefore,
+      secondBestCpMover,
+      winPctPrior,
+      winPctAfterRaw,
+      playerRating,
+      classByPly.get(i - 2) === 'Brilliant',
+    )
+    classByPly.set(i, classification)
+
     analyses.push({
       moveIndex: i,
       lossInWinPct: loss,
-      classification: classifyMove(
-        loss,
-        isEngineBestMove,
-        moves[i],
-        winPct(cpBefore),
-        cpBefore,
-        secondBestCpMover,
-        winPctPrior,
-        winPctAfterRaw,
-        playerRating,
-      ),
+      classification,
       accuracy: moveAccuracy(loss),
       winPctAfterRaw,
       phase,
