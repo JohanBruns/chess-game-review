@@ -7,6 +7,7 @@ export interface LineStep {
   fen: string
   from: Square
   to: Square
+  captured: boolean
 }
 
 export interface BestPreview {
@@ -62,7 +63,7 @@ export function buildLineSteps(fenBefore: string, pv: string | null): LineStep[]
     if (!san) continue
     try {
       const m = chess.move(san)
-      steps.push({ san: m.san, fen: chess.fen(), from: m.from, to: m.to })
+      steps.push({ san: m.san, fen: chess.fen(), from: m.from, to: m.to, captured: m.captured != null })
     } catch {
       break
     }

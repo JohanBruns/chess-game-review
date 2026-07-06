@@ -80,6 +80,11 @@ describe('buildLineSteps', () => {
     expect(steps[2].fen).toContain('N')
   })
 
+  it('flags capture moves in the line', () => {
+    const steps = buildLineSteps(START_FEN, 'e4 d5 exd5')
+    expect(steps.map(s => s.captured)).toEqual([false, false, true])
+  })
+
   it('stops cleanly at the first illegal SAN in the line', () => {
     const steps = buildLineSteps(START_FEN, 'e4 e5 Qh5 Ke7 Bc4 Nf6 Qxf7 illegalmove')
     expect(steps).toHaveLength(7)

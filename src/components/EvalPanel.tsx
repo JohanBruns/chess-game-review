@@ -7,6 +7,9 @@ interface EvalPanelProps {
   result: EvalResult | null
   error: string | null
   isGameLoaded: boolean
+  // True once an analysis has been started/completed for the loaded game — keeps the
+  // Analyze button greyed out after its one allowed click (resets on loading a new game).
+  hasAnalysis: boolean
   whiteAccuracy: number | null
   blackAccuracy: number | null
   whitePhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
@@ -38,13 +41,14 @@ export function EvalPanel({
   result,
   error,
   isGameLoaded,
+  hasAnalysis,
   whiteAccuracy,
   blackAccuracy,
   whitePhaseAccuracy,
   blackPhaseAccuracy,
   onAnalyzeGame,
 }: EvalPanelProps) {
-  const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing
+  const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing || hasAnalysis
 
   return (
     <div className="flex flex-col gap-2">
