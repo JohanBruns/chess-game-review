@@ -1,4 +1,5 @@
-# Chess Game Review
+# Chess Game Review 
+# No AI Slop
 
 A web-based chess game analysis tool inspired by chess.com's Game Review feature. Analyze your games with real-time engine evaluation (Stockfish), move classification, accuracy metrics, and detailed coaching insights.
 
