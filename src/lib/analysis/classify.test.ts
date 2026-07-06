@@ -25,11 +25,17 @@ const ev = (cp: number, bestMoveSan: string | null = null, secondBestCp: number 
   thirdBestMoveSan: null,
 })
 
-// A synthetic capture-type "sacrifice" move — isSacrifice's capture branch only reads
-// .piece/.captured (never .to/.after), so a cast is safe here (unlike the non-capture
-// branch tests below, which need a real board to check attacker/defender squares).
-const sacMv = (san: string): Move =>
-  ({ san, piece: 'q', captured: 'n', color: 'w', to: 'e4', after: 'x' } as unknown as Move)
+// A real board sacrifice — the SEE-based isSacrifice needs genuine positions.
+// Nc3-d5 puts the knight en prise to ...exd5 with no recapture: SEE net = 3
+// (a full piece), which passes the sacrifice threshold at every rating tier.
+const SAC_FEN = '4k3/8/4p3/8/8/2N5/8/4K3 w - - 0 1'
+const sacMv = (): Move => new Chess(SAC_FEN).move({ from: 'c3', to: 'd5' })
+
+// A real exchange-scale sacrifice — Ra4-c4 offers the rook to ...Nxc4 with only the
+// b3-pawn recapturing: SEE net = 5 - 3 = 2. Qualifies at the lenient tier
+// (sacrificeSeeMin 2) but not at neutral/strict (3).
+const EXCH_FEN = '4k3/8/3n4/8/R7/1P6/8/4K3 w - - 0 1'
+const exchMv = (): Move => new Chess(EXCH_FEN).move({ from: 'a4', to: 'c4' })
 
 describe('winPct', () => {
   it('returns 50 at cp=0', () => {
@@ -108,39 +114,91 @@ describe('classifyMove', () => {
   })
 })
 
-describe('isSacrifice', () => {
-  it('capture worth less than the mover → sacrifice', () => {
-    // queen (9) captures a knight (3)
-    const move = { piece: 'q', captured: 'n', color: 'w', to: 'e4', after: 'x' } as unknown as Move
+describe('isSacrifice (SEE-based)', () => {
+  it('capture of a DEFENDED lesser piece → sacrifice (queen for rook)', () => {
+    // Qa3xe7+ along the diagonal: the rook is defended by the king — Kxe7
+    // recaptures, net investment 9-5=4. (Diagonal capture, so the rook was not
+    // counter-attacking the queen beforehand.)
+    const chess = new Chess('4k3/4r3/8/8/8/Q7/8/6K1 w - - 0 1')
+    const move = chess.move({ from: 'a3', to: 'e7' })
     expect(isSacrifice(move)).toBe(true)
   })
 
-  it('capture worth more than or equal to the mover → not a sacrifice', () => {
-    // knight (3) captures a queen (9)
-    const move = { piece: 'n', captured: 'q', color: 'w', to: 'e4', after: 'x' } as unknown as Move
+  it('queen takes a rook that was ALREADY winning the queen on the shared line → not a fresh sacrifice', () => {
+    // Qd1xd8+ Kxd8 — but before the move ...Rxd1 Kxd1 was already netting Black the
+    // same 4 points on the d-file. Initiating an exchange you could not avoid is the
+    // "hing sowieso" rule, not a sacrifice.
+    const chess = new Chess('3rk3/8/8/8/8/8/8/3QK3 w - - 0 1')
+    const move = chess.move({ from: 'd1', to: 'd8' })
     expect(isSacrifice(move)).toBe(false)
   })
 
-  it('pawn non-capture is never a sacrifice', () => {
-    const move = { piece: 'p', captured: undefined, color: 'w', to: 'e4', after: 'x' } as unknown as Move
+  it('capture of an UNDEFENDED lesser piece → not a sacrifice (SEE fixes the old false positive)', () => {
+    // Qd1xd5: queen takes a rook nobody defends — pure material win, nothing invested.
+    // The old value-only heuristic (captured < mover) wrongly called this a sacrifice.
+    const chess = new Chess('4k3/8/8/3r4/8/8/8/3QK3 w - - 0 1')
+    const move = chess.move({ from: 'd1', to: 'd5' })
     expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('capture worth more than the mover → not a sacrifice', () => {
+    // Ne6xd8: knight (3) wins a queen (9); Kxd8 recaptures but the net is a gain.
+    const chess = new Chess('3qk3/8/4N3/8/8/8/8/4K3 w - - 0 1')
+    const move = chess.move({ from: 'e6', to: 'd8' })
+    expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('pawn push to an attacked square is not a sacrifice (below every threshold)', () => {
+    // e2-e4 walks into ...dxe4 with no recapture — SEE 1, under even the lenient min of 2.
+    const chess = new Chess('4k3/8/8/3p4/8/8/4P3/4K3 w - - 0 1')
+    const move = chess.move({ from: 'e2', to: 'e4' })
+    expect(isSacrifice(move, 2)).toBe(false)
   })
 
   it('non-capture onto a square defended by the mover\'s own side → not a sacrifice (regression: defended outpost)', () => {
     // Sveshnikov Sicilian: 9.Nd5 lands the knight on a square attacked by ...Nf6
     // but defended by White's own e4 pawn — a normal supported move, not a sacrifice.
+    // SEE: Nxd5 exd5 is an even knight-for-knight trade, net 0 — even at threshold 2.
     const chess = new Chess()
     for (const san of ['e4', 'c5', 'Nf3', 'Nc6', 'd4', 'cxd4', 'Nxd4', 'Nf6', 'Nc3', 'e5', 'Ndb5', 'd6', 'Bg5', 'a6', 'Na3', 'b5']) {
       chess.move(san)
     }
     const move = chess.move('Nd5')
     expect(isSacrifice(move)).toBe(false)
+    expect(isSacrifice(move, 2)).toBe(false)
   })
 
   it('non-capture onto a square genuinely undefended → still a sacrifice', () => {
     // White Nc3-d5: attacked by Black's e6 pawn, no White piece defends d5.
-    const chess = new Chess('4k3/8/4p3/8/8/2N5/8/4K3 w - - 0 1')
+    const chess = new Chess(SAC_FEN)
     const move = chess.move({ from: 'c3', to: 'd5' })
+    expect(isSacrifice(move)).toBe(true)
+  })
+
+  it('defended piece attacked by a CHEAPER attacker → exchange-scale sacrifice (SEE fixes the old false negative)', () => {
+    // Nc3-d5 defended by the c4 pawn but attacked by ...exd5: SEE = 3 - 1 = 2.
+    // The old attacked-and-undefended check saw "defended" and said no sacrifice;
+    // SEE prices the pawn-takes-knight, pawn-recaptures sequence correctly.
+    const chess = new Chess('4k3/8/4p3/8/2P5/2N5/8/4K3 w - - 0 1')
+    const move = chess.move({ from: 'c3', to: 'd5' })
+    expect(isSacrifice(move, 2)).toBe(true)   // lenient tier: exchange-scale counts
+    expect(isSacrifice(move, 3)).toBe(false)  // neutral/strict: full piece required
+  })
+
+  it('piece that was ALREADY hanging before the move → not a sacrifice', () => {
+    // The c3 knight is attacked by ...bxc3 and undefended — it was lost anyway.
+    // Moving it to d5 (also en prise) gives up nothing that wasn't gone already.
+    const chess = new Chess('4k3/8/4p3/8/1p6/2N5/8/4K3 w - - 0 1')
+    const move = chess.move({ from: 'c3', to: 'd5' })
+    expect(isSacrifice(move)).toBe(false)
+  })
+
+  it('abandoning the defense of ANOTHER piece → sacrifice (whole-board scan, not just the destination)', () => {
+    // Bd4 is the only defender of Ne5, which ...Re7 attacks. Bd4-b6 walks to a safe
+    // square but leaves the knight to ...Rxe5 with no recapture — SEE 3 on e5.
+    // The old heuristic only ever looked at the moved piece's destination square.
+    const chess = new Chess('7k/4r3/8/4N3/3B4/8/8/6K1 w - - 0 1')
+    const move = chess.move({ from: 'd4', to: 'b6' })
     expect(isSacrifice(move)).toBe(true)
   })
 })
@@ -148,22 +206,38 @@ describe('isSacrifice', () => {
 describe('classifyMove — Brilliant', () => {
   it('fires: sacrifice, small loss, not trivially won, not lost afterward', () => {
     // winPctBefore=67.62 (cp=200), loss=1 → winPctAfter=66.62 (>=50)
-    expect(classifyMove(1, false, sacMv('Qxh7'), 67.6212, null, null)).toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null)).toBe('Brilliant')
   })
 
   it('blocked: sacrifice played from a position that stays lost afterward', () => {
     // winPctBefore=24.89 (cp=-300), loss=1 → winPctAfter=23.89 (<50) — still losing
-    expect(classifyMove(1, false, sacMv('Qxh7'), 24.8874, null, null)).not.toBe('Brilliant')
-    expect(classifyMove(1, false, sacMv('Qxh7'), 24.8874, null, null)).toBe('Excellent')
+    expect(classifyMove(1, false, sacMv(), 24.8874, null, null)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv(), 24.8874, null, null)).toBe('Excellent')
   })
 
-  it('blocked: position already trivially won (winPctBefore >= 90)', () => {
+  it('blocked: second-best line is already completely winning (>250cp) — the sac was not needed', () => {
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, 300)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, 300)).toBe('Excellent')
+  })
+
+  it('fires: second-best line is NOT winning — the sacrifice earned something real', () => {
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, 200)).toBe('Brilliant')
+  })
+
+  it('fires: crushing sac (winPctBefore >= 90) stays Brilliant when the second-best line is modest', () => {
+    // The pre-move eval is high BECAUSE the sacrifice is on the board (best line);
+    // condition 4 asks about the position WITHOUT it — that's the second-best line.
+    // The old winPctBefore < 90 gate wrongly blocked exactly these.
+    expect(classifyMove(1, false, sacMv(), 92.9397, null, 0)).toBe('Brilliant')
+  })
+
+  it('blocked (fallback): winPctBefore >= 90 with no second-best line available', () => {
     // winPctBefore=92.94 (cp=700), loss=1
-    expect(classifyMove(1, false, sacMv('Qxh7'), 92.9397, null, null)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv(), 92.9397, null, null)).not.toBe('Brilliant')
   })
 
   it('blocked: loss too big (> 2)', () => {
-    expect(classifyMove(3, false, sacMv('Qxh7'), 67.6212, null, null)).not.toBe('Brilliant')
+    expect(classifyMove(3, false, sacMv(), 67.6212, null, null)).not.toBe('Brilliant')
   })
 
   it('blocked: move is not a sacrifice', () => {
@@ -171,14 +245,26 @@ describe('classifyMove — Brilliant', () => {
     expect(classifyMove(1, false, notASac, 67.6212, null, null)).not.toBe('Brilliant')
   })
 
-  it('blocked: a MORE valuable own piece hangs free at the same time (hasCostlierHangingPiece veto)', () => {
-    // Rxc6 (rook takes knight, PIECE_VAL[n]=3 < PIECE_VAL[r]=5 -> isSacrifice true).
-    // After the move, White's queen on d5 is undefended and attacked by the black
-    // bishop on f7 (f7-e6-d5 diagonal) — a piece MORE valuable (9) than the rook (5)
-    // just committed. This is a blunder that happens to also be a sacrifice, not a
-    // brilliancy.
+  it('blocked: suppressBrilliant=true skips only the Brilliant branch (one per combination)', () => {
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null, undefined, undefined, undefined, true)).toBe('Excellent')
+  })
+
+  it('capturing while a costlier piece was ALREADY hanging → not even a sacrifice under SEE', () => {
+    // Rxc6 wins a knight clean (no recapture on c6). The queen on d5 hung to ...Bf7xd5
+    // both before and after the move — a piece that was already lost is not being
+    // sacrificed. The old value-only heuristic called this a sacrifice.
     const chess = new Chess('6k1/5b2/2n5/3Q4/8/8/8/2R3K1 w - - 0 1')
     const move = chess.move({ from: 'c1', to: 'c6' })
+    expect(isSacrifice(move)).toBe(false)
+    expect(classifyMove(1, false, move, 67.6212, null, null)).not.toBe('Brilliant')
+  })
+
+  it('blocked: a MORE valuable own piece hangs FRESHLY at the same time (hasCostlierHangingPiece veto)', () => {
+    // Bd4-b6 offers the bishop to ...axb6 (a real sacrifice) but also unblocks the
+    // d-file, leaving the queen on d1 to ...Rd8xd1 with no recapture. Giving up a
+    // bishop while dropping the queen is a blunder, not a brilliancy.
+    const chess = new Chess('3r4/p6k/8/8/3B4/8/8/3Q2K1 w - - 0 1')
+    const move = chess.move({ from: 'd4', to: 'b6' })
     expect(isSacrifice(move)).toBe(true)
     expect(classifyMove(1, false, move, 67.6212, null, null)).not.toBe('Brilliant')
   })
@@ -222,16 +308,24 @@ describe('classifyMove — Great', () => {
 describe('classifyMove — rating-aware Brilliant/Great thresholds', () => {
   it('lenient (<1600) loosens the Brilliant loss gate', () => {
     // loss=2.5 is between the neutral max (2) and the lenient max (3).
-    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined)).not.toBe('Brilliant')
-    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1400)).toBe('Brilliant')
+    expect(classifyMove(2.5, false, sacMv(), 67.6212, null, null, undefined, undefined)).not.toBe('Brilliant')
+    expect(classifyMove(2.5, false, sacMv(), 67.6212, null, null, undefined, undefined, 1400)).toBe('Brilliant')
     // A rating inside the neutral band (1600-2000) behaves exactly like no rating at all.
-    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1800)).not.toBe('Brilliant')
+    expect(classifyMove(2.5, false, sacMv(), 67.6212, null, null, undefined, undefined, 1800)).not.toBe('Brilliant')
   })
 
   it('strict (>2000) tightens the Brilliant loss gate', () => {
     // loss=1.5 is between the strict max (1) and the neutral max (2).
-    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined)).toBe('Brilliant')
-    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 2200)).not.toBe('Brilliant')
+    expect(classifyMove(1.5, false, sacMv(), 67.6212, null, null, undefined, undefined)).toBe('Brilliant')
+    expect(classifyMove(1.5, false, sacMv(), 67.6212, null, null, undefined, undefined, 2200)).not.toBe('Brilliant')
+  })
+
+  it('lenient (<1600) loosens the sacrifice definition to exchange-scale (sacrificeSeeMin 2)', () => {
+    // exchMv gives up rook-for-knight (SEE net 2): a sacrifice for a club player,
+    // ordinary material handling at neutral/strict tiers (min 3 = full piece).
+    expect(classifyMove(1, false, exchMv(), 67.6212, null, null, undefined, undefined)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, exchMv(), 67.6212, null, null, undefined, undefined, 1400)).toBe('Brilliant')
+    expect(classifyMove(1, false, exchMv(), 67.6212, null, null, undefined, undefined, 2200)).not.toBe('Brilliant')
   })
 
   it('lenient (<1600) loosens the Great "only good move" gap requirement', () => {
@@ -255,9 +349,9 @@ describe('classifyMove — rating-aware Brilliant/Great thresholds', () => {
 
   it('tier boundaries are inclusive of neutral: exactly 1600 and exactly 2000 behave as no rating', () => {
     // 1600 must NOT get lenient treatment (loss=2.5 stays blocked, same as the lenient test above).
-    expect(classifyMove(2.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 1600)).not.toBe('Brilliant')
+    expect(classifyMove(2.5, false, sacMv(), 67.6212, null, null, undefined, undefined, 1600)).not.toBe('Brilliant')
     // 2000 must NOT get strict treatment (loss=1.5 stays Brilliant, same as the strict test above).
-    expect(classifyMove(1.5, false, sacMv('Qxh7'), 67.6212, null, null, undefined, undefined, 2000)).toBe('Brilliant')
+    expect(classifyMove(1.5, false, sacMv(), 67.6212, null, null, undefined, undefined, 2000)).toBe('Brilliant')
   })
 })
 
@@ -388,15 +482,32 @@ describe('buildMoveAnalyses — Vorzeichen-Logik', () => {
 describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
   it('sacrifice played from a losing position is NOT Brilliant, even with tiny loss', () => {
     // cpBefore=-300 (winPct≈24.89), cpAfter=-320 (winPct≈23.54) → loss≈1.35, still losing after
-    const [a] = buildMoveAnalyses([sacMv('Qxh7')], [ev(-300), ev(-320)])
+    const [a] = buildMoveAnalyses([sacMv()], [ev(-300), ev(-320)])
     expect(a.classification).not.toBe('Brilliant')
     expect(a.classification).toBe('Excellent')
   })
 
   it('sacrifice played while staying afloat IS Brilliant', () => {
     // cpBefore=200 (winPct≈67.62), cpAfter=180 (winPct≈65.99) → loss≈1.63, still >=50 after
-    const [a] = buildMoveAnalyses([sacMv('Qxh7')], [ev(200), ev(180)])
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200), ev(180)])
     expect(a.classification).toBe('Brilliant')
+  })
+
+  it('second-best line >250cp on the EvalResult blocks Brilliant end-to-end', () => {
+    // Same sac as above, but the engine's 2nd line was already +300 — anything wins.
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200, null, 300), ev(180)])
+    expect(a.classification).not.toBe('Brilliant')
+  })
+
+  it('only one Brilliant per combination: the consecutive follow-up sac is suppressed', () => {
+    // White sacrifices on plies 0 and 2 (same combination); Black's reply in between.
+    // Evals keep both White sacs in the Brilliant window (loss≈1.6, winPct>=50 after);
+    // only the first may fire, the follow-up falls through to Excellent.
+    const moves = [sacMv(), mv('h6'), sacMv()]
+    const evals = [ev(200), ev(180), ev(200), ev(180)]
+    const analyses = buildMoveAnalyses(moves, evals)
+    expect(analyses.find(a => a.moveIndex === 0)!.classification).toBe('Brilliant')
+    expect(analyses.find(a => a.moveIndex === 2)!.classification).toBe('Excellent')
   })
 
   it('Great fires end-to-end via secondBestCp on the EvalResult', () => {
@@ -408,7 +519,7 @@ describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
   it('rating-aware: whiteRating/blackRating are threaded through per-mover, not swapped', () => {
     // cpBefore=200 (winPct≈67.62), cpAfter=165 (winPct≈64.74) → loss≈2.88 for White's sac —
     // too big for neutral (max 2) but within the lenient band (max 3, whiteRating < 1600).
-    const moves = [sacMv('Qxh7')]
+    const moves = [sacMv()]
     const evals = [ev(200), ev(165)]
 
     const [noRating] = buildMoveAnalyses(moves, evals)
