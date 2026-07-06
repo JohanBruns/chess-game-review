@@ -1,13 +1,16 @@
 import { useMemo } from 'react'
 import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
 
-const LEGEND: { classification: MoveClass; src: string; label: string }[] = [
+const GOOD_LEGEND: { classification: MoveClass; src: string; label: string }[] = [
   { classification: 'Book',       src: '/marks/book_128x.png',       label: 'Book'           },
   { classification: 'Brilliant',  src: '/marks/brilliant_128x.png',  label: 'Brilliant (!!)' },
   { classification: 'Great',      src: '/marks/great_find_128x.png', label: 'Great (!)'      },
   { classification: 'Best',       src: '/marks/best_128x.png',       label: 'Best'           },
   { classification: 'Excellent',  src: '/marks/excellent_128x.png',  label: 'Excellent'      },
   { classification: 'Good',       src: '/marks/good_128x.png',       label: 'Good'           },
+]
+
+const OTHER_LEGEND: { classification: MoveClass; src: string; label: string }[] = [
   { classification: 'Inaccuracy', src: '/marks/inaccuracy_128x.png', label: 'Inaccuracy'     },
   { classification: 'Mistake',    src: '/marks/mistake_128x.png',    label: 'Mistake'        },
   { classification: 'Blunder',    src: '/marks/blunder_128x.png',    label: 'Blunder'        },
@@ -53,22 +56,32 @@ export function ClassLegend({ moveAnalyses }: ClassLegendProps) {
         )}
       </div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-        {LEGEND.map(({ classification, src, label }) => {
-          const c = counts[classification]
-          return (
-            <div key={label} className="flex items-center gap-1.5 text-[11px]">
-              <img src={src} alt={label} className="w-4 h-4 shrink-0" />
-              <span className="text-cc-text-dim truncate">{label}</span>
-              {moveAnalyses && (
-                <span className="flex gap-1.5 text-cc-text-dim tabular-nums shrink-0 ml-auto text-xs font-medium">
-                  <span className="w-4 text-center">{c.white}</span>
-                  <span className="w-4 text-center">{c.black}</span>
-                </span>
-              )}
-            </div>
-          )
-        })}
+        <div className="flex flex-col gap-1">
+          {GOOD_LEGEND.map(({ classification, src, label }) => (
+            <LegendRow key={label} src={src} label={label} count={counts[classification]} showCounts={!!moveAnalyses} />
+          ))}
+        </div>
+        <div className="flex flex-col gap-1">
+          {OTHER_LEGEND.map(({ classification, src, label }) => (
+            <LegendRow key={label} src={src} label={label} count={counts[classification]} showCounts={!!moveAnalyses} />
+          ))}
+        </div>
       </div>
+    </div>
+  )
+}
+
+function LegendRow({ src, label, count, showCounts }: { src: string; label: string; count: { white: number; black: number }; showCounts: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      <img src={src} alt={label} className="w-4 h-4 shrink-0" />
+      <span className="text-cc-text-dim truncate">{label}</span>
+      {showCounts && (
+        <span className="flex gap-1.5 text-cc-text-dim tabular-nums shrink-0 ml-auto text-xs font-medium">
+          <span className="w-4 text-center">{count.white}</span>
+          <span className="w-4 text-center">{count.black}</span>
+        </span>
+      )}
     </div>
   )
 }
