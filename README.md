@@ -81,12 +81,12 @@ The application follows a strict three-layer architecture:
 
 A Chrome extension is included to analyze games directly from chess.com:
 
-### Option A: Bookmarklet (Simple)
+### Option A: Bookmarklet 
 1. Create a new bookmark
 2. Paste the content of `extension/bookmarklet.js` as the URL
 3. Click the bookmark on any chess.com game page
 
-### Option B: Chrome Extension (Full-featured)
+### Option B: Chrome Extension (Recommended)
 1. Open `chrome://extensions`
 2. Enable "Developer mode"
 3. Click "Load unpacked" and select the `extension/` folder
