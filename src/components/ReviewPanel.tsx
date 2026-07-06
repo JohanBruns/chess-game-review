@@ -60,8 +60,8 @@ export function ReviewPanel({
       </div>
 
       <div className="flex items-center gap-2">
-        <div className="w-8 h-8 shrink-0 rounded-full bg-cc-surface flex items-center justify-center text-base">
-          🧑‍🏫
+        <div className="w-9 h-9 shrink-0 rounded-full bg-cc-surface overflow-hidden">
+          <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
         </div>
         <div className="flex-1 bg-cc-surface rounded px-3 py-2 flex items-center justify-between gap-2">
           <span className="text-cc-text text-xs leading-relaxed">{headline}</span>

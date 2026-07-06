@@ -174,8 +174,11 @@ function App() {
   useEffect(() => {
     const prev = soundPlyRef.current
     soundPlyRef.current = currentPly
-    if (currentPly !== prev + 1 || currentPly === 0) return
+    // Play on any change to a real ply (forward, backward, or a jump) — not just a clean
+    // +1 step. currentPly === 0 (start position) and no-op changes stay silent.
+    if (currentPly === prev || currentPly === 0) return
     const move = moves[currentPly - 1]
+    if (!move) return
     const audio = move.captured ? captureAudioRef.current : moveAudioRef.current
     if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
   }, [currentPly, moves])
@@ -281,7 +284,15 @@ function App() {
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
-      if (e.target instanceof HTMLTextAreaElement) return
+      if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
+      // In the guided "explain" walk, arrows step through the engine line (same as the
+      // ReviewPanel ◀/▶ buttons) instead of navigating the main line — they only move
+      // explainStep, so the ply-change reset below (which drops us out of explain on any
+      // currentPly change) never fires.
+      if (reviewSub === 'explain') {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); handleLinePrev(); return }
+        if (e.key === 'ArrowRight') { e.preventDefault(); handleLineNext(); return }
+      }
       if (e.key === 'ArrowLeft') { e.preventDefault(); goToPrev() }
       else if (e.key === 'ArrowRight') { e.preventDefault(); goToNext() }
       else if (e.key === 'Home') { e.preventDefault(); goToFirst() }
@@ -290,7 +301,7 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip])
+  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, handleLinePrev, handleLineNext])
 
   // Board view for the current retry/review sub-mode. Defaults to the plain "current
   // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
@@ -301,6 +312,11 @@ function App() {
   let viewFrom: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined
   let viewTo: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined
   let viewArrow = retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow
+  // Defaults to the main line's eval. The best/explain preview branches below override it to
+  // the pre-move eval (evalResults[currentPly - 1]) — a PV is best play, so that's exactly the
+  // evaluation the previewed line/best-move reaches. Keeps the eval bar in sync with viewFen
+  // instead of freezing on the post-move eval while the board shows a different position.
+  let viewEval = evalResults[currentPly] ?? result
 
   if (retryMoveIndex === null && reviewSub === 'best' && bestPreview) {
     viewFen = bestPreview.fen
@@ -308,6 +324,7 @@ function App() {
     viewFrom = bestPreview.from
     viewTo = bestPreview.to
     viewArrow = { from: bestPreview.from, to: bestPreview.to }
+    viewEval = evalResults[currentPly - 1] ?? result
   } else if (retryMoveIndex === null && reviewSub === 'explain' && lineSteps[explainStep]) {
     const step = lineSteps[explainStep]
     viewFen = step.fen
@@ -315,6 +332,7 @@ function App() {
     viewFrom = step.from
     viewTo = step.to
     viewArrow = undefined
+    viewEval = evalResults[currentPly - 1] ?? result
   }
 
   return (
@@ -338,7 +356,7 @@ function App() {
             className="flex flex-row items-stretch"
             style={{ height: 'min(calc(100vh - 128px), calc(100vw - 384px))' }}
           >
-            <EvalBar evalResult={evalResults[currentPly] ?? result} />
+            <EvalBar evalResult={viewEval} />
             <div className="aspect-square h-full">
               <BoardPanel
                 fen={viewFen}
