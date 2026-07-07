@@ -156,12 +156,14 @@ function nonPawnMaterial(fen: string): number {
 //   - For the moved piece's own square on a capture, the captured piece's value is
 //     immediate compensation and is subtracted (QxR that can be recaptured is a
 //     4-point sac; QxR with no recapture is just a win, not a sacrifice).
-//   - A piece that was already SEE-hanging before the move was lost anyway — giving
-//     it up (or leaving it) is not a fresh sacrifice.
+//   - A piece that was already SEE-hanging before the move was lost anyway — giving it up
+//     is not a fresh sacrifice, UNLESS this move gives up LESS than it was already losing
+//     (e.g. grabbing a pawn on the way down), which is a genuine, smaller sacrifice.
 // `seeThreshold` is the minimum net material given up (2 = exchange-scale, 3 = a
 // full piece) — rating-scaled by the caller via RatingThresholds.sacrificeSeeMin.
-export function isSacrifice(move: Move, seeThreshold = 3): boolean {
-  if (!move.piece || !move.color || !move.after) return false
+export function sacrificeSquares(move: Move, seeThreshold = 3): Square[] {
+  if (!move.piece || !move.color || !move.after) return []
+  const squares: Square[] = []
   try {
     const after = new Chess(move.after)
     const capturedVal = move.captured ? (PIECE_VAL[move.captured] ?? 0) : 0
@@ -175,36 +177,69 @@ export function isSacrifice(move: Move, seeThreshold = 3): boolean {
         // else is on its original square. (Castling maps the rook imprecisely —
         // its before-square was empty, harmlessly counting it as not-hanging.)
         const beforeSquare = sq.square === move.to ? move.from : sq.square
-        if (wasHangingBefore(move, beforeSquare, seeThreshold)) continue
-        return true
+        // Skip only a piece that was already losing >= threshold AND that this move does not
+        // improve on (netSac >= what it was already losing). A piece hanging for its full value
+        // that instead grabs material on the way down (netSac < hangingValue) is still a real,
+        // if cheaper, sacrifice — e.g. 6.Nxf7 in the Fried Liver: Ng5 was en prise to ...Qxg5
+        // for 3, but Nxf7 gives it up for only 2 net while winning a pawn and the attack.
+        const hangingValue = hangingBeforeValue(move, beforeSquare)
+        if (hangingValue >= seeThreshold && netSac >= hangingValue) continue
+        squares.push(sq.square)
       }
     }
-    return false
   } catch {
-    return false
+    return []
+  }
+  return squares
+}
+
+export function isSacrifice(move: Move, seeThreshold = 3): boolean {
+  return sacrificeSquares(move, seeThreshold).length > 0
+}
+
+// PV-confirmation of a sacrifice: from the position AFTER the move (fenAfterMove), does the
+// opponent's engine-best reply actually CAPTURE on one of the sacrificed squares? A real
+// sacrifice offers material the opponent grabs; a false SEE positive (e.g. a queen that only
+// looks hanging because of a tactic) is one the engine's best reply simply declines. Returns
+// undefined when it cannot be decided (no reply SAN), so the caller treats it as "not disproven".
+export function replyCapturesSacSquare(
+  fenAfterMove: string,
+  replySan: string | null,
+  sacSquares: Square[],
+): boolean | undefined {
+  if (!replySan || sacSquares.length === 0) return undefined
+  try {
+    const chess = new Chess(fenAfterMove)
+    const m = chess.move(replySan)
+    return m.captured != null && sacSquares.includes(m.to as Square)
+  } catch {
+    return undefined
   }
 }
 
-// Was this own piece already SEE-losing in the position before the move? Checked by
-// flipping the side to move in move.before (legal whenever the mover was not in
-// check: with the mover to move, the opponent's king cannot be in check either).
-// If the mover WAS in check, fall back to the simple attacked-and-undefended test.
-function wasHangingBefore(move: Move, square: Square, seeThreshold: number): boolean {
-  if (!move.before) return false
+// How much material (pawn units) was this own piece already SEE-losing on `square` in the
+// position BEFORE the move? Measured by flipping the side to move in move.before (legal
+// whenever the mover was not in check: with the mover to move, the opponent's king cannot be
+// in check either) and running SEE. 0 = not hanging. If the mover WAS in check, fall back to
+// a coarse attacked-and-undefended test yielding the piece's full value (or 0).
+function hangingBeforeValue(move: Move, square: Square): number {
+  if (!move.before) return 0
   try {
     const before = new Chess(move.before)
     if (!before.isCheck()) {
       const parts = move.before.split(' ')
       parts[1] = parts[1] === 'w' ? 'b' : 'w'
       parts[3] = '-' // en-passant target is meaningless for the flipped side
-      return seeGain(parts.join(' '), square) >= seeThreshold
+      return seeGain(parts.join(' '), square)
     }
     const opp = move.color === 'w' ? 'b' : 'w'
     const piece = before.get(square)
-    if (!piece || piece.color !== move.color) return false
+    if (!piece || piece.color !== move.color) return 0
     return before.isAttacked(square, opp) && !before.isAttacked(square, move.color)
+      ? (PIECE_VAL[piece.type] ?? 0)
+      : 0
   } catch {
-    return false
+    return 0
   }
 }
 
@@ -268,10 +303,17 @@ function ratingThresholds(rating?: number): RatingThresholds {
   return NEUTRAL_RATING_THRESHOLDS
 }
 
-// Brilliant condition 4 ("you were not already completely winning anyway"): the
-// second-best engine line must not itself be winning by more than this — a sacrifice
-// that merely decorates an already-won position earns no exclamation marks.
-const BRILLIANT_SECOND_BEST_MAX_CP = 250
+// Great — "refutation" branch: the minimum win%-gap (mover perspective) between the engine's
+// best move and its second-best line for a best-move-right-after-an-opponent-blunder to earn
+// Great. Lower than the "only good move" gap because chess.com rewards finding the refutation
+// even when the 2nd-best alternative is still playable; kept above ordinary recapture noise.
+const REFUTATION_GAP_MIN = 15
+
+// Escape hatch for the winPctBefore < 90 cap below: even in an already-won position, the
+// engine-best move right after a blunder is still Great when it is the UNIQUELY critical
+// continuation — the second-best line throws away at least this much win% (e.g. 22.Rxf7
+// starting a forced mate, where the only alternative roughly halves the evaluation).
+const REFUTATION_ONLY_MOVE_GAP = 50
 
 // Optional params enable Brilliant/Great detection when full context is available.
 // Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
@@ -286,27 +328,54 @@ export function classifyMove(
   winPctAfterRaw?: number,
   playerRating?: number,
   suppressBrilliant = false,
+  sacrificeConfirmed?: boolean,
+  opponentBlundered = false,
+  isTrivialRecapture = false,
 ): MoveClass {
   const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
   const rt = ratingThresholds(playerRating)
 
-  // Brilliant: sacrifice (SEE-based) + nearly best + not already winning without it
+  // Brilliant: sacrifice (SEE-based) + nearly best + the sacrifice is REAL
   // + you are NOT lost afterward (winPct >= 50 = at least equal)
   // + no MORE valuable own piece hangs free at the same time (that would be a
   //   blunder that happens to also give up material, not a brilliancy).
-  // "Not already winning" is measured by the second-best line when available —
-  // the pre-move eval would wrongly block sacs whose own point pushes the eval
-  // past 90%, while the second-best line shows the position WITHOUT the sacrifice.
+  // "The sacrifice is real" is decided by PV-confirmation: the opponent's engine-best reply
+  // actually captures the offered material (sacrificeConfirmed). A false SEE positive — a
+  // piece that only looks hanging because taking it runs into a tactic — is one the engine
+  // declines, so sacrificeConfirmed === false vetoes it. undefined (can't tell, e.g. the
+  // move gives mate so there is no reply) does NOT veto. This replaced the old
+  // second-best-cp heuristic, which both over-fired (declined "sacs") and under-fired
+  // (blocked genuine sacs merely because the position was already somewhat winning).
   // Cheap numeric gates run first so the SEE board scan only touches candidates.
   if (
     !suppressBrilliant &&
     move != null && winPctBefore != null && winPctAfter != null &&
     loss <= rt.brilliantLossMax &&
     winPctAfter >= 50 &&
-    (secondBestCp != null ? secondBestCp <= BRILLIANT_SECOND_BEST_MAX_CP : winPctBefore < 90) &&
+    sacrificeConfirmed !== false &&
     isSacrifice(move, rt.sacrificeSeeMin) &&
     !hasCostlierHangingPiece(move)
   ) return 'Brilliant'
+
+  // Great — "refutation": the engine's best move immediately after the opponent blundered,
+  // with a clear win%-gap to the second-best line. Unlike the "only good move" branch below,
+  // this does NOT require the 2nd-best to be losing — chess.com awards Great for finding the
+  // punishing move even when a calmer alternative would also keep an edge. Trivial recaptures
+  // (just taking back what the opponent captured on the same square) are excluded.
+  if (
+    !isTrivialRecapture &&
+    isEngineBestMove && opponentBlundered &&
+    bestCp != null && secondBestCp != null &&
+    winPctBefore != null
+  ) {
+    const gap = winPct(bestCp) - winPct(secondBestCp)
+    // Fire when the move is meaningfully the right one (gap >= REFUTATION_GAP_MIN) AND either
+    // the position wasn't already trivially won, OR it is the uniquely critical continuation
+    // even in a won position (very large gap — see REFUTATION_ONLY_MOVE_GAP).
+    if (gap >= REFUTATION_GAP_MIN && (winPctBefore < 90 || gap >= REFUTATION_ONLY_MOVE_GAP)) {
+      return 'Great'
+    }
+  }
 
   // Great: clearly best move where the 2nd-best alternative is a genuinely bad,
   // no-longer-favored outcome (winPct < 50) AND the gap is well past Blunder-scale
@@ -314,6 +383,7 @@ export function classifyMove(
   // this move would have been a serious, critical-position error, not just
   // "slightly less good while still comfortably winning either way".
   if (
+    !isTrivialRecapture &&
     isEngineBestMove &&
     bestCp != null && secondBestCp != null &&
     winPctBefore != null && winPctBefore < 85 &&
@@ -331,6 +401,7 @@ export function classifyMove(
   // the engine only sees once it's on the board).
   const isNearBest = loss <= rt.greatNearBestLossMax
   if (
+    !isTrivialRecapture &&
     isNearBest && winPctBefore != null && winPctAfterRaw != null &&
     (
       (winPctBefore < 50 && winPctAfterRaw >= 50) ||    // lost -> equal
@@ -391,17 +462,22 @@ export function buildMoveAnalyses(
     }
     const phase: GamePhase = i < openingEndPly ? 'opening' : endgameStarted ? 'endgame' : 'middlegame'
 
-    if (i < openingPly) {
-      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100, phase })
-      continue
-    }
-    if (isForcedMove(moves[i])) {
+    const isBook = i < openingPly
+
+    // Forced = only-legal-move: no skill signal, never promoted to Brilliant/Great. Book takes
+    // priority over Forced (original ordering), so this is only checked outside the book.
+    if (!isBook && isForcedMove(moves[i])) {
       analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Forced', accuracy: 100, phase })
       continue
     }
     const evalBefore = evalResults[i]
     const evalAfter = evalResults[i + 1]
-    if (!evalBefore || !evalAfter) continue
+    if (!evalBefore || !evalAfter) {
+      // No engine eval for this ply: a book move still gets its Book label; otherwise skip
+      // (unchanged behavior — a mid-game ply without an eval can't be classified).
+      if (isBook) analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100, phase })
+      continue
+    }
 
     const isWhite = i % 2 === 0
     const cpBefore = isWhite ? evalToCp(evalBefore) : -evalToCp(evalBefore)
@@ -430,6 +506,24 @@ export function buildMoveAnalyses(
     const winPctPrior = cpPrior != null ? winPct(cpPrior) : undefined
     const playerRating = isWhite ? whiteRating : blackRating
 
+    // PV-confirmation of a sacrifice: does the opponent's engine-best reply (evalAfter) actually
+    // capture the offered material? Undefined when there's nothing to sacrifice or no reply SAN.
+    const afterFen = moves[i].after
+    const sacSquares = sacrificeSquares(moves[i], ratingThresholds(playerRating).sacrificeSeeMin)
+    const sacrificeConfirmed = afterFen && sacSquares.length > 0
+      ? replyCapturesSacSquare(afterFen, evalAfter.bestMoveSan, sacSquares)
+      : undefined
+
+    // Did the opponent just blunder? Drives the Great "refutation" branch. Reads the previous
+    // ply's already-computed class (Book/Forced/skipped plies leave it undefined = no blunder).
+    const prevClass = classByPly.get(i - 1)
+    const opponentBlundered = prevClass === 'Mistake' || prevClass === 'Blunder'
+
+    // Trivial recapture: this move and the opponent's previous move both capture on the same
+    // square (just restoring material) — excluded from Great.
+    const prevMove = i > 0 ? moves[i - 1] : undefined
+    const isTrivialRecapture = !!(prevMove?.captured && moves[i].captured && prevMove.to === moves[i].to)
+
     const classification = classifyMove(
       loss,
       isEngineBestMove,
@@ -441,7 +535,19 @@ export function buildMoveAnalyses(
       winPctAfterRaw,
       playerRating,
       classByPly.get(i - 2) === 'Brilliant',
+      sacrificeConfirmed,
+      opponentBlundered,
+      isTrivialRecapture,
     )
+
+    // Book override: inside opening theory keep the Book label UNLESS the move is a genuine
+    // Brilliant/Great — chess.com awards those even for known theory (e.g. 6.Nxf7 Fried Liver).
+    if (isBook && classification !== 'Brilliant' && classification !== 'Great') {
+      analyses.push({ moveIndex: i, lossInWinPct: 0, classification: 'Book', accuracy: 100, phase })
+      classByPly.set(i, 'Book')
+      continue
+    }
+
     classByPly.set(i, classification)
 
     analyses.push({
