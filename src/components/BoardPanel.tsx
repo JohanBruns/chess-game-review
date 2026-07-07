@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Chessboard } from 'react-chessboard'
 import type { Arrow } from 'react-chessboard'
 import type { MoveClass } from '../lib/analysis/classify'
+import { CLASS_COLOR } from '../lib/analysis/classColors'
 
 interface BoardPanelProps {
   fen: string
@@ -48,26 +49,6 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Blunder:    'blunder_128x.png',
   Miss:       'miss_128x.png',
   Forced:     'forced_128x.png',
-}
-
-// rgb() triples so the square-highlight alpha can be applied uniformly.
-// Verified 2026-07-04 against a live chess.com Game Review (DevTools computed styles) —
-// Brilliant/Great/Good/Inaccuracy/Mistake/Miss/Blunder updated to the measured values.
-// Book and Forced have no chess.com equivalent to check against (Book here is a neutral
-// last-move tint, not chess.com's own book-brown; Forced is our own proprietary class) —
-// left unchanged.
-const CLASS_COLOR: Record<MoveClass, string> = {
-  Brilliant:  '38, 194, 163',
-  Great:      '116, 155, 191',
-  Best:       '129, 182, 76',   // var(--color-cc-green)
-  Excellent:  '129, 182, 76',
-  Good:       '149, 183, 118',
-  Book:       '240, 210, 100',  // neutral last-move tint, not a classification color
-  Inaccuracy: '247, 198, 49',
-  Mistake:    '255, 164, 89',
-  Blunder:    '250, 65, 45',
-  Miss:       '255, 119, 105',
-  Forced:     '128, 128, 128',
 }
 
 const IMG: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain' }

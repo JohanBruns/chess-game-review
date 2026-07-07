@@ -65,7 +65,6 @@ function App() {
     () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),
     [moveAnalyses],
   )
-  const keyMomentPlies = useMemo(() => [...keyMoments].map(i => i + 1), [keyMoments])
 
   const whiteAccuracy = useMemo(
     () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'white') : null),
@@ -434,7 +433,7 @@ function App() {
                 evalResults={evalResults}
                 currentPly={currentPly}
                 onSelectPly={goToPly}
-                keyMomentPlies={keyMomentPlies}
+                moveAnalyses={moveAnalyses}
               />
             </div>
           )}
