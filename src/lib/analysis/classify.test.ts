@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { Chess, type Move } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
-import { winPct, classifyMove, isSacrifice, buildMoveAnalyses, moveAccuracy, playerAccuracy, phaseAccuracy, findKeyMoments } from './classify'
+import { winPct, classifyMove, isSacrifice, sacrificeSquares, buildMoveAnalyses, moveAccuracy, playerAccuracy, phaseAccuracy, findKeyMoments } from './classify'
 import type { MoveAnalysis, MoveClass } from './classify'
 
 // Minimal helpers — buildMoveAnalyses only reads .san from Move and .cp/.mate/.bestMoveSan from EvalResult
@@ -185,6 +185,15 @@ describe('isSacrifice (SEE-based)', () => {
     expect(isSacrifice(move, 3)).toBe(false)  // neutral/strict: full piece required
   })
 
+  it('a piece hanging for its full value that grabs a pawn on the way down → still a sacrifice (Fried-Liver Nxf7)', () => {
+    // Ng5 is en prise to ...Qxg5 (a free knight, SEE 3). Instead it plays Nxf7: it gives the
+    // knight up for only 2 net (knight for the f7 pawn) — a genuine smaller sacrifice, not
+    // "doomed anyway". The old boolean wasHangingBefore veto wrongly rejected this.
+    const chess = new Chess('3qk3/5p2/8/6N1/8/8/8/4K3 w - - 0 1')
+    const move = chess.move({ from: 'g5', to: 'f7' })
+    expect(isSacrifice(move, 2)).toBe(true)
+  })
+
   it('piece that was ALREADY hanging before the move → not a sacrifice', () => {
     // The c3 knight is attacked by ...bxc3 and undefended — it was lost anyway.
     // Moving it to d5 (also en prise) gives up nothing that wasn't gone already.
@@ -203,6 +212,25 @@ describe('isSacrifice (SEE-based)', () => {
   })
 })
 
+describe('sacrificeSquares', () => {
+  it('returns the offered square for a real sacrifice', () => {
+    const move = new Chess(SAC_FEN).move({ from: 'c3', to: 'd5' })
+    expect(sacrificeSquares(move)).toContain('d5')
+  })
+
+  it('returns empty for a clean capture (no material given up)', () => {
+    // Qd1xd5: queen takes an undefended rook — pure win, nothing offered.
+    const chess = new Chess('4k3/8/8/3r4/8/8/8/3QK3 w - - 0 1')
+    const move = chess.move({ from: 'd1', to: 'd5' })
+    expect(sacrificeSquares(move)).toEqual([])
+  })
+
+  it('isSacrifice agrees with sacrificeSquares being non-empty', () => {
+    const sac = new Chess(SAC_FEN).move({ from: 'c3', to: 'd5' })
+    expect(isSacrifice(sac)).toBe(sacrificeSquares(sac).length > 0)
+  })
+})
+
 describe('classifyMove — Brilliant', () => {
   it('fires: sacrifice, small loss, not trivially won, not lost afterward', () => {
     // winPctBefore=67.62 (cp=200), loss=1 → winPctAfter=66.62 (>=50)
@@ -215,25 +243,25 @@ describe('classifyMove — Brilliant', () => {
     expect(classifyMove(1, false, sacMv(), 24.8874, null, null)).toBe('Excellent')
   })
 
-  it('blocked: second-best line is already completely winning (>250cp) — the sac was not needed', () => {
-    expect(classifyMove(1, false, sacMv(), 67.6212, null, 300)).not.toBe('Brilliant')
-    expect(classifyMove(1, false, sacMv(), 67.6212, null, 300)).toBe('Excellent')
+  // PV-confirmation (sacrificeConfirmed, param 11) replaced the old secondBestCp≤250 gate.
+  it('blocked: the opponent\'s best reply declines the "sacrifice" (sacrificeConfirmed=false)', () => {
+    // A false SEE positive — a piece that only looks hanging — is one the engine declines.
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null, undefined, undefined, undefined, false, false)).not.toBe('Brilliant')
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null, undefined, undefined, undefined, false, false)).toBe('Excellent')
   })
 
-  it('fires: second-best line is NOT winning — the sacrifice earned something real', () => {
-    expect(classifyMove(1, false, sacMv(), 67.6212, null, 200)).toBe('Brilliant')
+  it('fires: the opponent grabs the offered material (sacrificeConfirmed=true)', () => {
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null, undefined, undefined, undefined, false, true)).toBe('Brilliant')
   })
 
-  it('fires: crushing sac (winPctBefore >= 90) stays Brilliant when the second-best line is modest', () => {
-    // The pre-move eval is high BECAUSE the sacrifice is on the board (best line);
-    // condition 4 asks about the position WITHOUT it — that's the second-best line.
-    // The old winPctBefore < 90 gate wrongly blocked exactly these.
-    expect(classifyMove(1, false, sacMv(), 92.9397, null, 0)).toBe('Brilliant')
+  it('fires: sacrificeConfirmed undefined does NOT veto (mating sacs / old callers stay Brilliant)', () => {
+    expect(classifyMove(1, false, sacMv(), 67.6212, null, null)).toBe('Brilliant')
   })
 
-  it('blocked (fallback): winPctBefore >= 90 with no second-best line available', () => {
-    // winPctBefore=92.94 (cp=700), loss=1
-    expect(classifyMove(1, false, sacMv(), 92.9397, null, null)).not.toBe('Brilliant')
+  it('fires: a confirmed sac stays Brilliant even when already winning (no secondBestCp gate anymore)', () => {
+    // The old heuristic wrongly blocked real sacs merely because the position was already
+    // winning (secondBestCp +300). What matters now is that the opponent takes.
+    expect(classifyMove(1, false, sacMv(), 92.9397, null, 300, undefined, undefined, undefined, false, true)).toBe('Brilliant')
   })
 
   it('blocked: loss too big (> 2)', () => {
@@ -302,6 +330,39 @@ describe('classifyMove — Great', () => {
 
   it('blocked: secondBestCp is null (no throw, no false positive)', () => {
     expect(classifyMove(0, true, undefined, 67.6212, 200, null)).not.toBe('Great')
+  })
+
+  // Refutation branch (opponentBlundered=param 12): best move right after the opponent
+  // blundered, with a moderate gap — fires even when the 2nd-best line is NOT losing.
+  it('refutation: fires on best-after-blunder with a moderate gap and a still-playable 2nd-best', () => {
+    // winPct(481)=85.45, winPct(90)=58.21 → gap≈27.2; 2nd-best NOT losing (>50), winPctBefore<90.
+    expect(classifyMove(0, true, undefined, 85.45, 481, 90, undefined, undefined, undefined, false, undefined, true, false)).toBe('Great')
+  })
+
+  it('refutation: same values WITHOUT an opponent blunder are not Great', () => {
+    // winPctBefore 85.45 ≥ 85 and 2nd-best ≥ 50 → the "only good move" branch cannot fire either.
+    expect(classifyMove(0, true, undefined, 85.45, 481, 90)).not.toBe('Great')
+  })
+
+  it('refutation: blocked when the move is a trivial recapture (isTrivialRecapture=param 13)', () => {
+    expect(classifyMove(0, true, undefined, 85.45, 481, 90, undefined, undefined, undefined, false, undefined, true, true)).not.toBe('Great')
+  })
+
+  it('refutation: fires in an already-won position when it is the uniquely critical move (huge gap)', () => {
+    // winPctBefore=95.83 (cp 851) ≥ 90, but 2nd-best drops to ≈38% → gap ≈ 57.8 ≥ only-move gap.
+    // (22.Rxf7 pattern: the only move that keeps the forced win.)
+    expect(classifyMove(0, true, undefined, 95.83, 851, -132, undefined, undefined, undefined, false, undefined, true, false)).toBe('Great')
+  })
+
+  it('refutation: blocked in an already-won position when the gap is only moderate', () => {
+    // winPctBefore=95.83 ≥ 90 and gap ≈ 37.6 (< only-move gap) → routine best move, not Great.
+    expect(classifyMove(0, true, undefined, 95.83, 851, 90, undefined, undefined, undefined, false, undefined, true, false)).not.toBe('Great')
+  })
+
+  it('trivial recapture vetoes the "only good move" Great branch too', () => {
+    // Same values as the classic only-good-move Great test, but flagged as a recapture.
+    expect(classifyMove(0, true, undefined, 67.6212, 200, -400)).toBe('Great')
+    expect(classifyMove(0, true, undefined, 67.6212, 200, -400, undefined, undefined, undefined, false, undefined, false, true)).not.toBe('Great')
   })
 })
 
@@ -493,10 +554,39 @@ describe('buildMoveAnalyses — Brilliant/Great end-to-end', () => {
     expect(a.classification).toBe('Brilliant')
   })
 
-  it('second-best line >250cp on the EvalResult blocks Brilliant end-to-end', () => {
-    // Same sac as above, but the engine's 2nd line was already +300 — anything wins.
-    const [a] = buildMoveAnalyses([sacMv()], [ev(200, null, 300), ev(180)])
+  it('PV-confirmed end-to-end: the opponent\'s best reply captures the sac → Brilliant', () => {
+    // After Nc3-d5 the knight is en prise on d5; the engine\'s best reply exd5 grabs it.
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200), ev(180, 'exd5')])
+    expect(a.classification).toBe('Brilliant')
+  })
+
+  it('PV-declined end-to-end: the opponent\'s best reply ignores the sac → not Brilliant', () => {
+    // Best reply is a quiet king move that leaves the knight on d5 — the SEE "sacrifice" was
+    // illusory (the piece is not actually won), so it is downgraded.
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200), ev(180, 'Kd7')])
     expect(a.classification).not.toBe('Brilliant')
+    expect(a.classification).toBe('Excellent')
+  })
+
+  it('a genuine sacrifice inside opening theory is still Brilliant (book override)', () => {
+    // openingPly=1 → move 0 is "book", but a confirmed sac (exd5 grabs the knight) is promoted.
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200), ev(180, 'exd5')], 1)
+    expect(a.classification).toBe('Brilliant')
+  })
+
+  it('a normal book move stays Book (override promotes only Brilliant/Great)', () => {
+    const [a] = buildMoveAnalyses([sacMv()], [ev(200), ev(180, 'Kd7')], 1)
+    expect(a.classification).toBe('Book')
+  })
+
+  it('trivial recapture is not Great end-to-end even when the gap would trigger it', () => {
+    // 1.Rxd8+ Kxd8 — Black recaptures on the same square. Evals would make Kxd8 an
+    // only-good-move Great (gap≈49, 2nd-best losing), but the recapture veto downgrades it.
+    const chess = new Chess('3rk3/8/8/8/8/8/8/3RK3 w - - 0 1')
+    const rxd8 = chess.move('Rxd8+')
+    const kxd8 = chess.move('Kxd8')
+    const analyses = buildMoveAnalyses([rxd8, kxd8], [ev(0), ev(-200, 'Kxd8', 400), ev(-190)])
+    expect(analyses.find(a => a.moveIndex === 1)!.classification).not.toBe('Great')
   })
 
   it('only one Brilliant per combination: the consecutive follow-up sac is suppressed', () => {
