@@ -10,19 +10,28 @@ import {
 } from 'recharts'
 import type { TooltipProps } from 'recharts'
 import type { EvalResult } from '../lib/engine/useEngine'
+import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
+import { classColor } from '../lib/analysis/classColors'
 
 interface EvalGraphProps {
   evalResults: (EvalResult | null)[]
   currentPly: number
   onSelectPly: (ply: number) => void
-  keyMomentPlies?: number[]
+  moveAnalyses?: MoveAnalysis[] | null
 }
 
 type DataPoint = { ply: number; cp: number | null }
 
+// Only genuine highlights get a marker dot: the standout good moves (Brilliant, Great) and the
+// serious mistakes (Blunder, Miss). Routine classes (Best/Excellent/Good/Inaccuracy/Mistake) are
+// intentionally left off so the bar surfaces just the turning points.
+const DOT_CLASSES = new Set<MoveClass>(['Brilliant', 'Great', 'Blunder', 'Miss'])
+
+const EVAL_CLAMP = 1000
+
 function clampEval(r: EvalResult): number {
-  if (r.cp !== null) return Math.max(-1000, Math.min(1000, r.cp))
-  if (r.mate !== null) return r.mate > 0 ? 1000 : -1000
+  if (r.cp !== null) return Math.max(-EVAL_CLAMP, Math.min(EVAL_CLAMP, r.cp))
+  if (r.mate !== null) return r.mate > 0 ? EVAL_CLAMP : -EVAL_CLAMP
   return 0
 }
 
@@ -35,7 +44,7 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   if (!active || !payload?.length) return null
   const d = payload[0].payload as DataPoint
   if (d.cp === null) return null
-  const evalStr = d.cp >= 1000 ? '+M' : d.cp <= -1000 ? '-M' : formatPawns(d.cp)
+  const evalStr = d.cp >= EVAL_CLAMP ? '+M' : d.cp <= -EVAL_CLAMP ? '-M' : formatPawns(d.cp)
   const moveNum = Math.ceil(d.ply / 2)
   const side = d.ply % 2 === 1 ? 'W' : 'S'
   return (
@@ -55,7 +64,7 @@ function CustomTooltip({ active, payload }: TooltipProps<number, string>) {
   )
 }
 
-export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies }: EvalGraphProps) {
+export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }: EvalGraphProps) {
   if (evalResults.length === 0) return null
 
   const data: DataPoint[] = evalResults.map((r, ply) => ({
@@ -78,71 +87,61 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, keyMomentPlies
     }
   }
 
+  // A dot per noteworthy move, drawn at the eval REACHED by that move (fen index moveIndex+1),
+  // colored by its classification. moveIndex is 0-based; the post-move eval lives at ply+1.
+  const dots = (moveAnalyses ?? [])
+    .filter(a => DOT_CLASSES.has(a.classification) && data[a.moveIndex + 1]?.cp != null)
+    .map(a => ({ ply: a.moveIndex + 1, cp: data[a.moveIndex + 1]!.cp as number, cls: a.classification }))
+
   return (
-    <div style={{ width: '100%', height: 200 }}>
+    <div
+      style={{
+        width: '100%',
+        height: 112,
+        background: '#262421',
+        borderRadius: 6,
+        overflow: 'hidden',
+      }}
+    >
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
-          margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+          margin={{ top: 6, right: 6, left: 6, bottom: 6 }}
           onClick={handleClick}
           style={{ cursor: 'pointer' }}
         >
-          <defs>
-            <linearGradient id="evalGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e9e9e8" stopOpacity={0.9} />
-              <stop offset="50%" stopColor="#e9e9e8" stopOpacity={0.25} />
-              <stop offset="50%" stopColor="#1e1c1a" stopOpacity={0.55} />
-              <stop offset="100%" stopColor="#1e1c1a" stopOpacity={0.95} />
-            </linearGradient>
-          </defs>
-          <XAxis
-            dataKey="ply"
-            interval={0}
-            tick={{ fontSize: 10, fill: '#86847f' }}
-            tickFormatter={(ply: number) =>
-              ply > 0 && ply % 10 === 0 ? String(Math.round(ply / 2)) : ''
-            }
-            axisLine={{ stroke: '#4a4744' }}
-            tickLine={false}
-            height={16}
-          />
-          <YAxis
-            domain={[-1000, 1000]}
-            ticks={[-1000, -500, 0, 500, 1000]}
-            tickFormatter={(v: number) => (v / 100).toFixed(0)}
-            tick={{ fontSize: 10, fill: '#86847f' }}
-            axisLine={false}
-            tickLine={false}
-            width={24}
-          />
-          <ReferenceLine y={0} stroke="#4a4744" strokeWidth={1} />
-          <ReferenceLine
-            x={currentPly}
-            stroke="#f59e0b"
-            strokeWidth={2}
-            strokeDasharray="3 3"
-          />
-          <Tooltip content={<CustomTooltip />} />
-          {keyMomentPlies?.map(ply => (
-            <ReferenceDot
-              key={ply}
-              x={ply}
-              y={data[ply]?.cp ?? 0}
-              r={4}
-              fill="#e5533d"
-              stroke="none"
-            />
-          ))}
+          {/* White's share of the bar = the area from the eval curve DOWN to the bottom (like
+              the vertical eval bar with White at the bottom); the dark container shows through
+              above the curve (Black's share). Higher eval → the white area rises. */}
+          <XAxis dataKey="ply" interval={0} hide />
+          <YAxis domain={[-EVAL_CLAMP, EVAL_CLAMP]} hide />
+          <ReferenceLine y={0} stroke="#5b5854" strokeWidth={1} />
+          <ReferenceLine x={currentPly} stroke="#81b64c" strokeWidth={2} />
+          <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6b6864', strokeWidth: 1 }} />
           <Area
             type="monotone"
             dataKey="cp"
-            stroke="#b8b8b8"
-            strokeWidth={1.5}
-            fill="url(#evalGradient)"
+            baseValue={-EVAL_CLAMP}
+            stroke="#c9c9c6"
+            strokeWidth={1.25}
+            fill="#e9e9e8"
+            fillOpacity={0.95}
             dot={false}
             connectNulls={false}
             isAnimationActive={false}
           />
+          {dots.map(d => (
+            <ReferenceDot
+              key={d.ply}
+              x={d.ply}
+              y={d.cp}
+              r={3.4}
+              fill={classColor(d.cls)}
+              stroke="#1b1a18"
+              strokeWidth={0.75}
+              isFront
+            />
+          ))}
         </AreaChart>
       </ResponsiveContainer>
     </div>
