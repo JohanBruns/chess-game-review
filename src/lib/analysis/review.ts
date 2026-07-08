@@ -1,6 +1,7 @@
 import { Chess, type Square } from 'chess.js'
 import type { MoveClass } from './classify'
 import type { EvalResult } from '../engine/useEngine'
+import type { GameSummary } from './summary'
 
 export interface LineStep {
   san: string
@@ -82,4 +83,20 @@ export function buildBestPreview(fenBefore: string, bestSan: string | null): Bes
   } catch {
     return null
   }
+}
+
+// The coach's opening line on the Summary view (chapter 1), e.g. "You had a nice tactical
+// find in this game. Let's review!" (live-verified wording, 2026-07-08 checkpoint). Picks the
+// most notable highlight across both players — a Brilliant beats a Great beats a high-accuracy
+// game beats the generic fallback.
+export function summaryHeadline(whiteSummary: GameSummary, blackSummary: GameSummary): string {
+  const brilliantCount =
+    whiteSummary.classificationCounts.Brilliant + blackSummary.classificationCounts.Brilliant
+  const greatCount = whiteSummary.classificationCounts.Great + blackSummary.classificationCounts.Great
+  const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
+
+  if (brilliantCount > 0) return "You found a brilliant move in this game. Let's review!"
+  if (greatCount > 0) return "You had a nice tactical find in this game. Let's review!"
+  if (bestAccuracy >= 90) return "You played an excellent game. Let's review!"
+  return "Let's review your game!"
 }

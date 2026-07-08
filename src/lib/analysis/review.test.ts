@@ -1,8 +1,32 @@
 import { describe, it, expect } from 'vitest'
-import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './review'
+import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview, summaryHeadline } from './review'
 import type { EvalResult } from '../engine/useEngine'
+import type { GameSummary, PhaseGrade } from './summary'
+import type { MoveClass } from './classify'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+function gameSummary(overrides: {
+  accuracy?: number | null
+  classificationCounts?: Partial<Record<MoveClass, number>>
+} = {}): GameSummary {
+  const classificationCounts = Object.fromEntries(
+    (['Book', 'Brilliant', 'Great', 'Best', 'Excellent', 'Good', 'Inaccuracy', 'Mistake', 'Blunder', 'Miss', 'Forced'] as MoveClass[])
+      .map(c => [c, 0]),
+  ) as Record<MoveClass, number>
+  const phaseGrades: Record<'opening' | 'middlegame' | 'endgame', PhaseGrade | null> = {
+    opening: null,
+    middlegame: null,
+    endgame: null,
+  }
+  return {
+    accuracy: overrides.accuracy ?? null,
+    phaseAccuracy: { opening: null, middlegame: null, endgame: null },
+    phaseGrades,
+    classificationCounts: { ...classificationCounts, ...overrides.classificationCounts },
+    gameRating: null,
+  }
+}
 
 function evalResult(overrides: Partial<EvalResult>): EvalResult {
   return {
@@ -113,5 +137,43 @@ describe('buildBestPreview', () => {
 
   it('returns null for an illegal SAN', () => {
     expect(buildBestPreview(START_FEN, 'e5')).toBeNull()
+  })
+})
+
+describe('summaryHeadline', () => {
+  it('leads with a brilliant callout when either player has one', () => {
+    const white = gameSummary({ classificationCounts: { Brilliant: 1 } })
+    const black = gameSummary()
+    expect(summaryHeadline(white, black)).toBe(
+      "You found a brilliant move in this game. Let's review!",
+    )
+  })
+
+  it('falls back to a great-find callout when there is no brilliant but a great move', () => {
+    const white = gameSummary()
+    const black = gameSummary({ classificationCounts: { Great: 1 } })
+    expect(summaryHeadline(white, black)).toBe(
+      "You had a nice tactical find in this game. Let's review!",
+    )
+  })
+
+  it('prefers brilliant over great when both are present', () => {
+    const white = gameSummary({ classificationCounts: { Great: 2 } })
+    const black = gameSummary({ classificationCounts: { Brilliant: 1 } })
+    expect(summaryHeadline(white, black)).toBe(
+      "You found a brilliant move in this game. Let's review!",
+    )
+  })
+
+  it('praises a high-accuracy game with no highlights', () => {
+    const white = gameSummary({ accuracy: 91.2 })
+    const black = gameSummary({ accuracy: 60 })
+    expect(summaryHeadline(white, black)).toBe("You played an excellent game. Let's review!")
+  })
+
+  it('falls back to the generic prompt otherwise', () => {
+    const white = gameSummary({ accuracy: 70 })
+    const black = gameSummary({ accuracy: 65 })
+    expect(summaryHeadline(white, black)).toBe("Let's review your game!")
   })
 })
