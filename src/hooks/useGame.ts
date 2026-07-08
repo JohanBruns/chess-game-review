@@ -10,6 +10,9 @@ interface GameData {
   isLoaded: boolean
   whiteElo?: number
   blackElo?: number
+  whiteName?: string
+  blackName?: string
+  result?: string
 }
 
 const INITIAL_GAME: GameData = {
@@ -63,7 +66,10 @@ export function useGame() {
       const headers = chess.header()
       const whiteElo = parseElo(headers.WhiteElo)
       const blackElo = parseElo(headers.BlackElo)
-      setGame({ fens, moves, error: null, isLoaded: true, whiteElo, blackElo })
+      const whiteName = headers.White || undefined
+      const blackName = headers.Black || undefined
+      const result = headers.Result || undefined
+      setGame({ fens, moves, error: null, isLoaded: true, whiteElo, blackElo, whiteName, blackName, result })
       // A new game replaces currentPly synchronously — drop any not-yet-flushed navigation
       // intent from the previous game so it can't overwrite this reset on the next frame.
       pendingRef.current = null
@@ -114,6 +120,9 @@ export function useGame() {
     isLoaded: game.isLoaded,
     whiteElo: game.whiteElo,
     blackElo: game.blackElo,
+    whiteName: game.whiteName,
+    blackName: game.blackName,
+    result: game.result,
     canGoPrev: currentPly > 0,
     canGoNext: currentPly < game.fens.length - 1,
     loadPgn,

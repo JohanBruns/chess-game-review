@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Move } from 'chess.js'
-import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
+import type { MoveAnalysis } from '../lib/analysis/classify'
+import { CLASS_ICON } from '../lib/analysis/classIcons'
 
 interface MoveListProps {
   moves: Move[]
@@ -11,20 +12,6 @@ interface MoveListProps {
   // Retry-at-key-moments: called with the move's 0-based moveIndex (the position BEFORE the
   // move, unlike onSelectPly's 1-based ply which is the position after it).
   onRetry?: (moveIndex: number) => void
-}
-
-const CLASS_ICON: Record<MoveClass, string> = {
-  Book:        '/marks/book_128x.png',
-  Brilliant:   '/marks/brilliant_128x.png',
-  Great:       '/marks/great_find_128x.png',
-  Best:        '/marks/best_128x.png',
-  Excellent:   '/marks/excellent_128x.png',
-  Good:        '/marks/good_128x.png',
-  Inaccuracy:  '/marks/inaccuracy_128x.png',
-  Mistake:     '/marks/mistake_128x.png',
-  Blunder:     '/marks/blunder_128x.png',
-  Miss:        '/marks/miss_128x.png',
-  Forced:      '/marks/forced_128x.png',
 }
 
 export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMoments, onRetry }: MoveListProps) {
@@ -52,7 +39,7 @@ export function MoveList({ moves, currentPly, onSelectPly, moveAnalyses, keyMome
   }
 
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto">
+    <div className="flex-1 min-h-[220px] overflow-y-auto">
       <table className="w-full border-collapse">
         <tbody>
           {rows.map(({ moveNumber, whitePly, blackPly }) => (
