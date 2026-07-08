@@ -16,8 +16,7 @@ import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
-import { ReviewPanel } from './components/ReviewPanel'
-import { ClassLegend } from './components/ClassLegend'
+import { ReviewView } from './components/ReviewView'
 import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
 import { ThemePicker } from './components/ThemePicker'
@@ -258,6 +257,12 @@ function App() {
     reviewSub === 'idle' ? evalResults[currentPly] ?? null : evalResults[currentPly - 1] ?? null,
   )
 
+  // Class icon shown in the guided-review coach bubble: the played move's classification while
+  // idle, forced to 'Best' while previewing the best move. (Explain mode ignores it — the
+  // bubble shows a lightbulb there.)
+  const coachClass: MoveClass | null =
+    reviewSub === 'best' ? 'Best' : analysis?.classification ?? null
+
   const handleExplain = useCallback(() => {
     setReviewSub('explain')
     setExplainStep(0)
@@ -294,8 +299,20 @@ function App() {
     setSidebarView('setup')
   }, [clearAnalysis, loadPgn])
 
-  const handleStartReview = useCallback(() => setSidebarView('review'), [])
-  const handleBackToSummary = useCallback(() => setSidebarView('summary'), [])
+  // Start Review = chess.com's guided walkthrough. It jumps to the first move (ply 1) so the
+  // coach starts commenting from move 1, exactly like chess.com (reference Screenshot_21 opens
+  // on "e4 is a book move"), then steps forward one move per "Next".
+  const handleStartReview = useCallback(() => {
+    if (moves.length > 0) goToPly(1)
+    setSidebarView('review')
+  }, [goToPly, moves.length])
+  // Leaving the review chapter drops any best/explain preview so the summary board shows the
+  // real position at the current ply, not a frozen engine-line preview.
+  const handleBackToSummary = useCallback(() => {
+    setReviewSub('idle')
+    setExplainStep(0)
+    setSidebarView('summary')
+  }, [])
 
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
@@ -330,6 +347,10 @@ function App() {
         // Enter = the "Got it!" button: leave the engine line, back to the idle review state.
         if (e.key === 'Enter') { e.preventDefault(); handleGotIt(); return }
       }
+      // In the guided Review chapter's idle state, Enter = the "Next" button (step one move).
+      if (sidebarView === 'review' && reviewSub === 'idle' && e.key === 'Enter') {
+        e.preventDefault(); if (canGoNext) goToNext(); return
+      }
       if (e.key === 'ArrowLeft') { e.preventDefault(); goToPrev() }
       else if (e.key === 'ArrowRight') { e.preventDefault(); goToNext() }
       else if (e.key === 'Home') { e.preventDefault(); goToFirst() }
@@ -338,7 +359,7 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, handleLinePrev, handleLineNext, handleGotIt])
+  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, sidebarView, canGoNext, handleLinePrev, handleLineNext, handleGotIt])
 
   // Board view for the current retry/review sub-mode. Defaults to the plain "current
   // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
@@ -431,7 +452,10 @@ function App() {
           />
         </div>
 
-        {/* ── Right: Sidebar — fills remaining width ── */}
+        {/* ── Right: Sidebar — three mutually-exclusive chapters that replace each other:
+            'setup' (pre-analysis: opening badge, Analyze button, move list for navigation),
+            'summary' (chess.com's post-analysis Game Review card), and 'review' (the guided
+            walkthrough). See sidebarView. ── */}
         <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-y-auto">
           {sidebarView === 'summary' && evalResults.length > 0 && engineError == null ? (
             <SummaryView
@@ -447,36 +471,73 @@ function App() {
               onSelectPly={goToPly}
               onStartReview={handleStartReview}
             />
-          ) : (
-            <>
-              {sidebarView === 'review' ? (
-                <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
-                  <button
-                    onClick={handleBackToSummary}
-                    aria-label="Back to summary"
-                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-cc-surface/60 transition-colors text-cc-text-dim"
-                  >
-                    ←
-                  </button>
-                  <h2 className="text-sm font-semibold">Game Review</h2>
-                </div>
-              ) : (
-                <>
-                  <OpeningBadge opening={openingResult?.opening ?? null} />
-                  <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
-                    <EvalPanel
-                      isReady={isReady}
-                      isAnalyzing={isAnalyzing}
-                      analysisProgress={analysisProgress}
-                      result={result}
-                      error={engineError}
-                      isGameLoaded={isLoaded}
-                      hasAnalysis={evalResults.length > 0 && engineError == null}
-                      onAnalyzeGame={handleAnalyzeGame}
+          ) : sidebarView === 'review' && evalResults.length > 0 && engineError == null ? (
+            <ReviewView
+              onBack={handleBackToSummary}
+              active={reviewActive}
+              headline={reviewHeadlineText}
+              evalBadge={reviewEvalBadge}
+              coachClass={coachClass}
+              sub={reviewSub}
+              canBest={canBest}
+              canExplain={canExplain}
+              canNext={canGoNext}
+              lineSans={lineSteps.map(s => s.san)}
+              lineStep={explainStep}
+              onExplain={handleExplain}
+              onBest={handleBest}
+              onNext={goToNext}
+              onLinePrev={handleLinePrev}
+              onLineNext={handleLineNext}
+              onGotIt={handleGotIt}
+              onResume={handleResume}
+              moveList={
+                <MoveList
+                  moves={moves}
+                  currentPly={currentPly}
+                  onSelectPly={goToPly}
+                  moveAnalyses={moveAnalyses}
+                  keyMoments={keyMoments}
+                  onRetry={handleRetry}
+                />
+              }
+              graph={
+                <EvalGraph
+                  evalResults={evalResults}
+                  currentPly={currentPly}
+                  onSelectPly={goToPly}
+                  moveAnalyses={moveAnalyses}
+                />
+              }
+              retry={
+                retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] ? (
+                  <div className="shrink-0 border-t border-cc-border p-2">
+                    <RetryPanel
+                      originalSan={moves[retryMoveIndex].san}
+                      originalClassification={moveAnalyses[retryMoveIndex].classification}
+                      attempt={attemptResult}
+                      onRetryAgain={handleRetryAgain}
+                      onExit={handleExitRetry}
                     />
                   </div>
-                </>
-              )}
+                ) : null
+              }
+            />
+          ) : (
+            <>
+              <OpeningBadge opening={openingResult?.opening ?? null} />
+              <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
+                <EvalPanel
+                  isReady={isReady}
+                  isAnalyzing={isAnalyzing}
+                  analysisProgress={analysisProgress}
+                  result={result}
+                  error={engineError}
+                  isGameLoaded={isLoaded}
+                  hasAnalysis={evalResults.length > 0 && engineError == null}
+                  onAnalyzeGame={handleAnalyzeGame}
+                />
+              </div>
               <MoveList
                 moves={moves}
                 currentPly={currentPly}
@@ -485,48 +546,6 @@ function App() {
                 keyMoments={keyMoments}
                 onRetry={handleRetry}
               />
-              {evalResults.length > 0 && (
-                <div className="shrink-0 border-t border-cc-border">
-                  <EvalGraph
-                    evalResults={evalResults}
-                    currentPly={currentPly}
-                    onSelectPly={goToPly}
-                    moveAnalyses={moveAnalyses}
-                  />
-                </div>
-              )}
-              <ClassLegend moveAnalyses={moveAnalyses} />
-              {retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] && (
-                <div className="shrink-0 border-t border-cc-border p-2">
-                  <RetryPanel
-                    originalSan={moves[retryMoveIndex].san}
-                    originalClassification={moveAnalyses[retryMoveIndex].classification}
-                    attempt={attemptResult}
-                    onRetryAgain={handleRetryAgain}
-                    onExit={handleExitRetry}
-                  />
-                </div>
-              )}
-              <div className="shrink-0 border-t border-cc-border p-2">
-                <ReviewPanel
-                  active={reviewActive}
-                  headline={reviewHeadlineText}
-                  evalBadge={reviewEvalBadge}
-                  sub={reviewSub}
-                  canBest={canBest}
-                  canExplain={canExplain}
-                  canNext={canGoNext}
-                  lineSans={lineSteps.map(s => s.san)}
-                  lineStep={explainStep}
-                  onExplain={handleExplain}
-                  onBest={handleBest}
-                  onNext={goToNext}
-                  onLinePrev={handleLinePrev}
-                  onLineNext={handleLineNext}
-                  onGotIt={handleGotIt}
-                  onResume={handleResume}
-                />
-              </div>
             </>
           )}
         </div>
