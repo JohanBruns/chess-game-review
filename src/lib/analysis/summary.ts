@@ -20,8 +20,14 @@ export function classificationCounts(
   return counts
 }
 
-export type PhaseGrade = 'Excellent' | 'Good' | 'Inaccuracy' | 'Mistake' | 'Blunder'
+// Live chess.com Game Review (2026-07-08 checkpoint, game 171190174548) renders the
+// Opening/Middlegame/Endgame phase rows as a single ICON from the same set used for
+// individual move classifications (e.g. a blue "Great" mark for a strong opening) — there is
+// no separate phase-grade word or icon set. PhaseGrade values are therefore chosen to be a
+// subset of MoveClass so callers can index classIcons/classColors directly with the result.
+export type PhaseGrade = 'Great' | 'Excellent' | 'Good' | 'Inaccuracy' | 'Mistake' | 'Blunder'
 
+const PHASE_GRADE_GREAT_MIN = 95
 const PHASE_GRADE_EXCELLENT_MIN = 90
 const PHASE_GRADE_GOOD_MIN = 75
 const PHASE_GRADE_INACCURACY_MIN = 60
@@ -29,6 +35,7 @@ const PHASE_GRADE_MISTAKE_MIN = 45
 
 export function phaseGrade(phaseAcc: number | null): PhaseGrade | null {
   if (phaseAcc == null) return null
+  if (phaseAcc >= PHASE_GRADE_GREAT_MIN) return 'Great'
   if (phaseAcc >= PHASE_GRADE_EXCELLENT_MIN) return 'Excellent'
   if (phaseAcc >= PHASE_GRADE_GOOD_MIN) return 'Good'
   if (phaseAcc >= PHASE_GRADE_INACCURACY_MIN) return 'Inaccuracy'

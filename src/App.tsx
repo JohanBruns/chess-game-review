@@ -7,8 +7,9 @@ import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
-import { buildMoveAnalyses, playerAccuracy, phaseAccuracy, findKeyMoments } from './lib/analysis/classify'
+import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
 import type { MoveClass } from './lib/analysis/classify'
+import { buildGameSummary } from './lib/analysis/summary'
 import { getBestMoveArrow } from './lib/analysis/arrows'
 import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
@@ -17,6 +18,7 @@ import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { ReviewPanel } from './components/ReviewPanel'
 import { ClassLegend } from './components/ClassLegend'
+import { SummaryCard } from './components/SummaryCard'
 import { RetryPanel } from './components/RetryPanel'
 import { ThemePicker } from './components/ThemePicker'
 import { useTheme } from './hooks/useTheme'
@@ -31,6 +33,8 @@ function App() {
     isLoaded,
     whiteElo,
     blackElo,
+    whiteName,
+    blackName,
     canGoPrev,
     canGoNext,
     loadPgn,
@@ -68,22 +72,23 @@ function App() {
     [moveAnalyses],
   )
 
-  const whiteAccuracy = useMemo(
-    () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'white') : null),
-    [moveAnalyses],
+  const whiteSummary = useMemo(
+    () => buildGameSummary(moveAnalyses ?? [], 'white', blackElo),
+    [moveAnalyses, blackElo],
   )
-  const blackAccuracy = useMemo(
-    () => (moveAnalyses ? playerAccuracy(moveAnalyses, 'black') : null),
-    [moveAnalyses],
+  const blackSummary = useMemo(
+    () => buildGameSummary(moveAnalyses ?? [], 'black', whiteElo),
+    [moveAnalyses, whiteElo],
   )
-  const whitePhaseAccuracy = useMemo(
-    () => (moveAnalyses ? phaseAccuracy(moveAnalyses, 'white') : null),
-    [moveAnalyses],
-  )
-  const blackPhaseAccuracy = useMemo(
-    () => (moveAnalyses ? phaseAccuracy(moveAnalyses, 'black') : null),
-    [moveAnalyses],
-  )
+
+  // SummaryCard: expanded right after analysis finishes, collapses to a compact accuracy-only
+  // strip as soon as the user navigates (click the strip to re-expand at any time).
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const wasAnalyzingRef = useRef(false)
+  useEffect(() => {
+    if (wasAnalyzingRef.current && !isAnalyzing && engineError == null) setSummaryExpanded(true)
+    wasAnalyzingRef.current = isAnalyzing
+  }, [isAnalyzing, engineError])
 
   // Guided review sub-mode: idle (default per-move view), explain (steps through the
   // engine's PV on the board), best (previews the engine's best move on the board).
@@ -112,6 +117,7 @@ function App() {
     setPrevPly(currentPly)
     setReviewSub('idle')
     setExplainStep(0)
+    setSummaryExpanded(false)
     // Don't clear retry state when the ply change IS the retry entry itself (handleRetry sets
     // retryMoveIndex and calls goToPly in the same batch, so they land together here). Any other
     // navigation (Prev/Next/jump) changes currentPly without retryMoveIndex following it, which
@@ -420,8 +426,20 @@ function App() {
         </div>
 
         {/* ── Right: Sidebar — fills remaining width ── */}
-        <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-hidden">
+        <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-y-auto">
           <OpeningBadge opening={openingResult?.opening ?? null} />
+          {evalResults.length > 0 && engineError == null && (
+            <SummaryCard
+              whiteName={whiteName ?? 'White'}
+              blackName={blackName ?? 'Black'}
+              whiteElo={whiteElo}
+              blackElo={blackElo}
+              whiteSummary={whiteSummary}
+              blackSummary={blackSummary}
+              expanded={summaryExpanded}
+              onToggle={() => setSummaryExpanded(e => !e)}
+            />
+          )}
           <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
             <EvalPanel
               isReady={isReady}
@@ -431,10 +449,6 @@ function App() {
               error={engineError}
               isGameLoaded={isLoaded}
               hasAnalysis={evalResults.length > 0 && engineError == null}
-              whiteAccuracy={whiteAccuracy}
-              blackAccuracy={blackAccuracy}
-              whitePhaseAccuracy={whitePhaseAccuracy}
-              blackPhaseAccuracy={blackPhaseAccuracy}
               onAnalyzeGame={handleAnalyzeGame}
             />
           </div>

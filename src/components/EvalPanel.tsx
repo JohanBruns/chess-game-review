@@ -10,15 +10,7 @@ interface EvalPanelProps {
   // True once an analysis has been started/completed for the loaded game — keeps the
   // Analyze button greyed out after its one allowed click (resets on loading a new game).
   hasAnalysis: boolean
-  whiteAccuracy: number | null
-  blackAccuracy: number | null
-  whitePhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
-  blackPhaseAccuracy?: { opening: number | null; middlegame: number | null; endgame: number | null } | null
   onAnalyzeGame: () => void
-}
-
-function formatPhase(v: number | null): string {
-  return v === null ? '–' : v.toFixed(1)
 }
 
 function formatEval(result: EvalResult): string {
@@ -42,10 +34,6 @@ export function EvalPanel({
   error,
   isGameLoaded,
   hasAnalysis,
-  whiteAccuracy,
-  blackAccuracy,
-  whitePhaseAccuracy,
-  blackPhaseAccuracy,
   onAnalyzeGame,
 }: EvalPanelProps) {
   const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing || hasAnalysis
@@ -87,38 +75,6 @@ export function EvalPanel({
               Best move: {result.bestMoveSan}
             </span>
           )}
-        </div>
-      )}
-
-      {whiteAccuracy !== null && blackAccuracy !== null && (
-        <div className="flex justify-between text-sm px-1 py-1 bg-cc-panel rounded">
-          <span>
-            <span className="text-cc-text-dim">White </span>
-            <span className="font-semibold text-white">{whiteAccuracy.toFixed(1)}%</span>
-          </span>
-          <span>
-            <span className="text-cc-text-dim">Black </span>
-            <span className="font-semibold text-cc-text-dim">{blackAccuracy.toFixed(1)}%</span>
-          </span>
-        </div>
-      )}
-
-      {whitePhaseAccuracy && blackPhaseAccuracy && (
-        <div className="grid grid-cols-4 gap-1 text-xs px-1 py-1 bg-cc-panel rounded text-center">
-          <span></span>
-          <span className="text-cc-text-dim">Open</span>
-          <span className="text-cc-text-dim">Mid</span>
-          <span className="text-cc-text-dim">End</span>
-
-          <span className="text-cc-text-dim text-left">White</span>
-          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.opening)}</span>
-          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.middlegame)}</span>
-          <span className="font-semibold text-white">{formatPhase(whitePhaseAccuracy.endgame)}</span>
-
-          <span className="text-cc-text-dim text-left">Black</span>
-          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.opening)}</span>
-          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.middlegame)}</span>
-          <span className="font-semibold text-cc-text-dim">{formatPhase(blackPhaseAccuracy.endgame)}</span>
         </div>
       )}
 

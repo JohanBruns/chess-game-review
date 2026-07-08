@@ -42,7 +42,9 @@ describe('phaseGrade', () => {
   })
 
   it('grades at the documented boundaries', () => {
-    expect(phaseGrade(100)).toBe('Excellent')
+    expect(phaseGrade(100)).toBe('Great')
+    expect(phaseGrade(95)).toBe('Great')
+    expect(phaseGrade(94.9)).toBe('Excellent')
     expect(phaseGrade(90)).toBe('Excellent')
     expect(phaseGrade(89.9)).toBe('Good')
     expect(phaseGrade(75)).toBe('Good')
