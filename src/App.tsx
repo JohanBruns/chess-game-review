@@ -18,7 +18,7 @@ import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { ReviewPanel } from './components/ReviewPanel'
 import { ClassLegend } from './components/ClassLegend'
-import { SummaryCard } from './components/SummaryCard'
+import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
 import { ThemePicker } from './components/ThemePicker'
 import { useTheme } from './hooks/useTheme'
@@ -81,12 +81,15 @@ function App() {
     [moveAnalyses, whiteElo],
   )
 
-  // SummaryCard: expanded right after analysis finishes, collapses to a compact accuracy-only
-  // strip as soon as the user navigates (click the strip to re-expand at any time).
-  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  // Sidebar chapter: 'setup' (loading/analyzing, today's move-list stack), 'summary' (chess.com's
+  // post-analysis Game Review card — replaces the stack entirely), 'review' (guided-review
+  // chapter, reached via the Summary view's "Start Review" button; currently a placeholder that
+  // reuses the move-list stack until Phase 3 builds the real guided walkthrough). The chapters
+  // replace each other rather than coexisting — see the two-chapter sidebar plan.
+  const [sidebarView, setSidebarView] = useState<'setup' | 'summary' | 'review'>('setup')
   const wasAnalyzingRef = useRef(false)
   useEffect(() => {
-    if (wasAnalyzingRef.current && !isAnalyzing && engineError == null) setSummaryExpanded(true)
+    if (wasAnalyzingRef.current && !isAnalyzing && engineError == null) setSidebarView('summary')
     wasAnalyzingRef.current = isAnalyzing
   }, [isAnalyzing, engineError])
 
@@ -117,7 +120,6 @@ function App() {
     setPrevPly(currentPly)
     setReviewSub('idle')
     setExplainStep(0)
-    setSummaryExpanded(false)
     // Don't clear retry state when the ply change IS the retry entry itself (handleRetry sets
     // retryMoveIndex and calls goToPly in the same batch, so they land together here). Any other
     // navigation (Prev/Next/jump) changes currentPly without retryMoveIndex following it, which
@@ -289,7 +291,11 @@ function App() {
   const handleLoadPgn = useCallback((pgn: string) => {
     clearAnalysis()
     loadPgn(pgn)
+    setSidebarView('setup')
   }, [clearAnalysis, loadPgn])
+
+  const handleStartReview = useCallback(() => setSidebarView('review'), [])
+  const handleBackToSummary = useCallback(() => setSidebarView('summary'), [])
 
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
@@ -427,81 +433,102 @@ function App() {
 
         {/* ── Right: Sidebar — fills remaining width ── */}
         <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-y-auto">
-          <OpeningBadge opening={openingResult?.opening ?? null} />
-          {evalResults.length > 0 && engineError == null && (
-            <SummaryCard
+          {sidebarView === 'summary' && evalResults.length > 0 && engineError == null ? (
+            <SummaryView
               whiteName={whiteName ?? 'White'}
               blackName={blackName ?? 'Black'}
               whiteElo={whiteElo}
               blackElo={blackElo}
               whiteSummary={whiteSummary}
               blackSummary={blackSummary}
-              expanded={summaryExpanded}
-              onToggle={() => setSummaryExpanded(e => !e)}
+              evalResults={evalResults}
+              moveAnalyses={moveAnalyses}
+              currentPly={currentPly}
+              onSelectPly={goToPly}
+              onStartReview={handleStartReview}
             />
-          )}
-          <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
-            <EvalPanel
-              isReady={isReady}
-              isAnalyzing={isAnalyzing}
-              analysisProgress={analysisProgress}
-              result={result}
-              error={engineError}
-              isGameLoaded={isLoaded}
-              hasAnalysis={evalResults.length > 0 && engineError == null}
-              onAnalyzeGame={handleAnalyzeGame}
-            />
-          </div>
-          <MoveList
-            moves={moves}
-            currentPly={currentPly}
-            onSelectPly={goToPly}
-            moveAnalyses={moveAnalyses}
-            keyMoments={keyMoments}
-            onRetry={handleRetry}
-          />
-          {evalResults.length > 0 && (
-            <div className="shrink-0 border-t border-cc-border">
-              <EvalGraph
-                evalResults={evalResults}
+          ) : (
+            <>
+              {sidebarView === 'review' ? (
+                <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
+                  <button
+                    onClick={handleBackToSummary}
+                    aria-label="Back to summary"
+                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-cc-surface/60 transition-colors text-cc-text-dim"
+                  >
+                    ←
+                  </button>
+                  <h2 className="text-sm font-semibold">Game Review</h2>
+                </div>
+              ) : (
+                <>
+                  <OpeningBadge opening={openingResult?.opening ?? null} />
+                  <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
+                    <EvalPanel
+                      isReady={isReady}
+                      isAnalyzing={isAnalyzing}
+                      analysisProgress={analysisProgress}
+                      result={result}
+                      error={engineError}
+                      isGameLoaded={isLoaded}
+                      hasAnalysis={evalResults.length > 0 && engineError == null}
+                      onAnalyzeGame={handleAnalyzeGame}
+                    />
+                  </div>
+                </>
+              )}
+              <MoveList
+                moves={moves}
                 currentPly={currentPly}
                 onSelectPly={goToPly}
                 moveAnalyses={moveAnalyses}
+                keyMoments={keyMoments}
+                onRetry={handleRetry}
               />
-            </div>
+              {evalResults.length > 0 && (
+                <div className="shrink-0 border-t border-cc-border">
+                  <EvalGraph
+                    evalResults={evalResults}
+                    currentPly={currentPly}
+                    onSelectPly={goToPly}
+                    moveAnalyses={moveAnalyses}
+                  />
+                </div>
+              )}
+              <ClassLegend moveAnalyses={moveAnalyses} />
+              {retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] && (
+                <div className="shrink-0 border-t border-cc-border p-2">
+                  <RetryPanel
+                    originalSan={moves[retryMoveIndex].san}
+                    originalClassification={moveAnalyses[retryMoveIndex].classification}
+                    attempt={attemptResult}
+                    onRetryAgain={handleRetryAgain}
+                    onExit={handleExitRetry}
+                  />
+                </div>
+              )}
+              <div className="shrink-0 border-t border-cc-border p-2">
+                <ReviewPanel
+                  active={reviewActive}
+                  headline={reviewHeadlineText}
+                  evalBadge={reviewEvalBadge}
+                  sub={reviewSub}
+                  canBest={canBest}
+                  canExplain={canExplain}
+                  canNext={canGoNext}
+                  lineSans={lineSteps.map(s => s.san)}
+                  lineStep={explainStep}
+                  onExplain={handleExplain}
+                  onBest={handleBest}
+                  onNext={goToNext}
+                  onLinePrev={handleLinePrev}
+                  onLineNext={handleLineNext}
+                  onGotIt={handleGotIt}
+                  onResume={handleResume}
+                />
+              </div>
+            </>
           )}
-          <ClassLegend moveAnalyses={moveAnalyses} />
-          {retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] && (
-            <div className="shrink-0 border-t border-cc-border p-2">
-              <RetryPanel
-                originalSan={moves[retryMoveIndex].san}
-                originalClassification={moveAnalyses[retryMoveIndex].classification}
-                attempt={attemptResult}
-                onRetryAgain={handleRetryAgain}
-                onExit={handleExitRetry}
-              />
-            </div>
-          )}
-          <div className="shrink-0 border-t border-cc-border p-2">
-            <ReviewPanel
-              active={reviewActive}
-              headline={reviewHeadlineText}
-              evalBadge={reviewEvalBadge}
-              sub={reviewSub}
-              canBest={canBest}
-              canExplain={canExplain}
-              canNext={canGoNext}
-              lineSans={lineSteps.map(s => s.san)}
-              lineStep={explainStep}
-              onExplain={handleExplain}
-              onBest={handleBest}
-              onNext={goToNext}
-              onLinePrev={handleLinePrev}
-              onLineNext={handleLineNext}
-              onGotIt={handleGotIt}
-              onResume={handleResume}
-            />
-          </div>
         </div>
       </div>
     </div>
