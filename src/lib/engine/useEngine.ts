@@ -97,7 +97,7 @@ export function useEngine() {
         setState(prev => ({
           ...prev,
           isEvaluating: false,
-          error: 'Timeout: Engine hat nicht rechtzeitig geantwortet.',
+          error: 'Timeout: the engine did not respond in time.',
         }))
       }
     }, 10_000)
@@ -115,7 +115,7 @@ export function useEngine() {
 
     worker.onmessage = (e: MessageEvent<string>) => {
       const line = e.data.trim()
-      console.log('[SF]', line)
+      if (import.meta.env.DEV) console.log('[SF]', line)
 
       if (initPhaseRef.current === 'uci' && line === 'uciok') {
         initPhaseRef.current = 'isready'
