@@ -102,7 +102,12 @@ export function useEngine() {
       }
     }, 10_000)
   }
-  postEvalRef.current = postEval
+  // Sync the latest postEval closure into the ref after render (never during render — the
+  // worker.onmessage handler and the analysis-queue timeout both read postEvalRef.current
+  // asynchronously, so they always see this post-commit value).
+  useEffect(() => {
+    postEvalRef.current = postEval
+  })
 
   useEffect(() => {
     const worker = new Worker('/engine/stockfish-18-lite-single.js')
