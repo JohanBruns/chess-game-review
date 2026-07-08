@@ -30,7 +30,7 @@ Scope-Entscheidungen des Users (2026-07-08): Coach-Text **nur Templates** (wie c
 - camelCase-Dateinamen, Conventional Commits.
 - **Checkpoint-Regel**: Vor jedem von chess.com kopierten UI-Element das echte Game Review live im Browser (Browser-MCP) prüfen — Annahmen über chess.com-UI waren in diesem Repo schon zweimal falsch (siehe Memory).
 
-Empfohlene Reihenfolge: 1 → 2 → 2b → 3 → 4 → 5 → 6 → 7 → 8. Phasen 1+2 liefern den größten sichtbaren Paritätssprung (Stand 2026-07-08: 1 und 2 [alte Form] erledigt — als Nächstes 2b). Jede Phase = eine Opus/Sonnet-Session.
+Empfohlene Reihenfolge: 1 → 2 → 2b → 3 → 4 → 5 → 6 → 7 → 8. Phasen 1+2 liefern den größten sichtbaren Paritätssprung (Stand 2026-07-08: 1, 2 und 2b erledigt — als Nächstes 3). Jede Phase = eine Opus/Sonnet-Session.
 
 ### Modell-Empfehlung je Phase
 
@@ -111,6 +111,8 @@ Thresholds als exportierte Konstanten (Phase-2-Checkpoint verfeinert sie gegen d
 ---
 
 ## Phase 2b — Retrofit: SummaryCard → SummaryView (Delta zur bereits ausgeführten alten Phase 2)
+
+> **Status: ✅ fertig (2026-07-08, Commit `88db590`).** `sidebarView: 'setup'|'summary'|'review'` in `App.tsx`; `SummaryCard.tsx` → `SummaryView.tsx` (Vollansicht: Header, Coach-Bubble mit neuer `summaryHeadline()`-Template-Funktion in `review.ts`, Mini-EvalGraph, Accuracy-Pills, einklappbare Zähltabelle, Game-Rating, Phasen-Zeilen, unten gepinnter „Start Review"-Button). `'review'` ist bis Phase 3 ein Platzhalter (Zurück-Pfeil-Header + wiederverwendeter MoveList/EvalGraph/ClassLegend/RetryPanel/ReviewPanel-Stack). Kollaps-bei-Navigation entfernt — Kapitel bleibt bei Tastatur-Nav stehen. Live verifiziert (Partie danius777/jojo2go): Analyze → Summary-Ansicht → Start Review → Review-Ansicht (Zurück-Pfeil sichtbar, kein Start-Review-Button mehr) → Zurück-Pfeil → Summary-Ansicht, keine Konsolenfehler. 214 Tests grün, `tsc -b`/`eslint` sauber.
 
 **Modell: Sonnet** — kleine eigene Session VOR Phase 3 (Phase 3 setzt `sidebarView` + SummaryView voraus).
 **Ziel:** Die vorhandene SummaryCard-Implementierung auf die Zwei-Kapitel-Architektur heben. Reine Umbau-Phase, keine neue Analyse-Logik.
