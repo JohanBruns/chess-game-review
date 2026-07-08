@@ -18,6 +18,8 @@ import { EvalBar } from './components/EvalBar'
 import { ReviewPanel } from './components/ReviewPanel'
 import { ClassLegend } from './components/ClassLegend'
 import { RetryPanel } from './components/RetryPanel'
+import { ThemePicker } from './components/ThemePicker'
+import { useTheme } from './hooks/useTheme'
 
 function App() {
   const {
@@ -90,6 +92,10 @@ function App() {
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
+  // Board & piece appearance (persisted in localStorage) + the picker modal's open state.
+  const { boardTheme, pieceTheme, setBoardId, setPieceId } = useTheme()
+  const [themeOpen, setThemeOpen] = useState(false)
+
   // Retry-at-key-moments. retryMoveIndex is the 0-based moveIndex being retried (fens[moveIndex]
   // is the position BEFORE that move — the position the user tries an alternative from).
   // trialFen overlays the board with the user's attempted position; useGame's currentPly/fens
@@ -98,23 +104,24 @@ function App() {
   const [trialFen, setTrialFen] = useState<string | null>(null)
   const [attemptResult, setAttemptResult] = useState<{ san: string; isCorrect: boolean | null } | null>(null)
 
-  const prevPlyRef = useRef<number>(currentPly)
-  useEffect(() => {
-    if (prevPlyRef.current !== currentPly) {
-      prevPlyRef.current = currentPly
-      setReviewSub('idle')
-      setExplainStep(0)
-      // Don't clear retry state when the ply change IS the retry entry itself (handleRetry
-      // sets retryMoveIndex and calls goToPly in the same batch, so they land together here).
-      // Any other navigation (Prev/Next/jump) changes currentPly without retryMoveIndex
-      // following it, which is exactly when retry mode should end.
-      if (currentPly !== retryMoveIndex) {
-        setRetryMoveIndex(null)
-        setTrialFen(null)
-        setAttemptResult(null)
-      }
+  // Reset transient review/retry state whenever navigation moves to a different ply. Done in
+  // render (React's "adjust state on change" pattern) rather than an effect, so children never
+  // observe a frame of stale sub-mode state after a jump.
+  const [prevPly, setPrevPly] = useState(currentPly)
+  if (prevPly !== currentPly) {
+    setPrevPly(currentPly)
+    setReviewSub('idle')
+    setExplainStep(0)
+    // Don't clear retry state when the ply change IS the retry entry itself (handleRetry sets
+    // retryMoveIndex and calls goToPly in the same batch, so they land together here). Any other
+    // navigation (Prev/Next/jump) changes currentPly without retryMoveIndex following it, which
+    // is exactly when retry mode should end.
+    if (currentPly !== retryMoveIndex) {
+      setRetryMoveIndex(null)
+      setTrialFen(null)
+      setAttemptResult(null)
     }
-  }, [currentPly, retryMoveIndex])
+  }
 
   // Green suggestion arrow — shown automatically (chess.com-style) whenever the played move
   // differs from the engine's best move. Only meaningful in the idle sub-mode.
@@ -362,6 +369,15 @@ function App() {
         autoFetch={autoFetch}
       />
 
+      <ThemePicker
+        open={themeOpen}
+        onClose={() => setThemeOpen(false)}
+        boardId={boardTheme.id}
+        pieceId={pieceTheme.id}
+        onSelectBoard={setBoardId}
+        onSelectPiece={setPieceId}
+      />
+
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
             Capped by min() against viewport width so a narrow-but-tall window can't force
@@ -385,6 +401,8 @@ function App() {
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}
+                piecesBasePath={pieceTheme.basePath}
+                boardImageUrl={boardTheme.url}
               />
             </div>
           </div>
@@ -394,6 +412,7 @@ function App() {
             onNext={goToNext}
             onLast={goToLast}
             onFlip={handleFlip}
+            onOpenThemes={() => setThemeOpen(true)}
             canGoPrev={canGoPrev}
             canGoNext={canGoNext}
             isLoaded={isLoaded}
