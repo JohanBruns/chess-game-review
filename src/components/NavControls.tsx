@@ -4,6 +4,7 @@ interface NavControlsProps {
   onNext: () => void
   onLast: () => void
   onFlip: () => void
+  onOpenThemes: () => void
   canGoPrev: boolean
   canGoNext: boolean
   isLoaded: boolean
@@ -15,6 +16,7 @@ export function NavControls({
   onNext,
   onLast,
   onFlip,
+  onOpenThemes,
   canGoPrev,
   canGoNext,
   isLoaded,
@@ -63,6 +65,13 @@ export function NavControls({
         title="Flip Board (F)"
       >
         ⇅
+      </button>
+      <button
+        className={base}
+        onClick={onOpenThemes}
+        title="Board &amp; Pieces"
+      >
+        🎨
       </button>
     </div>
   )

@@ -3,6 +3,7 @@ import { Chessboard } from 'react-chessboard'
 import type { Arrow } from 'react-chessboard'
 import type { MoveClass } from '../lib/analysis/classify'
 import { CLASS_COLOR } from '../lib/analysis/classColors'
+import { pieceImageMap, PIECE_KEYS } from '../lib/themes'
 
 interface BoardPanelProps {
   fen: string
@@ -25,6 +26,9 @@ interface BoardPanelProps {
   // Called with (from, to) on a drop; return true to accept (and update `fen` accordingly)
   // or false to reject (piece snaps back). react-chessboard never commits the move itself.
   onPieceDrop?: (from: string, to: string) => boolean
+  // Theme (from the theme picker): directory of the 12 piece PNGs, and the board background URL.
+  piecesBasePath: string
+  boardImageUrl: string
 }
 
 // Matches --color-cc-green / --color-cc-orange / --color-cc-red in index.css —
@@ -53,21 +57,6 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
 
 const IMG: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain' }
 
-const CUSTOM_PIECES = {
-  wP: () => <img src="/pieces/wp.png" style={IMG} />,
-  wR: () => <img src="/pieces/wr.png" style={IMG} />,
-  wN: () => <img src="/pieces/wn.png" style={IMG} />,
-  wB: () => <img src="/pieces/wb.png" style={IMG} />,
-  wQ: () => <img src="/pieces/wq.png" style={IMG} />,
-  wK: () => <img src="/pieces/wk.png" style={IMG} />,
-  bP: () => <img src="/pieces/bp.png" style={IMG} />,
-  bR: () => <img src="/pieces/br.png" style={IMG} />,
-  bN: () => <img src="/pieces/bn.png" style={IMG} />,
-  bB: () => <img src="/pieces/bb.png" style={IMG} />,
-  bQ: () => <img src="/pieces/bq.png" style={IMG} />,
-  bK: () => <img src="/pieces/bk.png" style={IMG} />,
-}
-
 export function BoardPanel({
   fen,
   lastMoveFrom,
@@ -79,7 +68,18 @@ export function BoardPanel({
   orientation = 'white',
   interactive = false,
   onPieceDrop,
+  piecesBasePath,
+  boardImageUrl,
 }: BoardPanelProps) {
+  // Custom piece renderers, rebuilt only when the piece theme changes. react-chessboard
+  // memoizes off this object reference, so a fresh literal every render would defeat that.
+  const customPieces = useMemo(() => {
+    const map = pieceImageMap(piecesBasePath)
+    return Object.fromEntries(
+      PIECE_KEYS.map(key => [key, () => <img src={map[key]} style={IMG} alt="" />]),
+    )
+  }, [piecesBasePath])
+
   const squareStyles: Record<string, React.CSSProperties> = {}
   if (lastMoveFrom && lastMoveTo && classification) {
     const color = `rgba(${CLASS_COLOR[classification]}, 0.55)`
@@ -102,7 +102,7 @@ export function BoardPanel({
       result.push({ startSquare: candidateArrow.from, endSquare: candidateArrow.to, color: CANDIDATE_ARROW_COLOR })
     }
     return result
-  }, [bestMoveArrow, classification, threatArrow, candidateArrow])
+  }, [bestMoveArrow, threatArrow, candidateArrow])
 
   const badge =
     lastMoveTo && classification && classification !== 'Book'
@@ -135,9 +135,9 @@ export function BoardPanel({
             ? ({ sourceSquare, targetSquare }) =>
                 targetSquare !== null && onPieceDrop(sourceSquare, targetSquare)
             : undefined,
-          pieces: CUSTOM_PIECES,
+          pieces: customPieces,
           boardStyle: {
-            backgroundImage: 'url(/pieces/brett.png)',
+            backgroundImage: `url(${boardImageUrl})`,
             backgroundSize: '100% 100%',
           },
           darkSquareStyle:  { backgroundColor: 'transparent' },
