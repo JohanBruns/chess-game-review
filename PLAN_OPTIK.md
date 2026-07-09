@@ -34,7 +34,7 @@
 | 3 | Navigation: 5 große Buttons in den Sidebar-Footer | Sonnet | ✅ |
 | 4 | Coach-Bubble (weiße Sprechblase) | Sonnet | ✅ |
 | 5 | Explain/Best/Next-Buttonreihe | Sonnet | ✅ |
-| 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ☐ |
+| 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ✅ (Explain-Sub-Zeile zurückgestellt) |
 | 7 | Eval-Graph | Sonnet | ☐ |
 | 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ☐ |
 | 9 | Summary-Karte | Sonnet | ☐ |
@@ -183,13 +183,12 @@ anders als chess.com.
   11 px) links, Breite ~28 px.
 - **Figurinen** vor der SAN (♗xf7+ statt Bxf7+). Umsetzung: Unicode-Figurinen ODER 12-px-Bilder
   aus dem aktiven Piece-Theme (Rückfrage 3; Default bis zur Antwort: Unicode).
-- **Icon-Politik (wichtig, live verifiziert):** Inline-Icons NUR für Book, Brilliant, Great,
-  Excellent, Good, Inaccuracy, Mistake, Miss, Blunder — **Best-Züge bekommen KEIN Icon und
-  KEINE Farbe** (chess.com lässt Best-SANs in normaler Textfarbe!). Farbige SAN nur für:
-  Brilliant, Great, Excellent(grün), Inaccuracy, Mistake, Miss, Blunder.
-  ⚠️ Vor Umsetzung am Referenz-Review nochmal stichprobenartig verifizieren (welche Klassen
-  genau Icon+Farbe tragen — unsere heutigen Screenshots zeigen Icons bei Book/?!/?/??/👍,
-  keine bei Best/Great-losen Normalzügen).
+- **Icon-Politik (KORRIGIERT nach Screenshot-Gegenprüfung, `Board&Game/review/Screenshot_3`,
+  Spiel 171300157032):** Inline-Icon **und** farbige SAN für **Book, Brilliant, Great, Best,
+  Inaccuracy, Mistake, Miss, Blunder**. **Best HAT sehr wohl ein Icon (grüner Stern) + grüne
+  Schrift** (`exf4`, `cxd4` im Screenshot) — die frühere Plan-Annahme war falsch. **KEIN Icon,
+  neutrale helle Textfarbe** für **Excellent, Good** (der Normalzug-Band, z. B. `♞f3`, `d4`,
+  `O-O`) sowie Forced. Umgesetzt via `MARKED_CLASSES` in `MoveList.tsx`.
 - **Keine Zugzeiten** in der Review-Zugliste (chess.com blendet sie dort aus). Im
   Setup-Chapter dürfen sie bleiben (Rückfrage 1).
 - ⚡-Retry-Marker: chess.com hat keinen → per Settings-Toggle oder dezenter (Rückfrage 1;
@@ -201,6 +200,10 @@ anders als chess.com.
   Zug** in der Liste rendern („4. ♗xf7+ ♔xf7 5. ♕e2", aktueller Schritt hell hinterlegt),
   statt der SAN-Chips unter den Buttons. Dazu `lineSans`/`lineStep` an MoveList durchreichen
   (oder Slot-Render in ReviewView).
+  → **ZURÜCKGESTELLT** (nicht in diesem Schritt umgesetzt): Die PV-Chips bleiben vorerst unter
+  den Explain-Buttons (aus Schritt 5). Die eingerückte Sub-Zeile in der Zugliste ist die
+  komplexeste + am wenigsten sichtbare Teilaufgabe und ohne Live-Preview nicht verifizierbar
+  (Dev-Server projektweit von anderer Session gesperrt). Als separater Nachzieh-Schritt offen.
 
 **Dateien:** [src/components/MoveList.tsx](src/components/MoveList.tsx),
 [ReviewView.tsx](src/components/ReviewView.tsx) (PV-Zeile), ggf. `classIcons.ts`.
