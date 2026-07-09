@@ -6,6 +6,10 @@ import type { EvalResult } from '../lib/engine/useEngine'
 import type { MoveAnalysis } from '../lib/analysis/classify'
 import { EvalGraph } from './EvalGraph'
 
+// Accuracy threshold for the confetti celebration burst — matches chess.com's "excellent game"
+// bar (see summaryHeadline's own >=90 check for the coach headline).
+const CELEBRATION_ACCURACY = 90
+
 const PHASE_ROWS: { key: 'opening' | 'middlegame' | 'endgame'; label: string }[] = [
   { key: 'opening', label: 'Opening' },
   { key: 'middlegame', label: 'Middlegame' },
@@ -47,11 +51,15 @@ export function SummaryView({
   onStartReview,
 }: SummaryViewProps) {
   const [tableExpanded, setTableExpanded] = useState(true)
+  const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
+  const celebrate = bestAccuracy >= CELEBRATION_ACCURACY
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
+    <div className="relative flex flex-col h-full overflow-y-auto animate-chapter-fade-in">
+      {celebrate && <ConfettiBurst />}
+
       <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
-        <h2 className="text-sm font-semibold">Game Review</h2>
+        <h2 className="font-heading text-sm font-semibold">Game Review</h2>
       </div>
 
       <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
@@ -150,7 +158,7 @@ export function SummaryView({
 function AccuracyPill({ accuracy, light }: { accuracy: number | null; light: boolean }) {
   return (
     <span
-      className={`px-2 py-1 rounded font-semibold text-sm ${
+      className={`font-heading px-2 py-1 rounded font-semibold text-sm ${
         light ? 'bg-cc-text text-cc-bg' : 'bg-cc-bg-dark text-cc-text border border-cc-border'
       }`}
     >
@@ -161,7 +169,7 @@ function AccuracyPill({ accuracy, light }: { accuracy: number | null; light: boo
 
 function RatingPill({ rating }: { rating: number | null }) {
   return (
-    <span className="px-2 py-0.5 rounded bg-cc-surface font-bold text-cc-text min-w-10 text-center">
+    <span className="font-heading px-2 py-0.5 rounded bg-cc-surface font-bold text-cc-text min-w-10 text-center">
       {rating ?? '–'}
     </span>
   )
@@ -170,4 +178,41 @@ function RatingPill({ rating }: { rating: number | null }) {
 function PhaseIcon({ grade }: { grade: PhaseGrade | null | undefined }) {
   if (!grade) return <span className="w-4 h-4 inline-block" />
   return <img src={CLASS_ICON[grade]} alt={grade} title={grade} className="w-4 h-4" />
+}
+
+const CONFETTI_COLORS = ['#81b64c', '#e2903f', '#749bbf', '#e5533d', '#f7c631']
+
+// A small CSS-only confetti burst (no canvas/animation library) for the accuracy>=90
+// celebration — a fixed set of pieces, randomized once via useState's lazy initializer (the
+// idiomatic one-time-impure-computation escape hatch; a useMemo callback isn't safe here since
+// React may re-invoke or discard it), each falling via the `animate-confetti-fall` keyframe
+// (index.css) with a per-piece delay/rotation/color.
+function ConfettiBurst() {
+  const [pieces] = useState(() =>
+    Array.from({ length: 24 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 300,
+      color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+      rotate: Math.random() * 360,
+    })),
+  )
+
+  return (
+    <div className="absolute inset-x-0 top-0 h-24 overflow-hidden pointer-events-none z-10">
+      {pieces.map(p => (
+        <span
+          key={p.id}
+          className="absolute w-1.5 h-2.5 animate-confetti-fall"
+          style={{
+            left: `${p.left}%`,
+            top: '-8px',
+            backgroundColor: p.color,
+            animationDelay: `${p.delay}ms`,
+            transform: `rotate(${p.rotate}deg)`,
+          }}
+        />
+      ))}
+    </div>
+  )
 }

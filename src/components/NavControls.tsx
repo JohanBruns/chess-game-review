@@ -5,6 +5,11 @@ interface NavControlsProps {
   onLast: () => void
   onFlip: () => void
   onOpenThemes: () => void
+  onOpenSettings: () => void
+  // Share/Export (Phase 7) — both no-op-disabled when no game is loaded.
+  onCopyLink: () => void
+  onExportImage: () => void
+  linkCopied: boolean
   canGoPrev: boolean
   canGoNext: boolean
   isLoaded: boolean
@@ -17,6 +22,10 @@ export function NavControls({
   onLast,
   onFlip,
   onOpenThemes,
+  onOpenSettings,
+  onCopyLink,
+  onExportImage,
+  linkCopied,
   canGoPrev,
   canGoNext,
   isLoaded,
@@ -72,6 +81,29 @@ export function NavControls({
         title="Board &amp; Pieces"
       >
         🎨
+      </button>
+      <button
+        className={base}
+        onClick={onOpenSettings}
+        title="Settings"
+      >
+        ⚙️
+      </button>
+      <button
+        className={base}
+        onClick={onCopyLink}
+        disabled={!isLoaded}
+        title={linkCopied ? 'Copied!' : 'Copy analysis link'}
+      >
+        {linkCopied ? '✓' : '🔗'}
+      </button>
+      <button
+        className={base}
+        onClick={onExportImage}
+        disabled={!isLoaded}
+        title="Export board image"
+      >
+        📷
       </button>
     </div>
   )

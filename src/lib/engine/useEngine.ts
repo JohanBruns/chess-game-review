@@ -39,12 +39,17 @@ const INITIAL_STATE: EngineState = {
 
 type InitPhase = 'uci' | 'isready' | 'ready'
 
+// Watchdog duration per search depth — deeper searches legitimately take longer, so a flat
+// timeout would either time out valid depth-18 searches or waste time waiting at depth 12.
+const DEPTH_TIMEOUT_MS: Record<number, number> = { 12: 7000, 15: 10000, 18: 20000 }
+
 export function useEngine() {
   const [state, setState] = useState<EngineState>(INITIAL_STATE)
   const workerRef = useRef<Worker | null>(null)
   const evaluatingFenRef = useRef<string | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initPhaseRef = useRef<InitPhase>('uci')
+  const depthRef = useRef<number>(15)
   const analysisQueueRef = useRef<AnalysisQueue | null>(null)
   const lastCpRef = useRef<number | null>(null)
   const lastMateRef = useRef<number | null>(null)
@@ -70,7 +75,7 @@ export function useEngine() {
     lastThirdBestUciRef.current = null
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
     workerRef.current.postMessage(`position fen ${fen}`)
-    workerRef.current.postMessage('go depth 15')
+    workerRef.current.postMessage(`go depth ${depthRef.current}`)
     timeoutRef.current = setTimeout(() => {
       workerRef.current?.postMessage('stop')
       timeoutRef.current = null
@@ -100,7 +105,7 @@ export function useEngine() {
           error: 'Timeout: the engine did not respond in time.',
         }))
       }
-    }, 10_000)
+    }, DEPTH_TIMEOUT_MS[depthRef.current] ?? 10_000)
   }
   // Sync the latest postEval closure into the ref after render (never during render — the
   // worker.onmessage handler and the analysis-queue timeout both read postEvalRef.current
@@ -286,8 +291,9 @@ export function useEngine() {
     }
   }, [])
 
-  const evaluate = useCallback((fen: string) => {
+  const evaluate = useCallback((fen: string, depth = 15) => {
     if (!workerRef.current) return
+    depthRef.current = depth
     analysisQueueRef.current = null
     setState(prev => ({ ...prev, isEvaluating: true, isAnalyzing: false, result: null, error: null }))
     postEvalRef.current(fen)
@@ -310,12 +316,13 @@ export function useEngine() {
     }))
   }, [])
 
-  const analyzeGame = useCallback((fens: string[]) => {
+  const analyzeGame = useCallback((fens: string[], depth = 15) => {
     if (!workerRef.current || fens.length === 0) return
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
+    depthRef.current = depth
     analysisQueueRef.current = { fens, index: 0 }
     setState(prev => ({
       ...prev,

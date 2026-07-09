@@ -17,6 +17,12 @@ interface BoardPanelProps {
   extraArrows?: { from: string; to: string; color: string }[]
   // Extra square tints (square → css color) for coach theme highlights; merged over the last-move tint.
   extraSquareHighlights?: Record<string, string>
+  // Settings toggle for the classification badge (⭐/❓/❗ etc.) on the last-moved square.
+  showBadges?: boolean
+  // Retry-at-key-moments feedback (Phase 6 polish): a ✓/✗ badge on the attempted move's target
+  // square, independent of the classification badge above (retry passes classification=undefined
+  // so the two never overlap).
+  resultBadge?: { square: string; correct: boolean }
   // Which side's perspective the board is drawn from. react-chessboard flips pieces, arrows,
   // and squareStyles automatically; only the manual badge-overlay geometry below needs mirroring.
   orientation?: 'white' | 'black'
@@ -54,6 +60,19 @@ const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
 
 const IMG: React.CSSProperties = { width: '100%', height: '100%', objectFit: 'contain' }
 
+// Badge sits at a square's top-right *screen* corner. White screen col=file, row=8-rank;
+// Black screen col=7-file, row=rank-1 (board mirrored on both axes) — the +1 on the White
+// right-edge case becomes (8-file) for Black.
+function badgeScreenPosition(square: string, orientation: 'white' | 'black'): { left: number; top: number } {
+  const file = square.charCodeAt(0) - 97  // 0 = a … 7 = h
+  const rank = parseInt(square[1])          // 1–8
+  const flipped = orientation === 'black'
+  return {
+    left: flipped ? (8 - file) / 8 * 100 : (file + 1) / 8 * 100,
+    top:  flipped ? (rank - 1) / 8 * 100 : (8 - rank) / 8 * 100,
+  }
+}
+
 export function BoardPanel({
   fen,
   lastMoveFrom,
@@ -62,6 +81,8 @@ export function BoardPanel({
   bestMoveArrow,
   extraArrows,
   extraSquareHighlights,
+  showBadges = true,
+  resultBadge,
   orientation = 'white',
   interactive = false,
   onPieceDrop,
@@ -107,21 +128,19 @@ export function BoardPanel({
   }, [bestMoveArrow, extraArrows])
 
   const badge =
-    lastMoveTo && classification && classification !== 'Book'
-      ? (() => {
-          const file = lastMoveTo.charCodeAt(0) - 97  // 0 = a … 7 = h
-          const rank = parseInt(lastMoveTo[1])          // 1–8
-          const flipped = orientation === 'black'
-          // Badge sits at the destination square's top-right *screen* corner. White screen
-          // col=file, row=8-rank; Black screen col=7-file, row=rank-1 (board mirrored on
-          // both axes) — the +1 on the White right-edge case becomes (8-file) for Black.
-          return {
-            left: flipped ? (8 - file) / 8 * 100 : (file + 1) / 8 * 100,
-            top:  flipped ? (rank - 1) / 8 * 100 : (8 - rank) / 8 * 100,
-            src:  `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
-          }
-        })()
+    showBadges && lastMoveTo && classification && classification !== 'Book'
+      ? {
+          ...badgeScreenPosition(lastMoveTo, orientation),
+          src: `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
+        }
       : null
+
+  const resultBadgePos = resultBadge
+    ? {
+        ...badgeScreenPosition(resultBadge.square, orientation),
+        src: resultBadge.correct ? '/marks/correct_128x.png' : '/marks/incorrect_128x.png',
+      }
+    : null
 
   return (
     <div className="w-full h-full relative">
@@ -148,17 +167,34 @@ export function BoardPanel({
           arrows,
           allowDrawingArrows: true,
           clearArrowsOnPositionChange: true,
+          animationDurationInMs: 200,
         }}
       />
       {badge && (
         <div className="absolute inset-0 pointer-events-none">
           <img
+            key={`${badge.src}-${lastMoveTo}`}
             src={badge.src}
             alt={classification}
-            className="absolute w-5 h-5 drop-shadow-lg"
+            className="absolute w-5 h-5 drop-shadow-lg animate-badge-pop-in"
             style={{
               left: `${badge.left}%`,
               top:  `${badge.top}%`,
+              transform: 'translate(-50%, -50%)',
+            }}
+          />
+        </div>
+      )}
+      {resultBadgePos && (
+        <div className="absolute inset-0 pointer-events-none">
+          <img
+            key={`${resultBadgePos.src}-${resultBadge!.square}`}
+            src={resultBadgePos.src}
+            alt={resultBadge!.correct ? 'Correct' : 'Incorrect'}
+            className="absolute w-6 h-6 drop-shadow-lg animate-badge-pop-in"
+            style={{
+              left: `${resultBadgePos.left}%`,
+              top:  `${resultBadgePos.top}%`,
               transform: 'translate(-50%, -50%)',
             }}
           />

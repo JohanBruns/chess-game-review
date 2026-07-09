@@ -16,4 +16,45 @@
   --color-cc-red: #e5533d;
   --color-cc-red-hover: #cf4834;
   --color-cc-orange: #e2903f;
+
+  /* Body text uses the platform's UI font (chess.com-style: no webfont on ordinary text);
+     headings/numbers (Game Rating, Accuracy, section titles) use Montserrat for a bit of
+     visual weight — see the `font-heading` utility below. */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-heading: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.font-heading {
+  font-family: var(--font-heading);
+}
+
+/* Classification badge pop-in (BoardPanel) — a quick scale+fade so a landed badge (best move
+   star, blunder mark, retry correct/incorrect) reads as an event instead of just appearing. */
+@keyframes badge-pop-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.animate-badge-pop-in {
+  animation: badge-pop-in 150ms ease-out;
+}
+
+/* Sidebar chapter switch (setup/summary/review) — a short fade+slide so the view swap reads
+   as a transition rather than an instant content swap. */
+@keyframes chapter-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-chapter-fade-in {
+  animation: chapter-fade-in 150ms ease-out;
+}
+
+/* Accuracy-celebration confetti burst (SummaryView, accuracy >= 90) — small CSS-only piece,
+   no canvas/animation dependency. Each piece's fall distance/rotation/delay is randomized
+   inline per-element; this keyframe just defines the fall+spin+fade arc. */
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120px) rotate(540deg); opacity: 0; }
+}
+.animate-confetti-fall {
+  animation: confetti-fall 900ms ease-in forwards;
 }

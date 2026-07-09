@@ -11,6 +11,9 @@ interface ReviewViewProps {
   // Coach state — mirrors the old ReviewPanel's idle/best/explain sub-modes, now hoisted to
   // the top of the sidebar chapter (chess.com puts the coach above the move list, not below).
   active: boolean
+  // settings.coachEnabled — hides only the coach bubble's content (avatar/text/eval badge);
+  // the Explain/Best/Next button row stays functional either way.
+  coachEnabled: boolean
   headline: string
   // Rich per-move commentary tokens (idle sub-mode only). When present the coach renders these —
   // with hoverable tactical phrases — instead of the plain `headline`.
@@ -57,6 +60,7 @@ const SECONDARY_BTN =
 export function ReviewView({
   onBack,
   active,
+  coachEnabled,
   headline,
   commentary,
   activeHighlight,
@@ -82,7 +86,7 @@ export function ReviewView({
   retry,
 }: ReviewViewProps) {
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden animate-chapter-fade-in">
       <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
         <button
           onClick={onBack}
@@ -91,53 +95,55 @@ export function ReviewView({
         >
           ←
         </button>
-        <h2 className="text-sm font-semibold">Game Review</h2>
+        <h2 className="font-heading text-sm font-semibold">Game Review</h2>
       </div>
 
       <div className="shrink-0 flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        <div className="flex items-start gap-2">
-          <div className="w-9 h-9 shrink-0 rounded-full bg-cc-surface overflow-hidden">
-            <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
-          </div>
-          <div className="flex-1 bg-cc-surface rounded px-3 py-2 flex items-start justify-between gap-2 min-h-9">
-            {active ? (
-              <>
-                <span className="flex items-start gap-1.5 text-cc-text text-xs leading-relaxed min-w-0">
-                  {sub === 'explain' ? (
-                    <span aria-hidden className="shrink-0 mt-px">💡</span>
-                  ) : (
-                    coachClass && (
-                      <img
-                        src={CLASS_ICON[coachClass]}
-                        alt={coachClass}
-                        className="w-4 h-4 shrink-0 mt-px"
+        {coachEnabled && (
+          <div className="flex items-start gap-2">
+            <div className="w-9 h-9 shrink-0 rounded-full bg-cc-surface overflow-hidden">
+              <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 bg-cc-surface rounded px-3 py-2 flex items-start justify-between gap-2 min-h-9">
+              {active ? (
+                <>
+                  <span className="flex items-start gap-1.5 text-cc-text text-xs leading-relaxed min-w-0">
+                    {sub === 'explain' ? (
+                      <span aria-hidden className="shrink-0 mt-px">💡</span>
+                    ) : (
+                      coachClass && (
+                        <img
+                          src={CLASS_ICON[coachClass]}
+                          alt={coachClass}
+                          className="w-4 h-4 shrink-0 mt-px"
+                        />
+                      )
+                    )}
+                    {sub === 'idle' && commentary && commentary.length > 0 ? (
+                      <CoachBubble
+                        tokens={commentary}
+                        activeHighlight={activeHighlight}
+                        onHover={onHoverHighlight}
+                        onPin={onPinHighlight}
                       />
-                    )
-                  )}
-                  {sub === 'idle' && commentary && commentary.length > 0 ? (
-                    <CoachBubble
-                      tokens={commentary}
-                      activeHighlight={activeHighlight}
-                      onHover={onHoverHighlight}
-                      onPin={onPinHighlight}
-                    />
-                  ) : (
-                    <span>{headline}</span>
-                  )}
-                </span>
-                {evalBadge && (
-                  <span className="shrink-0 font-mono text-xs font-semibold text-cc-text-dim mt-px">
-                    {evalBadge}
+                    ) : (
+                      <span>{headline}</span>
+                    )}
                   </span>
-                )}
-              </>
-            ) : (
-              <span className="text-cc-text-faint text-xs italic">
-                Step through your moves with Next.
-              </span>
-            )}
+                  {evalBadge && (
+                    <span className="shrink-0 font-mono text-xs font-semibold text-cc-text-dim mt-px">
+                      {evalBadge}
+                    </span>
+                  )}
+                </>
+              ) : (
+                <span className="text-cc-text-faint text-xs italic">
+                  Step through your moves with Next.
+                </span>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {active && sub === 'idle' && (
           <div className="flex gap-2">
