@@ -670,7 +670,9 @@ function App() {
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
             Capped by min() against viewport width so a narrow-but-tall window can't force
-            the board wider than the screen and crush the sidebar (min 320px for it). ── */}
+            the board wider than the screen and crush the sidebar (reserves the sidebar's
+            fixed 400px, or 320px on narrow windows where the sidebar itself shrinks — see
+            the sidebar's own min-width below). ── */}
         <div
           className="shrink-0 flex flex-col p-3 gap-2"
           style={{ width: 'min(calc(100vh - 64px), calc(100vw - 320px))' }}
@@ -720,8 +722,11 @@ function App() {
         {/* ── Right: Sidebar — three mutually-exclusive chapters that replace each other:
             'setup' (pre-analysis: opening badge, Analyze button, move list for navigation),
             'summary' (chess.com's post-analysis Game Review card), and 'review' (the guided
-            walkthrough). See sidebarView. ── */}
-        <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-y-auto">
+            walkthrough). See sidebarView. Fixed width (chess.com's sidebar is a constant
+            ~400px, never flex-filling the viewport) — shrinks down to 320px before the board
+            column (which reserves at least that much, see its width formula above) gives up
+            any more room. ── */}
+        <div className="w-[400px] min-w-[320px] shrink border-l border-cc-border flex flex-col overflow-y-auto">
           {playout.active ? (
             <PlayoutPanel
               userColor={playout.userColor}
