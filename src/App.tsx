@@ -16,16 +16,21 @@ import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } fro
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
 import { buildCommentary } from './lib/analysis/commentary'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
+import { extractPuzzles } from './lib/analysis/puzzles'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { ReviewView } from './components/ReviewView'
 import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
+import { PlayoutPanel } from './components/PlayoutPanel'
+import { PuzzlePanel } from './components/PuzzlePanel'
 import { ThemePicker } from './components/ThemePicker'
 import { SettingsMenu } from './components/SettingsMenu'
 import { useTheme } from './hooks/useTheme'
 import { useSettings } from './hooks/useSettings'
+import { usePlayout } from './hooks/usePlayout'
+import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
@@ -74,7 +79,14 @@ function App() {
     error: engineError,
     analyzeGame,
     clearAnalysis,
+    requestPlayMove,
   } = useEngine()
+
+  // Phase 8 — "Practice from here" (play the current position out vs. Stockfish) and "Puzzles"
+  // (drill your own mistakes). Both take over the board and sidebar while active; see the board
+  // view overrides and sidebar branch below.
+  const playout = usePlayout(requestPlayMove)
+  const puzzles = usePuzzles()
 
   const openingResult = useMemo(
     () => (fens.length > 0 ? detectOpening(fens) : null),
@@ -90,6 +102,13 @@ function App() {
   const keyMoments = useMemo(
     () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),
     [moveAnalyses],
+  )
+
+  // Phase 8: puzzles drilled from this game's Mistake/Miss/Blunder plies that have a unique best
+  // reply. Drives the "Puzzles (n)" button in the summary and the puzzle session.
+  const puzzleList = useMemo(
+    () => (moveAnalyses ? extractPuzzles(moves, fens, evalResults, moveAnalyses) : []),
+    [moveAnalyses, moves, fens, evalResults],
   )
 
   // Persisted app settings (gear menu) + the menu's open state.
@@ -468,6 +487,28 @@ function App() {
     setSidebarView('summary')
   }, [])
 
+  // Phase 8 entry points. Both clear any in-progress retry so the board is free to be taken over.
+  const handleStartPractice = useCallback(() => {
+    setRetryMoveIndex(null)
+    setTrialFen(null)
+    setAttemptResult(null)
+    setReviewSub('idle')
+    playout.start(currentFen)
+  }, [playout, currentFen])
+  const handleStartPuzzles = useCallback(() => {
+    setRetryMoveIndex(null)
+    setTrialFen(null)
+    setAttemptResult(null)
+    puzzles.start(puzzleList)
+  }, [puzzles, puzzleList])
+
+  // Best-move preview for a revealed puzzle solution (position after bestSan + its arrow).
+  const currentPuzzle = puzzles.current
+  const puzzleBestPreview = useMemo(
+    () => (currentPuzzle ? buildBestPreview(currentPuzzle.fenBefore, currentPuzzle.bestSan) : null),
+    [currentPuzzle],
+  )
+
   // Autoplay (settings.autoplay): steps "Next" on a timer while idling in the guided Review
   // chapter. Re-armed on every currentPly change (auto or manual), which both keeps a steady
   // cadence and means a manual nav click pushes the next auto-step back a full interval instead
@@ -501,6 +542,9 @@ function App() {
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement) return
+      // Practice / puzzle modes own the board — main-line keyboard nav is disabled so the arrow
+      // keys don't desync useGame's ply from the position shown during a practice game.
+      if (playout.active || puzzles.active) return
       // In the guided "explain" walk, arrows step through the engine line (same as the
       // ReviewPanel ◀/▶ buttons) instead of navigating the main line — they only move
       // explainStep, so the ply-change reset below (which drops us out of explain on any
@@ -523,7 +567,7 @@ function App() {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, sidebarView, canGoNext, handleLinePrev, handleLineNext, handleGotIt])
+  }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, sidebarView, canGoNext, handleLinePrev, handleLineNext, handleGotIt, playout.active, puzzles.active])
 
   // Board view for the current retry/review sub-mode. Defaults to the plain "current
   // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
@@ -555,6 +599,47 @@ function App() {
     viewTo = step.to
     viewArrow = undefined
     viewEval = evalResults[currentPly - 1] ?? result
+  }
+
+  // Board controls (interactivity, drop handler, ✓/✗ badge) — default to the retry-at-key-moments
+  // wiring, overridden below by the Phase 8 practice/puzzle takeovers.
+  let boardInteractive = retryMoveIndex !== null && trialFen === null
+  let boardOnDrop: ((from: string, to: string) => boolean) | undefined = handleTrialDrop
+  let boardResultBadge: { square: string; correct: boolean } | undefined =
+    retryMoveIndex !== null && attemptResult && attemptResult.isCorrect !== null
+      ? { square: attemptResult.to, correct: attemptResult.isCorrect }
+      : undefined
+  // Coach/threat/engine-line overlays are review-chapter features — suppress them while a
+  // practice/puzzle game owns the board (both branches set these to undefined).
+  let boardExtraArrows = extraArrows
+  let boardExtraSquares = extraSquareHighlights
+
+  if (playout.active && playout.fen) {
+    viewFen = playout.fen
+    viewFrom = playout.lastMove?.from
+    viewTo = playout.lastMove?.to
+    viewClass = undefined
+    viewArrow = undefined
+    viewEval = result ?? viewEval // live eval from the play-out search
+    boardInteractive = playout.isUserTurn
+    boardOnDrop = playout.applyUserMove
+    boardResultBadge = undefined
+    boardExtraArrows = undefined
+    boardExtraSquares = undefined
+  } else if (puzzles.active && puzzles.current) {
+    const attempt = puzzles.attempt
+    const showBest = puzzles.revealed && puzzleBestPreview
+    viewFen = attempt?.fen ?? (showBest ? puzzleBestPreview!.fen : puzzles.current.fenBefore)
+    viewClass = undefined
+    viewFrom = showBest ? puzzleBestPreview!.from : undefined
+    viewTo = showBest ? puzzleBestPreview!.to : undefined
+    viewArrow = showBest ? { from: puzzleBestPreview!.from, to: puzzleBestPreview!.to } : undefined
+    viewEval = evalResults[puzzles.current.moveIndex] ?? null
+    boardInteractive = attempt === null && !puzzles.revealed
+    boardOnDrop = puzzles.tryMove
+    boardResultBadge = attempt ? { square: attempt.to, correct: attempt.correct } : undefined
+    boardExtraArrows = undefined
+    boardExtraSquares = undefined
   }
 
   return (
@@ -602,17 +687,13 @@ function App() {
                 lastMoveTo={viewTo}
                 classification={viewClass}
                 bestMoveArrow={viewArrow}
-                extraArrows={extraArrows}
-                extraSquareHighlights={extraSquareHighlights}
+                extraArrows={boardExtraArrows}
+                extraSquareHighlights={boardExtraSquares}
                 showBadges={settings.showBoardBadges}
-                resultBadge={
-                  retryMoveIndex !== null && attemptResult && attemptResult.isCorrect !== null
-                    ? { square: attemptResult.to, correct: attemptResult.isCorrect }
-                    : undefined
-                }
+                resultBadge={boardResultBadge}
                 orientation={orientation}
-                interactive={retryMoveIndex !== null && trialFen === null}
-                onPieceDrop={handleTrialDrop}
+                interactive={boardInteractive}
+                onPieceDrop={boardOnDrop}
                 piecesBasePath={pieceTheme.basePath}
                 boardImageUrl={boardTheme.url}
               />
@@ -632,6 +713,7 @@ function App() {
             canGoPrev={canGoPrev}
             canGoNext={canGoNext}
             isLoaded={isLoaded}
+            takeover={playout.active || puzzles.active}
           />
         </div>
 
@@ -640,7 +722,33 @@ function App() {
             'summary' (chess.com's post-analysis Game Review card), and 'review' (the guided
             walkthrough). See sidebarView. ── */}
         <div className="flex-1 min-w-0 border-l border-cc-border flex flex-col overflow-y-auto">
-          {sidebarView === 'summary' && evalResults.length > 0 && engineError == null ? (
+          {playout.active ? (
+            <PlayoutPanel
+              userColor={playout.userColor}
+              isUserTurn={playout.isUserTurn}
+              engineThinking={playout.engineThinking}
+              gameOver={playout.gameOver}
+              resultText={playout.resultText}
+              moveCount={playout.moveCount}
+              onExit={playout.exit}
+            />
+          ) : puzzles.active ? (
+            <PuzzlePanel
+              index={puzzles.index}
+              total={puzzles.total}
+              solvedCount={puzzles.solvedCount}
+              finished={puzzles.finished}
+              sideToMove={puzzles.current ? (puzzles.current.fenBefore.split(' ')[1] as 'w' | 'b') : null}
+              classification={puzzles.current?.classification ?? null}
+              attempt={puzzles.attempt}
+              revealed={puzzles.revealed}
+              bestSan={puzzles.current?.bestSan ?? null}
+              onTryAgain={puzzles.retry}
+              onReveal={puzzles.reveal}
+              onNext={puzzles.next}
+              onExit={puzzles.exit}
+            />
+          ) : sidebarView === 'summary' && evalResults.length > 0 && engineError == null ? (
             <SummaryView
               whiteName={whiteName ?? 'White'}
               blackName={blackName ?? 'Black'}
@@ -653,10 +761,14 @@ function App() {
               currentPly={currentPly}
               onSelectPly={goToPly}
               onStartReview={handleStartReview}
+              puzzleCount={puzzleList.length}
+              onStartPuzzles={handleStartPuzzles}
             />
           ) : sidebarView === 'review' && evalResults.length > 0 && engineError == null ? (
             <ReviewView
               onBack={handleBackToSummary}
+              onPractice={handleStartPractice}
+              canPractice={isReady && currentPly > 0}
               active={reviewActive}
               coachEnabled={settings.coachEnabled}
               headline={reviewHeadlineText}

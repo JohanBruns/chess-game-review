@@ -7,6 +7,10 @@ import { CoachBubble } from './CoachBubble'
 
 interface ReviewViewProps {
   onBack: () => void
+  // Phase 8: "Practice" hands the current position to the play-out-vs-engine mode. Disabled until
+  // the engine is ready and there's a real position to play (currentPly > 0).
+  onPractice: () => void
+  canPractice: boolean
 
   // Coach state — mirrors the old ReviewPanel's idle/best/explain sub-modes, now hoisted to
   // the top of the sidebar chapter (chess.com puts the coach above the move list, not below).
@@ -59,6 +63,8 @@ const SECONDARY_BTN =
 // This view REPLACES the setup/summary sidebar contents — see sidebarView in App.tsx.
 export function ReviewView({
   onBack,
+  onPractice,
+  canPractice,
   active,
   coachEnabled,
   headline,
@@ -159,6 +165,12 @@ export function ReviewView({
               Next
             </button>
           </div>
+        )}
+
+        {active && sub === 'idle' && canPractice && (
+          <button onClick={onPractice} className={`${SECONDARY_BTN} w-full`}>
+            Practice from here
+          </button>
         )}
 
         {active && sub === 'best' && (

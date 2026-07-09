@@ -28,6 +28,10 @@ interface SummaryViewProps {
   currentPly: number
   onSelectPly: (ply: number) => void
   onStartReview: () => void
+  // Phase 8: number of drillable mistakes in this game, and the handler to start the puzzle flow.
+  // The "Puzzles (n)" button is hidden when there are none.
+  puzzleCount: number
+  onStartPuzzles: () => void
 }
 
 // Sidebar "chapter 1" — chess.com's post-analysis Game Review summary. Structure verified
@@ -49,6 +53,8 @@ export function SummaryView({
   currentPly,
   onSelectPly,
   onStartReview,
+  puzzleCount,
+  onStartPuzzles,
 }: SummaryViewProps) {
   const [tableExpanded, setTableExpanded] = useState(true)
   const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
@@ -143,13 +149,21 @@ export function SummaryView({
 
       <div className="flex-1 min-h-4" />
 
-      <div className="shrink-0 p-2">
+      <div className="shrink-0 p-2 flex flex-col gap-2">
         <button
           onClick={onStartReview}
           className="w-full px-3 py-2.5 rounded bg-cc-green hover:bg-cc-green-hover text-white text-sm font-semibold transition-colors"
         >
           Start Review
         </button>
+        {puzzleCount > 0 && (
+          <button
+            onClick={onStartPuzzles}
+            className="w-full px-3 py-2 rounded bg-cc-surface hover:bg-cc-surface-hover text-cc-text text-sm font-semibold transition-colors"
+          >
+            Puzzles ({puzzleCount})
+          </button>
+        )}
       </div>
     </div>
   )

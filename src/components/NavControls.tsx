@@ -13,6 +13,10 @@ interface NavControlsProps {
   canGoPrev: boolean
   canGoNext: boolean
   isLoaded: boolean
+  // Phase 8: a practice/puzzle game owns the board — disable move navigation and share/export
+  // (which act on the underlying game position, not the practice board) so they can't silently
+  // desync the review ply. Flip/theme/settings stay usable.
+  takeover?: boolean
 }
 
 export function NavControls({
@@ -29,6 +33,7 @@ export function NavControls({
   canGoPrev,
   canGoNext,
   isLoaded,
+  takeover = false,
 }: NavControlsProps) {
   const base =
     'px-3 py-1.5 rounded font-mono text-sm bg-cc-surface hover:bg-cc-surface-hover text-cc-text disabled:opacity-30 disabled:cursor-not-allowed'
@@ -38,7 +43,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onFirst}
-        disabled={!isLoaded || !canGoPrev}
+        disabled={!isLoaded || !canGoPrev || takeover}
         title="First Move (Home)"
       >
         ⏮
@@ -46,7 +51,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onPrev}
-        disabled={!isLoaded || !canGoPrev}
+        disabled={!isLoaded || !canGoPrev || takeover}
         title="Previous Move (←)"
       >
         ◀
@@ -54,7 +59,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onNext}
-        disabled={!isLoaded || !canGoNext}
+        disabled={!isLoaded || !canGoNext || takeover}
         title="Next Move (→)"
       >
         ▶
@@ -62,7 +67,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onLast}
-        disabled={!isLoaded || !canGoNext}
+        disabled={!isLoaded || !canGoNext || takeover}
         title="Last Move (End)"
       >
         ⏭
@@ -92,7 +97,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onCopyLink}
-        disabled={!isLoaded}
+        disabled={!isLoaded || takeover}
         title={linkCopied ? 'Copied!' : 'Copy analysis link'}
       >
         {linkCopied ? '✓' : '🔗'}
@@ -100,7 +105,7 @@ export function NavControls({
       <button
         className={base}
         onClick={onExportImage}
-        disabled={!isLoaded}
+        disabled={!isLoaded || takeover}
         title="Export board image"
       >
         📷
