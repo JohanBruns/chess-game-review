@@ -1,4 +1,6 @@
 import type { EvalResult } from '../lib/engine/useEngine'
+import type { EngineLine } from '../lib/analysis/lines'
+import { EngineLines } from './EngineLines'
 
 interface EvalPanelProps {
   isReady: boolean
@@ -11,6 +13,10 @@ interface EvalPanelProps {
   // Analyze button greyed out after its one allowed click (resets on loading a new game).
   hasAnalysis: boolean
   onAnalyzeGame: () => void
+  // Candidate moves for the current position (settings.showEngineLines) — empty when the
+  // setting is off or no analysis is available yet for this ply.
+  engineLines?: EngineLine[]
+  onHoverEngineLine?: (san: string | null) => void
 }
 
 function formatEval(result: EvalResult): string {
@@ -35,6 +41,8 @@ export function EvalPanel({
   isGameLoaded,
   hasAnalysis,
   onAnalyzeGame,
+  engineLines = [],
+  onHoverEngineLine,
 }: EvalPanelProps) {
   const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing || hasAnalysis
 
@@ -79,6 +87,8 @@ export function EvalPanel({
       )}
 
       {error && <p className="text-cc-red text-xs px-1">{error}</p>}
+
+      {onHoverEngineLine && <EngineLines lines={engineLines} onHoverLine={onHoverEngineLine} />}
     </div>
   )
 }

@@ -48,20 +48,31 @@ export function RetryPanel({
       )}
 
       <div className="flex gap-2">
-        {attempt !== null && (
+        {attempt !== null && attempt.isCorrect === true ? (
           <button
-            onClick={onRetryAgain}
-            className="px-3 py-1 rounded bg-cc-green text-white text-xs hover:bg-cc-green-hover transition-colors"
+            onClick={onExit}
+            className="px-3 py-1 rounded bg-cc-green text-white text-xs font-semibold hover:bg-cc-green-hover transition-colors"
           >
-            Try Again
+            Continue
           </button>
+        ) : (
+          <>
+            {attempt !== null && (
+              <button
+                onClick={onRetryAgain}
+                className="px-3 py-1 rounded bg-cc-green text-white text-xs hover:bg-cc-green-hover transition-colors"
+              >
+                Try Again
+              </button>
+            )}
+            <button
+              onClick={onExit}
+              className="px-3 py-1 rounded bg-cc-surface text-cc-text-dim text-xs hover:bg-cc-surface-hover transition-colors"
+            >
+              Exit Retry
+            </button>
+          </>
         )}
-        <button
-          onClick={onExit}
-          className="px-3 py-1 rounded bg-cc-surface text-cc-text-dim text-xs hover:bg-cc-surface-hover transition-colors"
-        >
-          Exit Retry
-        </button>
       </div>
     </div>
   )

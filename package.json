@@ -26,6 +26,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@fontsource/montserrat": "^5.2.8",
     "@tailwindcss/vite": "^4.3.1",
     "chess.js": "^1.4.0",
     "react": "^19.2.7",

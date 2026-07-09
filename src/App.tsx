@@ -10,7 +10,8 @@ import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
 import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
-import { getBestMoveArrow } from './lib/analysis/arrows'
+import { getBestMoveArrow, getThreatArrow } from './lib/analysis/arrows'
+import { getEngineLines } from './lib/analysis/lines'
 import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
 import { buildCommentary } from './lib/analysis/commentary'
@@ -22,12 +23,23 @@ import { ReviewView } from './components/ReviewView'
 import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
 import { ThemePicker } from './components/ThemePicker'
+import { SettingsMenu } from './components/SettingsMenu'
 import { useTheme } from './hooks/useTheme'
+import { useSettings } from './hooks/useSettings'
+import { exportBoardImage, downloadBlob } from './lib/boardImage'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
 // arrow so both can show at once. Square tint is translucent so the piece stays legible.
 const THEME_ARROW_COLOR = '#e2903f'
 const THEME_SQUARE_COLOR = 'rgba(226, 144, 63, 0.45)'
+// Threat arrow (settings.showThreatArrow) — matches --color-cc-red so it reads as a warning,
+// distinct from the green best-move arrow and the orange coach-theme arrows.
+const THREAT_ARROW_COLOR = '#e5533d'
+// Engine-lines hover candidate arrow (settings.showEngineLines) — a third, neutral color so it
+// never gets confused with the best-move or threat arrows when several show at once.
+const CANDIDATE_ARROW_COLOR = '#4f9fe8'
+// How often "Next" auto-advances while settings.autoplay is on, in the guided Review chapter.
+const AUTOPLAY_INTERVAL_MS = 1500
 
 function App() {
   const {
@@ -49,6 +61,8 @@ function App() {
     goToNext,
     goToLast,
     goToPly,
+    pgn,
+    moveTimeSeconds,
   } = useGame()
 
   const {
@@ -77,6 +91,19 @@ function App() {
     () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),
     [moveAnalyses],
   )
+
+  // Persisted app settings (gear menu) + the menu's open state.
+  const { settings, updateSettings } = useSettings()
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // reviewAs filters which side's ⚡ retry markers show in the move list — 'both' (default)
+  // shows every key moment, 'white'/'black' only that side's (moveIndex parity: even = White,
+  // matching classify.ts's playerAccuracy split).
+  const visibleKeyMoments = useMemo(() => {
+    if (settings.reviewAs === 'both') return keyMoments
+    const wantWhite = settings.reviewAs === 'white'
+    return new Set([...keyMoments].filter(idx => (idx % 2 === 0) === wantWhite))
+  }, [keyMoments, settings.reviewAs])
 
   const whiteSummary = useMemo(
     () => buildGameSummary(moveAnalyses ?? [], 'white', blackElo),
@@ -109,6 +136,14 @@ function App() {
   const [pinnedHighlight, setPinnedHighlight] = useState<ThemeHighlight | null>(null)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
+  // reviewAs also sets the default board orientation ('both' behaves like 'white'). Adjusted
+  // during render (the same "reset on prop change" pattern as the prevPly block below) rather
+  // than an effect, so a settings change never leaves a stale-orientation frame on screen.
+  const [prevReviewAs, setPrevReviewAs] = useState(settings.reviewAs)
+  if (prevReviewAs !== settings.reviewAs) {
+    setPrevReviewAs(settings.reviewAs)
+    setOrientation(settings.reviewAs === 'black' ? 'black' : 'white')
+  }
 
   // Board & piece appearance (persisted in localStorage) + the picker modal's open state.
   const { boardTheme, pieceTheme, setBoardId, setPieceId } = useTheme()
@@ -120,7 +155,11 @@ function App() {
   // are never mutated by a retry attempt.
   const [retryMoveIndex, setRetryMoveIndex] = useState<number | null>(null)
   const [trialFen, setTrialFen] = useState<string | null>(null)
-  const [attemptResult, setAttemptResult] = useState<{ san: string; isCorrect: boolean | null } | null>(null)
+  const [attemptResult, setAttemptResult] = useState<{ san: string; to: string; isCorrect: boolean | null } | null>(null)
+
+  // Engine-lines hover (settings.showEngineLines): which candidate SAN is currently hovered in
+  // the EngineLines panel, drawn as a board arrow via engineLineArrow below.
+  const [hoveredLineSan, setHoveredLineSan] = useState<string | null>(null)
 
   // Reset transient review/retry state whenever navigation moves to a different ply. Done in
   // render (React's "adjust state on change" pattern) rather than an effect, so children never
@@ -133,6 +172,8 @@ function App() {
     // A different move is now selected — its themes differ, so drop any hovered/pinned highlight.
     setHoveredHighlight(null)
     setPinnedHighlight(null)
+    // The candidate moves shown by EngineLines are specific to the previous ply too.
+    setHoveredLineSan(null)
     // Don't clear retry state when the ply change IS the retry entry itself (handleRetry sets
     // retryMoveIndex and calls goToPly in the same batch, so they land together here). Any other
     // navigation (Prev/Next/jump) changes currentPly without retryMoveIndex following it, which
@@ -147,11 +188,11 @@ function App() {
   // Green suggestion arrow — shown automatically (chess.com-style) whenever the played move
   // differs from the engine's best move. Only meaningful in the idle sub-mode.
   const bestMoveArrow = useMemo(() => {
-    if (currentPly === 0) return undefined
+    if (!settings.showBestMoveArrow || currentPly === 0) return undefined
     const bestMoveSan = evalResults[currentPly - 1]?.bestMoveSan
     if (!bestMoveSan || bestMoveSan === moves[currentPly - 1].san) return undefined
     return getBestMoveArrow(fens[currentPly - 1], bestMoveSan) ?? undefined
-  }, [currentPly, evalResults, moves, fens])
+  }, [settings.showBestMoveArrow, currentPly, evalResults, moves, fens])
 
   // Retry-at-key-moments: reveals the engine's best move once an attempt has been made,
   // reusing getBestMoveArrow exactly as the normal-mode bestMoveArrow above does.
@@ -175,7 +216,7 @@ function App() {
     if (!result) return false
     const bestSan = evalResults[retryMoveIndex]?.bestMoveSan ?? null
     setTrialFen(result.fenAfter)
-    setAttemptResult({ san: result.san, isCorrect: isBestMove(result.san, bestSan) })
+    setAttemptResult({ san: result.san, to, isCorrect: isBestMove(result.san, bestSan) })
     return true
   }, [retryMoveIndex, currentFen, evalResults])
 
@@ -198,9 +239,10 @@ function App() {
     moveAudioRef.current = new Audio('/sounds/move-self.mp3')
   }, [])
   const playMoveSound = useCallback((captured: boolean) => {
+    if (!settings.soundEnabled) return
     const audio = captured ? captureAudioRef.current : moveAudioRef.current
     if (audio) { audio.currentTime = 0; audio.play().catch(() => {}) }
-  }, [])
+  }, [settings.soundEnabled])
   const soundPlyRef = useRef(currentPly)
   useEffect(() => {
     const prev = soundPlyRef.current
@@ -308,16 +350,49 @@ function App() {
     (h: ThemeHighlight) => setPinnedHighlight(prev => (prev === h ? null : h)),
     [],
   )
+
+  // Threat arrow (settings.showThreatArrow) — the engine's best reply from the position that
+  // resulted after the played move, i.e. the standing threat. Like the theme highlights, only
+  // meaningful while the board shows the real current position (reviewSub 'idle') — the
+  // best/explain sub-modes preview a different fen and would otherwise get a misaligned arrow.
+  const threatArrow = useMemo(() => {
+    if (!settings.showThreatArrow || reviewSub !== 'idle' || currentPly === 0) return undefined
+    const bestSan = evalResults[currentPly]?.bestMoveSan
+    if (!bestSan) return undefined
+    const arrow = getThreatArrow(currentFen, bestSan)
+    return arrow ? { from: arrow.from, to: arrow.to, color: THREAT_ARROW_COLOR } : undefined
+  }, [settings.showThreatArrow, reviewSub, currentPly, evalResults, currentFen])
+
+  // EngineLines hover (settings.showEngineLines) — same "only while showing the real position"
+  // constraint as threatArrow above.
+  const engineLineArrow = useMemo(() => {
+    if (!settings.showEngineLines || reviewSub !== 'idle' || hoveredLineSan == null) return undefined
+    const arrow = getBestMoveArrow(currentFen, hoveredLineSan)
+    return arrow ? { from: arrow.from, to: arrow.to, color: CANDIDATE_ARROW_COLOR } : undefined
+  }, [settings.showEngineLines, reviewSub, hoveredLineSan, currentFen])
+
   const extraArrows = useMemo(() => {
-    if (!showThemeHighlight || !activeHighlight) return undefined
-    return activeHighlight.arrows.map(a => ({ from: a.from, to: a.to, color: THEME_ARROW_COLOR }))
-  }, [showThemeHighlight, activeHighlight])
+    const arrows: { from: string; to: string; color: string }[] = []
+    if (showThemeHighlight && activeHighlight) {
+      for (const a of activeHighlight.arrows) arrows.push({ from: a.from, to: a.to, color: THEME_ARROW_COLOR })
+    }
+    if (threatArrow) arrows.push(threatArrow)
+    if (engineLineArrow) arrows.push(engineLineArrow)
+    return arrows.length > 0 ? arrows : undefined
+  }, [showThemeHighlight, activeHighlight, threatArrow, engineLineArrow])
   const extraSquareHighlights = useMemo(() => {
     if (!showThemeHighlight || !activeHighlight || activeHighlight.squares.length === 0) return undefined
     const map: Record<string, string> = {}
     for (const sq of activeHighlight.squares) map[sq] = THEME_SQUARE_COLOR
     return map
   }, [showThemeHighlight, activeHighlight])
+
+  // Engine's candidate moves for the current position (settings.showEngineLines) — feeds
+  // EvalPanel's EngineLines panel in the 'setup' chapter.
+  const currentEngineLines = useMemo(() => {
+    if (!settings.showEngineLines) return []
+    return getEngineLines(evalResults[currentPly] ?? result)
+  }, [settings.showEngineLines, evalResults, currentPly, result])
 
   const handleExplain = useCallback(() => {
     setReviewSub('explain')
@@ -345,15 +420,38 @@ function App() {
   }, [])
 
   const handleAnalyzeGame = useCallback(
-    () => analyzeGame(fens),
-    [analyzeGame, fens],
+    () => analyzeGame(fens, settings.depth),
+    [analyzeGame, fens, settings.depth],
   )
 
-  const handleLoadPgn = useCallback((pgn: string) => {
+  const handleLoadPgn = useCallback((newPgn: string) => {
     clearAnalysis()
-    loadPgn(pgn)
+    loadPgn(newPgn)
     setSidebarView('setup')
   }, [clearAnalysis, loadPgn])
+
+  // Share/Export (Phase 7). "Copied!" is a brief self-clearing confirmation, same idea as the
+  // retry feedback elsewhere — no toast library for one string.
+  const [linkCopied, setLinkCopied] = useState(false)
+  const handleCopyLink = useCallback(() => {
+    if (!pgn) return
+    const url = `${window.location.origin}${window.location.pathname}?pgn=${encodeURIComponent(pgn)}`
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 1500)
+    }).catch(() => {})
+  }, [pgn])
+
+  const handleExportImage = useCallback(() => {
+    exportBoardImage({
+      fen: currentFen,
+      boardImageUrl: boardTheme.url,
+      piecesBasePath: pieceTheme.basePath,
+      orientation,
+    }).then(blob => {
+      if (blob) downloadBlob(blob, 'game-review-position.png')
+    }).catch(() => {})
+  }, [currentFen, boardTheme.url, pieceTheme.basePath, orientation])
 
   // Start Review = chess.com's guided walkthrough. It jumps to the first move (ply 1) so the
   // coach starts commenting from move 1, exactly like chess.com (reference Screenshot_21 opens
@@ -369,6 +467,16 @@ function App() {
     setExplainStep(0)
     setSidebarView('summary')
   }, [])
+
+  // Autoplay (settings.autoplay): steps "Next" on a timer while idling in the guided Review
+  // chapter. Re-armed on every currentPly change (auto or manual), which both keeps a steady
+  // cadence and means a manual nav click pushes the next auto-step back a full interval instead
+  // of firing immediately after it.
+  useEffect(() => {
+    if (!settings.autoplay || sidebarView !== 'review' || reviewSub !== 'idle' || !canGoNext) return
+    const id = setTimeout(() => goToNext(), AUTOPLAY_INTERVAL_MS)
+    return () => clearTimeout(id)
+  }, [settings.autoplay, sidebarView, reviewSub, canGoNext, goToNext, currentPly])
 
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
@@ -467,6 +575,13 @@ function App() {
         onSelectPiece={setPieceId}
       />
 
+      <SettingsMenu
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onChange={updateSettings}
+      />
+
       <div className="flex flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
             Capped by min() against viewport width so a narrow-but-tall window can't force
@@ -489,6 +604,12 @@ function App() {
                 bestMoveArrow={viewArrow}
                 extraArrows={extraArrows}
                 extraSquareHighlights={extraSquareHighlights}
+                showBadges={settings.showBoardBadges}
+                resultBadge={
+                  retryMoveIndex !== null && attemptResult && attemptResult.isCorrect !== null
+                    ? { square: attemptResult.to, correct: attemptResult.isCorrect }
+                    : undefined
+                }
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}
@@ -504,6 +625,10 @@ function App() {
             onLast={goToLast}
             onFlip={handleFlip}
             onOpenThemes={() => setThemeOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onCopyLink={handleCopyLink}
+            onExportImage={handleExportImage}
+            linkCopied={linkCopied}
             canGoPrev={canGoPrev}
             canGoNext={canGoNext}
             isLoaded={isLoaded}
@@ -533,6 +658,7 @@ function App() {
             <ReviewView
               onBack={handleBackToSummary}
               active={reviewActive}
+              coachEnabled={settings.coachEnabled}
               headline={reviewHeadlineText}
               commentary={reviewSub === 'idle' ? commentary : null}
               activeHighlight={activeHighlight}
@@ -559,7 +685,8 @@ function App() {
                   currentPly={currentPly}
                   onSelectPly={goToPly}
                   moveAnalyses={moveAnalyses}
-                  keyMoments={keyMoments}
+                  keyMoments={visibleKeyMoments}
+                  moveTimeSeconds={moveTimeSeconds}
                   onRetry={handleRetry}
                 />
               }
@@ -586,7 +713,7 @@ function App() {
               }
             />
           ) : (
-            <>
+            <div className="flex flex-col flex-1 min-h-0 animate-chapter-fade-in">
               <OpeningBadge opening={openingResult?.opening ?? null} />
               <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
                 <EvalPanel
@@ -598,6 +725,8 @@ function App() {
                   isGameLoaded={isLoaded}
                   hasAnalysis={evalResults.length > 0 && engineError == null}
                   onAnalyzeGame={handleAnalyzeGame}
+                  engineLines={currentEngineLines}
+                  onHoverEngineLine={settings.showEngineLines ? setHoveredLineSan : undefined}
                 />
               </div>
               <MoveList
@@ -605,10 +734,11 @@ function App() {
                 currentPly={currentPly}
                 onSelectPly={goToPly}
                 moveAnalyses={moveAnalyses}
-                keyMoments={keyMoments}
+                keyMoments={visibleKeyMoments}
+                moveTimeSeconds={moveTimeSeconds}
                 onRetry={handleRetry}
               />
-            </>
+            </div>
           )}
         </div>
       </div>

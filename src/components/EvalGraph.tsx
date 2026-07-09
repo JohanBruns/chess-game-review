@@ -118,14 +118,21 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
           <ReferenceLine y={0} stroke="#5b5854" strokeWidth={1} />
           <ReferenceLine x={currentPly} stroke="#81b64c" strokeWidth={2} />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6b6864', strokeWidth: 1 }} />
+          <defs>
+            {/* Subtle vertical fade on White's territory — solid near the eval curve, softening
+                towards the bottom edge, instead of one flat fill opacity. */}
+            <linearGradient id="evalAreaFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#e9e9e8" stopOpacity={0.95} />
+              <stop offset="100%" stopColor="#e9e9e8" stopOpacity={0.75} />
+            </linearGradient>
+          </defs>
           <Area
             type="monotone"
             dataKey="cp"
             baseValue={-EVAL_CLAMP}
             stroke="#c9c9c6"
             strokeWidth={1.25}
-            fill="#e9e9e8"
-            fillOpacity={0.95}
+            fill="url(#evalAreaFill)"
             dot={false}
             connectNulls={false}
             isAnimationActive={false}
