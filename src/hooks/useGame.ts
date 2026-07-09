@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Chess, type Move } from 'chess.js'
-import { parseClocks, parseTimeControl, moveTimes as computeMoveTimes } from '../lib/analysis/clocks'
+import { parseClocks, parseTimeControl, moveTimes as computeMoveTimes, type TimeControl } from '../lib/analysis/clocks'
 
 const DEFAULT_POSITION = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -20,6 +20,11 @@ interface GameData {
   // Per-ply time spent (seconds), same indexing as moves/fens[1..]; null where unknown
   // (no %clk data, or no TimeControl header to seed the first move of a side).
   moveTimeSeconds: (number | null)[]
+  // Raw per-ply %clk readings (see parseClocks) — PlayerBar derives each side's "current"
+  // clock from this + currentPly via remainingClockSeconds, rather than a running countdown
+  // (chess.com's Game Review shows a static reading, not a live ticking clock).
+  clocks: (number | null)[]
+  timeControl: TimeControl | null
 }
 
 const INITIAL_GAME: GameData = {
@@ -28,6 +33,8 @@ const INITIAL_GAME: GameData = {
   error: null,
   isLoaded: false,
   moveTimeSeconds: [],
+  clocks: [],
+  timeControl: null,
 }
 
 // PGN Elo tags are strings and chess.com uses "?" (or occasionally "0") for unrated/unknown
@@ -82,7 +89,7 @@ export function useGame() {
       const moveTimeSeconds = computeMoveTimes(clocks, timeControl)
       setGame({
         fens, moves, error: null, isLoaded: true, whiteElo, blackElo, whiteName, blackName, result,
-        pgn, moveTimeSeconds,
+        pgn, moveTimeSeconds, clocks, timeControl,
       })
       // A new game replaces currentPly synchronously — drop any not-yet-flushed navigation
       // intent from the previous game so it can't overwrite this reset on the next frame.
@@ -139,6 +146,8 @@ export function useGame() {
     result: game.result,
     pgn: game.pgn,
     moveTimeSeconds: game.moveTimeSeconds,
+    clocks: game.clocks,
+    timeControl: game.timeControl,
     canGoPrev: currentPly > 0,
     canGoNext: currentPly < game.fens.length - 1,
     loadPgn,
