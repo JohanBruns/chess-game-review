@@ -17,7 +17,9 @@ interface ChessComGame {
 }
 
 interface GamePickerProps {
-  onLoad: (pgn: string) => void
+  // side is the color `username` played in the selected game, when known (chess.com game
+  // selection) — lets the caller orient the board with the reviewed player at the bottom.
+  onLoad: (pgn: string, side?: 'white' | 'black') => void
   error: string | null
   initialUsername?: string | null
   autoFetch?: boolean
@@ -134,8 +136,9 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
     }
   }, [autoFetch, username, handleFetch])
 
-  const handleSelectGame = (pgn: string) => {
-    onLoad(pgn)
+  const handleSelectGame = (game: ChessComGame) => {
+    const isWhite = game.white.username.toLowerCase() === username.toLowerCase()
+    onLoad(game.pgn, isWhite ? 'white' : 'black')
     setShowDropdown(false)
   }
 
@@ -192,7 +195,7 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
               <button
                 key={game.url}
                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-cc-surface transition-colors text-xs border-b border-cc-border/50 last:border-0"
-                onClick={() => handleSelectGame(game.pgn)}
+                onClick={() => handleSelectGame(game)}
               >
                 <span
                   className="w-2.5 h-2.5 rounded-full shrink-0 border border-cc-text-faint"

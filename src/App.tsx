@@ -20,6 +20,7 @@ import {
   formatEvalBadge,
   buildLineSteps,
   buildBestPreview,
+  explainStepMate,
 } from './lib/analysis/review'
 import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
@@ -458,10 +459,15 @@ function App() {
     [analyzeGame, fens, settings.depth],
   )
 
-  const handleLoadPgn = useCallback((newPgn: string) => {
+  // reviewingSide comes from GamePicker when a chess.com username's game is selected (it knows
+  // which color that username played) — orients the board with the reviewed player at the
+  // bottom instead of always defaulting to White. Manual PGN paste has no username to derive
+  // this from, so it's omitted there and orientation falls back to today's reviewAs-driven default.
+  const handleLoadPgn = useCallback((newPgn: string, reviewingSide?: 'white' | 'black') => {
     clearAnalysis()
     loadPgn(newPgn)
     setSidebarView('setup')
+    if (reviewingSide) setOrientation(reviewingSide)
   }, [clearAnalysis, loadPgn])
 
   // Share/Export (Phase 7). "Copied!" is a brief self-clearing confirmation, same idea as the
@@ -613,7 +619,13 @@ function App() {
     viewFrom = step.from
     viewTo = step.to
     viewArrow = undefined
-    viewEval = evalResults[currentPly - 1] ?? result
+    // The pre-move eval is a genuinely optimal line, so its cp value doesn't change as you step
+    // through it — but a mate count must still count down (see explainStepMate), or the eval bar
+    // looks frozen the whole way through a forced-mate PV.
+    const preEval = evalResults[currentPly - 1] ?? result
+    viewEval = preEval && preEval.mate !== null
+      ? { ...preEval, mate: explainStepMate(preEval.mate, lineSteps.length, explainStep) }
+      : preEval
   }
 
   // Board controls (interactivity, drop handler, ✓/✗ badge) — default to the retry-at-key-moments
