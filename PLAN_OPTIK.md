@@ -33,7 +33,7 @@
 | 2 | Spieler-Leisten über/unter dem Brett | Sonnet | ✅ |
 | 3 | Navigation: 5 große Buttons in den Sidebar-Footer | Sonnet | ✅ |
 | 4 | Coach-Bubble (weiße Sprechblase) | Sonnet | ✅ |
-| 5 | Explain/Best/Next-Buttonreihe | Sonnet | ☐ |
+| 5 | Explain/Best/Next-Buttonreihe | Sonnet | ✅ |
 | 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ☐ |
 | 7 | Eval-Graph | Sonnet | ☐ |
 | 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ☐ |
