@@ -55,6 +55,17 @@ export function reviewHeadline(san: string, cls: MoveClass, isEnginesBest: boole
   return `${san} ${middle} ${classWord}`
 }
 
+// A PV's mate count applies to the position BEFORE the whole line — as the coach's Explain mode
+// steps through it move by move, that number must count down instead of staying frozen at the
+// original value (the bug: the eval bar/badge looked like it never moved while stepping a mate
+// line). The side delivering mate never changes along the line, so the sign is stable; only the
+// magnitude (moves left) shrinks by roughly one per full move played.
+export function explainStepMate(mate: number, lineLength: number, step: number): number {
+  const remainingPlies = Math.max(0, lineLength - (step + 1))
+  // `|| 0` normalizes -0 (Math.sign(-2) * 0) to a plain 0 at the delivered-mate step.
+  return Math.sign(mate) * Math.ceil(remainingPlies / 2) || 0
+}
+
 // White-perspective compact eval badge: "+4.21" / "-0.09" / "M5" / "-M3"
 export function formatEvalBadge(r: EvalResult | null): string {
   if (!r) return ''
