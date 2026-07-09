@@ -30,7 +30,7 @@ Scope-Entscheidungen des Users (2026-07-08): Coach-Text **nur Templates** (wie c
 - camelCase-Dateinamen, Conventional Commits.
 - **Checkpoint-Regel**: Vor jedem von chess.com kopierten UI-Element das echte Game Review live im Browser (Browser-MCP) prüfen — Annahmen über chess.com-UI waren in diesem Repo schon zweimal falsch (siehe Memory).
 
-Empfohlene Reihenfolge: 1 → 2 → 2b → 3 → 4 → 5 → 6 → 7 → 8. Phasen 1+2 liefern den größten sichtbaren Paritätssprung (Stand 2026-07-08: 1, 2 und 2b erledigt — als Nächstes 3). Jede Phase = eine Opus/Sonnet-Session.
+Empfohlene Reihenfolge: 1 → 2 → 2b → 3 → 4 → 5 → 6 → 7 → 8. Phasen 1+2 liefern den größten sichtbaren Paritätssprung (Stand 2026-07-09: 1–7 erledigt — als Nächstes 8, letzte Phase). Jede Phase = eine Opus/Sonnet-Session.
 
 ### Modell-Empfehlung je Phase
 
@@ -199,6 +199,8 @@ Templates je Klassifikation mit Themen-Fragmenten als Highlight-Tokens; Fallback
 
 ## Phase 5 — Settings-Menü + tote Features verdrahten (EngineLines, Threat-Arrow)
 
+> **Status: ✅ fertig (2026-07-09).** `src/lib/settings.ts`/`useSettings.ts` (localStorage-Roundtrip, Muster wie `useTheme`) + `SettingsMenu.tsx` (Overlay-Modal wie `ThemePicker` statt Popover — kein Popover-Primitive im Repo, 7 Toggles + reviewAs/depth-Select). EngineLines in `EvalPanel` verdrahtet (Setup-Ansicht, Hover → Kandidaten-Pfeil via `getBestMoveArrow`), Threat-Arrow (`getThreatArrow`, rot `#e5533d`) und der automatische Best-Move-Pfeil jetzt settings-gated. **Kein `guidedReview.ts`** (existiert seit Phase 3 nicht, siehe dortiger Status) — `reviewAs` filtert stattdessen direkt die `keyMoments`-Set-Filterung in `App.tsx` (⚡-Retry-Marker) + setzt die Default-Brett-Orientierung. `useEngine.ts` nimmt einen `depth`-Parameter (12/15/18) mit depth-skaliertem Watchdog-Timeout (7 s/10 s/20 s) an. Live verifiziert (Scholar's-Mate `?pgn=`): Threat-Arrow + Best-Move-Arrow koexistieren korrekt, `reviewAs: white` filtert ⚡-Marker richtig, Board-Badges-Toggle greift sofort. 234 Vitest-Tests grün, `tsc -b` sauber.
+
 **Modell: Sonnet**
 **Ziel:** chess.com-Zahnrad mit persistierten Toggles; gebaute-aber-tote Features werden echt.
 
@@ -225,6 +227,8 @@ localStorage-Key `gr.settings`, merge-with-defaults (forward-kompatibel), Muster
 
 ## Phase 6 — Optik-Politur: Font, MoveList, Animationen, Retry-Polish
 
+> **Status: ✅ fertig (2026-07-09).** `@fontsource/montserrat` installiert, `--font-heading`/`--font-sans` in `index.css` registriert; Montserrat auf Headings/Zahlen (Game-Review-Header, Accuracy-/Rating-Pills). `MoveList`: Icon jetzt vor dem SAN, klassengefärbter SAN-Text für markante Züge, alternierende Zeilenhintergründe, engeres Padding, ⚡-Marker kleiner/gedimmt. `EvalGraph`: Gradient-Fill ergänzt (Tooltip mit Zug+Eval und Current-Ply-Cursor gab es aus Phase 3/4 schon). Animationen: Badge-Pop-in (Scale/Fade, 150 ms) auf BoardPanel-Markierungen, `animationDurationInMs: 200` für react-chessboard-Zugbewegungen, Kapitel-Wechsel-Fade (Setup/Summary/Review, 150 ms), CSS-only Confetti-Burst bei Accuracy ≥ 90 (kein Canvas/Dependency, live korrekt *nicht* ausgelöst bei 89.4 %). Retry-Polish: `correct_128x.png`/`incorrect_128x.png` als neue `resultBadge`-Prop auf `BoardPanel` (reuse der bestehenden Badge-Positionslogik), „Continue"-Button ersetzt „Try Again"/„Exit Retry" bei korrektem Zug. `ClassLegend.tsx` gelöscht (seit Phase 3 verwaist, durch SummaryView-Tabelle redundant). Dabei zwei React-Hooks-Lint-Fehler gefixt: die reviewAs→Orientation-Kopplung von `useEffect` auf das Render-Phase-„adjust state"-Pattern umgestellt (wie der bestehende `prevPly`-Block), `Math.random` im Confetti von `useMemo` auf `useState`-Lazy-Init verschoben. Live verifiziert, 234 Tests grün, `tsc -b`/`eslint` sauber.
+
 **Modell: Sonnet**
 **Ziel:** Restlichen Look-and-Feel-Gap schließen.
 
@@ -243,6 +247,8 @@ localStorage-Key `gr.settings`, merge-with-defaults (forward-kompatibel), Muster
 ---
 
 ## Phase 7 — Extras: %clk-Zugzeiten, Share/Export, Kleinkram
+
+> **Status: ✅ fertig (2026-07-09).** `src/lib/analysis/clocks.ts` (`parseClocks` gegen das rohe PGN vor dem Kommentar-Strip, `parseTimeControl`, `moveTimes`, `formatMoveTime`) — `useGame.ts` behält jetzt das rohe PGN und berechnet `moveTimeSeconds` beim Laden; dezentes Zeit-Label je Zug in `MoveList`. Share/Export: „Copy analysis link" baut die `?pgn=`-URL aus dem gespeicherten Roh-PGN; „Export board image" rendert Position + aktives Theme via neuem `src/lib/boardImage.ts` (`fenToPlacements`/`squarePixelRect` pur & getestet, `exportBoardImage`/`downloadBlob` als Canvas/Browser-Teil, nicht node-testbar) zu einem PNG-Download. Beide über neue 🔗/📷-Buttons in `NavControls` erreichbar. Live verifiziert: Zugzeiten gegen manuelle Clock-Rechnung bestätigt (0:02/0:01/0:08/0:04/0:05/0:15/0:01), Export-PNG zeigt per Blob-Interception die korrekte Stellung + Theme, Copy-Link-URL roundtrippt in einem frischen Tab (der eigentliche Clipboard-Write ließ sich in der automatisierten Preview wegen fehlendem Dokumentfokus nicht direkt prüfen — Environment-Limitierung, kein Code-Bug). 255 Vitest-Tests grün, `tsc -b`/`eslint` sauber.
 
 **Modell: Sonnet**
 **Neu:** `src/lib/analysis/clocks.ts` + Tests:
