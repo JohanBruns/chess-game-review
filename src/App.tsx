@@ -836,6 +836,7 @@ function App() {
                   moveAnalyses={moveAnalyses}
                   keyMoments={visibleKeyMoments}
                   moveTimeSeconds={moveTimeSeconds}
+                  showMoveTimes={false}
                   onRetry={handleRetry}
                 />
               }
