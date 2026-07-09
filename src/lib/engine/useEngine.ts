@@ -58,6 +58,10 @@ export function useEngine() {
   const lastSecondBestUciRef = useRef<string | null>(null)
   const lastThirdBestCpRef = useRef<number | null>(null)
   const lastThirdBestUciRef = useRef<string | null>(null)
+  // Play-out mode (Phase 8): a lightweight second request path — `go movetime` for a single reply
+  // instead of the batch `go depth` sweep. When set, the next `bestmove` resolves this instead of
+  // touching evalResults/result. Reuses the same worker; only entered after batch analysis is idle.
+  const playRequestRef = useRef<((uci: string | null) => void) | null>(null)
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
@@ -219,6 +223,17 @@ export function useEngine() {
           timeoutRef.current = null
         }
         const uciMove = line.split(' ')[1]
+
+        // Play-out mode wins over everything: resolve the pending reply and stop — no evalResults
+        // or result mutation (the batch analysis / single-eval state must survive a practice game).
+        const play = playRequestRef.current
+        if (play) {
+          playRequestRef.current = null
+          setState(prev => ({ ...prev, isEvaluating: false }))
+          play(uciMove && uciMove !== '(none)' ? uciMove : null)
+          return
+        }
+
         const bestMoveSan = uciToSan(evaluatingFenRef.current, uciMove)
 
         const pv = lastPvRef.current.length > 0 && evaluatingFenRef.current
@@ -336,6 +351,45 @@ export function useEngine() {
     postEvalRef.current(fens[0])
   }, [])
 
+  // Play-out reply for a single position (Phase 8 "Practice from here"). Resolves with the
+  // engine's move in UCI, or null if it can't run (not ready, a batch analysis is in flight, or
+  // the watchdog fired). Deliberately does NOT go through postEval — it uses `go movetime` for a
+  // fast, shallow reply and never records the position into evalResults.
+  const requestPlayMove = useCallback((fen: string, movetimeMs = 500): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const worker = workerRef.current
+      if (!worker || !state.isReady || analysisQueueRef.current) {
+        resolve(null)
+        return
+      }
+      if (playRequestRef.current) playRequestRef.current(null) // supersede any stale request
+      playRequestRef.current = resolve
+      evaluatingFenRef.current = fen
+      lastCpRef.current = null
+      lastMateRef.current = null
+      lastPvRef.current = []
+      lastSecondBestCpRef.current = null
+      lastSecondBestUciRef.current = null
+      lastThirdBestCpRef.current = null
+      lastThirdBestUciRef.current = null
+      if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+      setState(prev => ({ ...prev, isEvaluating: true, error: null }))
+      worker.postMessage(`position fen ${fen}`)
+      worker.postMessage(`go movetime ${movetimeMs}`)
+      // Watchdog: `go movetime` self-terminates, but force a stop + null-resolve if it goes silent.
+      timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null
+        worker.postMessage('stop')
+        const pending = playRequestRef.current
+        if (pending) {
+          playRequestRef.current = null
+          setState(prev => ({ ...prev, isEvaluating: false }))
+          pending(null)
+        }
+      }, movetimeMs + 3000)
+    })
+  }, [state.isReady])
+
   return {
     isReady: state.isReady,
     isEvaluating: state.isEvaluating,
@@ -347,5 +401,6 @@ export function useEngine() {
     evaluate,
     analyzeGame,
     clearAnalysis,
+    requestPlayMove,
   }
 }
