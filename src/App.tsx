@@ -5,6 +5,7 @@ import { GamePicker } from './components/GamePicker'
 import { BoardPanel } from './components/BoardPanel'
 import { PlayerBar } from './components/PlayerBar'
 import { NavControls } from './components/NavControls'
+import { BoardToolbar } from './components/BoardToolbar'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
@@ -159,6 +160,10 @@ function App() {
   const [pinnedHighlight, setPinnedHighlight] = useState<ThemeHighlight | null>(null)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
+  const handleToggleAutoplay = useCallback(
+    () => updateSettings({ autoplay: !settings.autoplay }),
+    [updateSettings, settings.autoplay],
+  )
   // PlayerBar placement: opponent above the board, the oriented (self) side below — flips
   // together with the board itself.
   const bottomSide = orientation
@@ -730,19 +735,13 @@ function App() {
               clockSeconds={remainingClockSeconds(clocks, currentPly, bottomSide, timeControl)}
             />
           )}
-          <NavControls
-            onFirst={goToFirst}
-            onPrev={goToPrev}
-            onNext={goToNext}
-            onLast={goToLast}
+          <BoardToolbar
             onFlip={handleFlip}
             onOpenThemes={() => setThemeOpen(true)}
             onOpenSettings={() => setSettingsOpen(true)}
             onCopyLink={handleCopyLink}
             onExportImage={handleExportImage}
             linkCopied={linkCopied}
-            canGoPrev={canGoPrev}
-            canGoNext={canGoNext}
             isLoaded={isLoaded}
             takeover={playout.active || puzzles.active}
           />
@@ -755,7 +754,8 @@ function App() {
             ~400px, never flex-filling the viewport) — shrinks down to 320px before the board
             column (which reserves at least that much, see its width formula above) gives up
             any more room. ── */}
-        <div className="w-[400px] min-w-[320px] shrink border-l border-cc-border flex flex-col overflow-y-auto">
+        <div className="w-[400px] min-w-[320px] shrink border-l border-cc-border flex flex-col overflow-hidden">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
           {playout.active ? (
             <PlayoutPanel
               userColor={playout.userColor}
@@ -886,6 +886,24 @@ function App() {
               />
             </div>
           )}
+        </div>
+          {/* Sidebar footer — chess.com's five-button move-navigation row (first/prev/play/
+              next/last), shared across every chapter (setup/summary/review/playout/puzzle;
+              `takeover` disables it during the latter two, same as the buttons it replaced
+              under the board). Sits outside the scrollable chapter area so it never scrolls
+              out of view. ── */}
+          <NavControls
+            onFirst={goToFirst}
+            onPrev={goToPrev}
+            onNext={goToNext}
+            onLast={goToLast}
+            canGoPrev={canGoPrev}
+            canGoNext={canGoNext}
+            isLoaded={isLoaded}
+            autoplay={settings.autoplay}
+            onToggleAutoplay={handleToggleAutoplay}
+            takeover={playout.active || puzzles.active}
+          />
         </div>
       </div>
     </div>
