@@ -12,11 +12,11 @@ interface BoardPanelProps {
   classification?: MoveClass
   // Engine's recommended move, shown as a green arrow (toggled on by the caller).
   bestMoveArrow?: { from: string; to: string }
-  // Engine's best move in the current position — the standing threat, shown as a red arrow.
-  threatArrow?: { from: string; to: string }
-  // T7c engine-lines panel: the (best, or hovered) candidate move for the current position.
-  // chess.com only ever draws one such arrow at a time — never all lines simultaneously.
-  candidateArrow?: { from: string; to: string }
+  // Extra arrows with explicit colors — used by the coach's hoverable tactical-theme highlights
+  // (Phase 4). Drawn alongside bestMoveArrow. In Phase 5 the threat arrow returns through here too.
+  extraArrows?: { from: string; to: string; color: string }[]
+  // Extra square tints (square → css color) for coach theme highlights; merged over the last-move tint.
+  extraSquareHighlights?: Record<string, string>
   // Which side's perspective the board is drawn from. react-chessboard flips pieces, arrows,
   // and squareStyles automatically; only the manual badge-overlay geometry below needs mirroring.
   orientation?: 'white' | 'black'
@@ -38,9 +38,6 @@ interface BoardPanelProps {
 // regardless of how bad the played move was (Mistake/Blunder included) — it's the
 // same "best move" color as the Best/Excellent square highlight, not severity-coded.
 const BEST_MOVE_ARROW_COLOR = '#9FCF3F'
-const THREAT_ARROW_COLOR = '#e02c2c'
-// chess.com's analysis-mode engine-lines arrow — same green as its "best move" square/line highlight.
-const CANDIDATE_ARROW_COLOR = '#81b64c'
 
 const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
   Brilliant:  'brilliant_128x.png',
@@ -63,8 +60,8 @@ export function BoardPanel({
   lastMoveTo,
   classification,
   bestMoveArrow,
-  threatArrow,
-  candidateArrow,
+  extraArrows,
+  extraSquareHighlights,
   orientation = 'white',
   interactive = false,
   onPieceDrop,
@@ -86,6 +83,12 @@ export function BoardPanel({
     squareStyles[lastMoveFrom] = { backgroundColor: color }
     squareStyles[lastMoveTo] = { backgroundColor: color }
   }
+  // Coach theme highlights sit on top of the last-move tint (they share few squares in practice).
+  if (extraSquareHighlights) {
+    for (const [sq, color] of Object.entries(extraSquareHighlights)) {
+      squareStyles[sq] = { backgroundColor: color }
+    }
+  }
 
   // react-chessboard memoizes internal children off the `arrows` array reference — without
   // useMemo a fresh literal on every render (e.g. during a rapid-navigation burst) would
@@ -95,14 +98,13 @@ export function BoardPanel({
     if (bestMoveArrow) {
       result.push({ startSquare: bestMoveArrow.from, endSquare: bestMoveArrow.to, color: BEST_MOVE_ARROW_COLOR })
     }
-    if (threatArrow) {
-      result.push({ startSquare: threatArrow.from, endSquare: threatArrow.to, color: THREAT_ARROW_COLOR })
-    }
-    if (candidateArrow) {
-      result.push({ startSquare: candidateArrow.from, endSquare: candidateArrow.to, color: CANDIDATE_ARROW_COLOR })
+    if (extraArrows) {
+      for (const a of extraArrows) {
+        result.push({ startSquare: a.from, endSquare: a.to, color: a.color })
+      }
     }
     return result
-  }, [bestMoveArrow, threatArrow, candidateArrow])
+  }, [bestMoveArrow, extraArrows])
 
   const badge =
     lastMoveTo && classification && classification !== 'Book'

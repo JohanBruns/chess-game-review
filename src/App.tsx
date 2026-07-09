@@ -12,6 +12,8 @@ import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
 import { getBestMoveArrow } from './lib/analysis/arrows'
 import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
+import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
+import { buildCommentary } from './lib/analysis/commentary'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
@@ -21,6 +23,11 @@ import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
 import { ThemePicker } from './components/ThemePicker'
 import { useTheme } from './hooks/useTheme'
+
+// Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
+// arrow so both can show at once. Square tint is translucent so the piece stays legible.
+const THEME_ARROW_COLOR = '#e2903f'
+const THEME_SQUARE_COLOR = 'rgba(226, 144, 63, 0.45)'
 
 function App() {
   const {
@@ -96,6 +103,10 @@ function App() {
   // engine's PV on the board), best (previews the engine's best move on the board).
   const [reviewSub, setReviewSub] = useState<'idle' | 'explain' | 'best'>('idle')
   const [explainStep, setExplainStep] = useState(0)
+  // Coach tactical-theme highlight (Phase 4): a phrase hovered in the coach bubble previews its
+  // squares/arrows on the board; clicking pins it. Hover wins over pin while both are set.
+  const [hoveredHighlight, setHoveredHighlight] = useState<ThemeHighlight | null>(null)
+  const [pinnedHighlight, setPinnedHighlight] = useState<ThemeHighlight | null>(null)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
 
@@ -119,6 +130,9 @@ function App() {
     setPrevPly(currentPly)
     setReviewSub('idle')
     setExplainStep(0)
+    // A different move is now selected — its themes differ, so drop any hovered/pinned highlight.
+    setHoveredHighlight(null)
+    setPinnedHighlight(null)
     // Don't clear retry state when the ply change IS the retry entry itself (handleRetry sets
     // retryMoveIndex and calls goToPly in the same batch, so they land together here). Any other
     // navigation (Prev/Next/jump) changes currentPly without retryMoveIndex following it, which
@@ -262,6 +276,48 @@ function App() {
   // bubble shows a lightbulb there.)
   const coachClass: MoveClass | null =
     reviewSub === 'best' ? 'Best' : analysis?.classification ?? null
+
+  // Phase 4 coach commentary: detect tactical themes for the played move, then build hoverable
+  // comment tokens. Only meaningful for the idle review sub-mode (explaining the move just played).
+  const themes = useMemo(() => {
+    if (currentPly === 0) return []
+    const move = moves[currentPly - 1]
+    const evalBefore = evalResults[currentPly - 1]
+    const evalAfter = evalResults[currentPly]
+    if (!move || !evalBefore || !evalAfter) return []
+    return detectThemes(move, evalBefore, evalAfter, bestPreview)
+  }, [currentPly, moves, evalResults, bestPreview])
+
+  const commentary = useMemo(() => {
+    if (playedSan == null || analysis == null) return null
+    return buildCommentary({
+      san: playedSan,
+      classification: analysis.classification,
+      isEnginesBest,
+      bestSan,
+      themes,
+      ply: currentPly,
+    })
+  }, [playedSan, analysis, isEnginesBest, bestSan, themes, currentPly])
+
+  // The theme highlight actually drawn on the board (hover preview beats a pin), and its board
+  // props. Gated to the idle review chapter — the best/explain sub-modes show their own board view.
+  const activeHighlight = hoveredHighlight ?? pinnedHighlight
+  const showThemeHighlight = sidebarView === 'review' && reviewSub === 'idle'
+  const handlePinHighlight = useCallback(
+    (h: ThemeHighlight) => setPinnedHighlight(prev => (prev === h ? null : h)),
+    [],
+  )
+  const extraArrows = useMemo(() => {
+    if (!showThemeHighlight || !activeHighlight) return undefined
+    return activeHighlight.arrows.map(a => ({ from: a.from, to: a.to, color: THEME_ARROW_COLOR }))
+  }, [showThemeHighlight, activeHighlight])
+  const extraSquareHighlights = useMemo(() => {
+    if (!showThemeHighlight || !activeHighlight || activeHighlight.squares.length === 0) return undefined
+    const map: Record<string, string> = {}
+    for (const sq of activeHighlight.squares) map[sq] = THEME_SQUARE_COLOR
+    return map
+  }, [showThemeHighlight, activeHighlight])
 
   const handleExplain = useCallback(() => {
     setReviewSub('explain')
@@ -431,6 +487,8 @@ function App() {
                 lastMoveTo={viewTo}
                 classification={viewClass}
                 bestMoveArrow={viewArrow}
+                extraArrows={extraArrows}
+                extraSquareHighlights={extraSquareHighlights}
                 orientation={orientation}
                 interactive={retryMoveIndex !== null && trialFen === null}
                 onPieceDrop={handleTrialDrop}
@@ -476,6 +534,10 @@ function App() {
               onBack={handleBackToSummary}
               active={reviewActive}
               headline={reviewHeadlineText}
+              commentary={reviewSub === 'idle' ? commentary : null}
+              activeHighlight={activeHighlight}
+              onHoverHighlight={setHoveredHighlight}
+              onPinHighlight={handlePinHighlight}
               evalBadge={reviewEvalBadge}
               coachClass={coachClass}
               sub={reviewSub}
