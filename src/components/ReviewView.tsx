@@ -56,10 +56,13 @@ interface ReviewViewProps {
   retry?: ReactNode
 }
 
+// 36px tall, 5px radius, bold 14px, icon+label centered — matches chess.com's Explain/Best/Next
+// row (verified against the reference screenshots).
 const PRIMARY_BTN =
-  'px-3 py-1.5 rounded bg-cc-green text-white text-xs font-medium hover:bg-cc-green-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+  'h-9 rounded-[5px] bg-cc-green text-white text-sm font-bold hover:bg-cc-green-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5'
 const SECONDARY_BTN =
-  'px-3 py-1.5 rounded bg-cc-surface text-cc-text-dim text-xs font-medium hover:bg-cc-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+  'h-9 rounded-[5px] bg-[#3a3937] text-white/85 text-sm font-bold hover:bg-cc-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5'
+const BTN_ICON = 'text-base leading-none'
 
 // Sidebar "chapter 2" — chess.com's guided Game Review walkthrough. Structure verified against
 // the reference screenshots (Board&Game/review/Screenshot_3/21/22/23/24/27/28, 2026-07-08): a
@@ -180,35 +183,24 @@ export function ReviewView({
 
         {active && sub === 'idle' && (
           <div className="flex gap-2">
-            <button onClick={onExplain} disabled={!canExplain} className={SECONDARY_BTN}>
-              Explain
+            <button onClick={onExplain} disabled={!canExplain} className={`${SECONDARY_BTN} flex-1`}>
+              <span aria-hidden className={BTN_ICON}>💡</span> Explain
             </button>
             {canBest && (
-              <button onClick={onBest} className={SECONDARY_BTN}>
-                Best
+              <button onClick={onBest} className={`${SECONDARY_BTN} flex-1`}>
+                <span aria-hidden className={BTN_ICON}>⭐</span> Best
               </button>
             )}
             <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} flex-1`}>
-              Next
+              <span aria-hidden className={BTN_ICON}>→</span> Next
             </button>
           </div>
-        )}
-
-        {active && sub === 'idle' && canPractice && (
-          <button onClick={onPractice} className={`${SECONDARY_BTN} w-full`}>
-            Practice from here
-          </button>
         )}
 
         {active && sub === 'best' && (
-          <div className="flex gap-2">
-            <button onClick={onExplain} disabled={!canExplain} className={SECONDARY_BTN}>
-              Explain
-            </button>
-            <button onClick={onResume} className={`${PRIMARY_BTN} flex-1`}>
-              Resume
-            </button>
-          </div>
+          <button onClick={onResume} className={`${PRIMARY_BTN} w-full`}>
+            <span aria-hidden className={BTN_ICON}>▶</span> Resume
+          </button>
         )}
 
         {active && sub === 'explain' && (
@@ -217,21 +209,23 @@ export function ReviewView({
               <button
                 onClick={onLinePrev}
                 disabled={lineStep <= 0}
-                className={SECONDARY_BTN}
+                className={`${SECONDARY_BTN} w-9 shrink-0`}
                 title="Previous move in line"
+                aria-label="Previous move in line"
               >
-                ◀
+                <span aria-hidden className={BTN_ICON}>‹</span>
               </button>
               <button
                 onClick={onLineNext}
                 disabled={lineStep >= lineSans.length - 1}
-                className={SECONDARY_BTN}
+                className={`${PRIMARY_BTN} w-9 shrink-0`}
                 title="Next move in line"
+                aria-label="Next move in line"
               >
-                ▶
+                <span aria-hidden className={BTN_ICON}>›</span>
               </button>
-              <button onClick={onGotIt} className={`${PRIMARY_BTN} flex-1`}>
-                Got it!
+              <button onClick={onGotIt} className={`${SECONDARY_BTN} flex-1`}>
+                <span aria-hidden className={BTN_ICON}>✓</span> Got it!
               </button>
             </div>
             {lineSans.length > 0 && (
@@ -255,6 +249,15 @@ export function ReviewView({
       </div>
 
       {moveList}
+
+      {active && sub === 'idle' && canPractice && (
+        <button
+          onClick={onPractice}
+          className="shrink-0 w-full py-1.5 text-xs text-cc-text-faint hover:text-cc-text-dim underline decoration-dotted underline-offset-2 transition-colors"
+        >
+          Practice from here
+        </button>
+      )}
 
       {retry}
 
