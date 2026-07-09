@@ -18,26 +18,41 @@ export interface BestPreview {
   to: Square
 }
 
-// "e4 is a book move" / "O-O is best" / "Qxg4 is a miss" / ...
+// The coach headline split into its three visually-distinct runs, so callers (the coach bubble)
+// can color/bold the SAN and classification word while keeping the connective words plain — e.g.
+// "Bxf7+" (colored) + "is a" (plain) + "blunder" (colored).
+export interface HeadlineParts {
+  san: string
+  middle: string
+  classWord: string
+}
+
+const CLASS_PHRASE: Record<Exclude<MoveClass, 'Book' | 'Best'>, [middle: string, classWord: string]> = {
+  Brilliant: ['is a', 'brilliant move'],
+  Great: ['is a', 'great move'],
+  Excellent: ['is', 'excellent'],
+  Good: ['is a', 'good move'],
+  Inaccuracy: ['is an', 'inaccuracy'],
+  Mistake: ['is a', 'mistake'],
+  Blunder: ['is a', 'blunder'],
+  Miss: ['is a', 'miss'],
+  Forced: ['is', 'forced'],
+}
+
 // isEnginesBest covers the (classification !== 'Best') edge case where the played move
 // happens to equal the engine's top move but got classified otherwise (shouldn't normally
 // happen, but keeps the headline honest if it does).
-export function reviewHeadline(san: string, cls: MoveClass, isEnginesBest: boolean): string {
-  if (cls === 'Book') return `${san} is a book move`
-  if (isEnginesBest || cls === 'Best') return `${san} is best`
+export function reviewHeadlineParts(san: string, cls: MoveClass, isEnginesBest: boolean): HeadlineParts {
+  if (cls === 'Book') return { san, middle: 'is a', classWord: 'book move' }
+  if (isEnginesBest || cls === 'Best') return { san, middle: 'is', classWord: 'best' }
+  const [middle, classWord] = CLASS_PHRASE[cls]
+  return { san, middle, classWord }
+}
 
-  const phrase: Record<Exclude<MoveClass, 'Book' | 'Best'>, string> = {
-    Brilliant: 'is a brilliant move',
-    Great: 'is a great move',
-    Excellent: 'is excellent',
-    Good: 'is a good move',
-    Inaccuracy: 'is an inaccuracy',
-    Mistake: 'is a mistake',
-    Blunder: 'is a blunder',
-    Miss: 'is a miss',
-    Forced: 'is forced',
-  }
-  return `${san} ${phrase[cls]}`
+// "e4 is a book move" / "O-O is best" / "Qxg4 is a miss" / ...
+export function reviewHeadline(san: string, cls: MoveClass, isEnginesBest: boolean): string {
+  const { middle, classWord } = reviewHeadlineParts(san, cls, isEnginesBest)
+  return `${san} ${middle} ${classWord}`
 }
 
 // White-perspective compact eval badge: "+4.21" / "-0.09" / "M5" / "-M3"

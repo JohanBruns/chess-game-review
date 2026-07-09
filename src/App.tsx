@@ -15,7 +15,13 @@ import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
 import { getBestMoveArrow, getThreatArrow } from './lib/analysis/arrows'
 import { getEngineLines } from './lib/analysis/lines'
-import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview } from './lib/analysis/review'
+import {
+  reviewHeadlineParts,
+  formatEvalBadge,
+  buildLineSteps,
+  buildBestPreview,
+} from './lib/analysis/review'
+import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
 import { buildCommentary } from './lib/analysis/commentary'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
@@ -328,18 +334,21 @@ function App() {
     !isEnginesBest
   const canExplain = lineSteps.length > 0
 
-  const reviewHeadlineText =
+  // Structured headline (SAN / connective words / classification word) for idle and best modes,
+  // so the coach bubble can color+bold just the SAN and classification word. Explain mode's
+  // "Explaining X" text doesn't fit that shape, so it stays a plain string.
+  const headlineParts: HeadlineParts | null =
     reviewSub === 'idle'
       ? playedSan != null && analysis != null
-        ? reviewHeadline(playedSan, analysis.classification, isEnginesBest)
-        : ''
+        ? reviewHeadlineParts(playedSan, analysis.classification, isEnginesBest)
+        : null
       : reviewSub === 'best'
         ? bestSan != null
-          ? reviewHeadline(bestSan, 'Best', true)
-          : ''
-        : bestSan != null
-          ? `Explaining ${bestSan}`
-          : ''
+          ? reviewHeadlineParts(bestSan, 'Best', true)
+          : null
+        : null
+
+  const reviewHeadlineText = reviewSub === 'explain' && bestSan != null ? `Explaining ${bestSan}` : ''
 
   const reviewEvalBadge = formatEvalBadge(
     reviewSub === 'idle' ? evalResults[currentPly] ?? null : evalResults[currentPly - 1] ?? null,
@@ -364,15 +373,8 @@ function App() {
 
   const commentary = useMemo(() => {
     if (playedSan == null || analysis == null) return null
-    return buildCommentary({
-      san: playedSan,
-      classification: analysis.classification,
-      isEnginesBest,
-      bestSan,
-      themes,
-      ply: currentPly,
-    })
-  }, [playedSan, analysis, isEnginesBest, bestSan, themes, currentPly])
+    return buildCommentary({ classification: analysis.classification, themes })
+  }, [playedSan, analysis, themes])
 
   // The theme highlight actually drawn on the board (hover preview beats a pin), and its board
   // props. Gated to the idle review chapter — the best/explain sub-modes show their own board view.
@@ -806,6 +808,7 @@ function App() {
               active={reviewActive}
               coachEnabled={settings.coachEnabled}
               headline={reviewHeadlineText}
+              headlineParts={headlineParts}
               commentary={reviewSub === 'idle' ? commentary : null}
               activeHighlight={activeHighlight}
               onHoverHighlight={setHoveredHighlight}

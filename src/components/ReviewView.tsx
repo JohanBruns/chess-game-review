@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import type { MoveClass } from '../lib/analysis/classify'
 import { CLASS_ICON } from '../lib/analysis/classIcons'
+import { classColor } from '../lib/analysis/classColors'
 import type { CommentToken } from '../lib/analysis/commentary'
+import type { HeadlineParts } from '../lib/analysis/review'
 import type { ThemeHighlight } from '../lib/analysis/tactics'
 import { CoachBubble } from './CoachBubble'
 
@@ -18,7 +20,12 @@ interface ReviewViewProps {
   // settings.coachEnabled — hides only the coach bubble's content (avatar/text/eval badge);
   // the Explain/Best/Next button row stays functional either way.
   coachEnabled: boolean
+  // Plain-string headline, used as-is only for the explain sub-mode ("Explaining Bxf7+") where
+  // the SAN doesn't sit at a fixed spot worth coloring separately.
   headline: string
+  // Structured headline (idle/best sub-modes) so the SAN and classification word can be colored
+  // and bolded per chess.com's coach-bubble style, while the connective words stay plain.
+  headlineParts: HeadlineParts | null
   // Rich per-move commentary tokens (idle sub-mode only). When present the coach renders these —
   // with hoverable tactical phrases — instead of the plain `headline`.
   commentary: CommentToken[] | null
@@ -68,6 +75,7 @@ export function ReviewView({
   active,
   coachEnabled,
   headline,
+  headlineParts,
   commentary,
   activeHighlight,
   onHoverHighlight,
@@ -107,43 +115,62 @@ export function ReviewView({
       <div className="shrink-0 flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
         {coachEnabled && (
           <div className="flex items-start gap-2">
-            <div className="w-9 h-9 shrink-0 rounded-full bg-cc-surface overflow-hidden">
+            <div className="w-14 h-14 shrink-0 rounded-lg bg-cc-surface overflow-hidden">
               <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
             </div>
-            <div className="flex-1 bg-cc-surface rounded px-3 py-2 flex items-start justify-between gap-2 min-h-9">
+            <div className="relative flex-1 bg-white rounded-lg px-3 py-2.5 min-h-14">
+              <span
+                aria-hidden
+                className="absolute -left-1.5 top-4 w-3 h-3 bg-white rotate-45"
+              />
               {active ? (
                 <>
-                  <span className="flex items-start gap-1.5 text-cc-text text-xs leading-relaxed min-w-0">
-                    {sub === 'explain' ? (
-                      <span aria-hidden className="shrink-0 mt-px">💡</span>
-                    ) : (
-                      coachClass && (
-                        <img
-                          src={CLASS_ICON[coachClass]}
-                          alt={coachClass}
-                          className="w-4 h-4 shrink-0 mt-px"
-                        />
-                      )
-                    )}
-                    {sub === 'idle' && commentary && commentary.length > 0 ? (
-                      <CoachBubble
-                        tokens={commentary}
-                        activeHighlight={activeHighlight}
-                        onHover={onHoverHighlight}
-                        onPin={onPinHighlight}
-                      />
-                    ) : (
-                      <span>{headline}</span>
-                    )}
-                  </span>
                   {evalBadge && (
-                    <span className="shrink-0 font-mono text-xs font-semibold text-cc-text-dim mt-px">
+                    <span className="absolute top-2 right-2 bg-[#312e2b] text-white text-[13px] font-bold rounded px-1.5 py-0.5">
                       {evalBadge}
                     </span>
                   )}
+                  <div className="flex flex-col gap-1 pr-10">
+                    <span className="flex items-center gap-1.5 text-[15px] leading-snug text-[#312e2b]">
+                      {sub === 'explain' ? (
+                        <span aria-hidden className="shrink-0">💡</span>
+                      ) : (
+                        coachClass && (
+                          <img
+                            src={CLASS_ICON[coachClass]}
+                            alt={coachClass}
+                            className="w-4 h-4 shrink-0"
+                          />
+                        )
+                      )}
+                      {sub !== 'explain' && headlineParts && coachClass ? (
+                        <span>
+                          <span className="font-bold" style={{ color: classColor(coachClass) }}>
+                            {headlineParts.san}
+                          </span>{' '}
+                          <span>{headlineParts.middle}</span>{' '}
+                          <span className="font-bold" style={{ color: classColor(coachClass) }}>
+                            {headlineParts.classWord}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="font-semibold">{headline}</span>
+                      )}
+                    </span>
+                    {sub === 'idle' && commentary && commentary.length > 0 && (
+                      <span className="text-[13px] leading-relaxed text-[#312e2b]/85">
+                        <CoachBubble
+                          tokens={commentary}
+                          activeHighlight={activeHighlight}
+                          onHover={onHoverHighlight}
+                          onPin={onPinHighlight}
+                        />
+                      </span>
+                    )}
+                  </div>
                 </>
               ) : (
-                <span className="text-cc-text-faint text-xs italic">
+                <span className="text-[#312e2b]/50 text-[13px] italic">
                   Step through your moves with Next.
                 </span>
               )}
