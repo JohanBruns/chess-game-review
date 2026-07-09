@@ -18,48 +18,29 @@ function hasHighlight(t: CommentToken): t is { text: string; highlight: Tactical
 }
 
 describe('buildCommentary', () => {
-  it('falls back to the plain headline when there are no themes', () => {
-    const tokens = buildCommentary({
-      san: 'Nf3', classification: 'Good', isEnginesBest: false, bestSan: null, themes: [], ply: 4,
-    })
-    expect(tokens).toEqual([{ text: 'Nf3 is a good move' }])
+  it('returns no tokens when there are no themes', () => {
+    const tokens = buildCommentary({ classification: 'Good', themes: [] })
+    expect(tokens).toEqual([])
   })
 
-  it('appends a hoverable theme phrase for a blunder', () => {
-    const tokens = buildCommentary({
-      san: 'Qxg4', classification: 'Blunder', isEnginesBest: false, bestSan: 'Qd1',
-      themes: [hangingTheme], ply: 4,
-    })
-    expect(tokens[0].text).toBe('Qxg4 is a blunder — ')
+  it('renders a capitalized, hoverable theme phrase for a blunder', () => {
+    const tokens = buildCommentary({ classification: 'Blunder', themes: [hangingTheme] })
     const highlighted = tokens.filter(hasHighlight)
     expect(highlighted).toHaveLength(1)
-    expect(highlighted[0].text).toBe('it leaves the rook on a8 hanging')
+    expect(highlighted[0].text).toBe('It leaves the rook on a8 hanging')
     expect(highlighted[0].highlight).toBe(hangingTheme.highlight)
+    expect(tokens.some(t => t.text === '.')).toBe(true)
   })
 
   it('drops themes that do not fit the move quality (a Best move keeps no negative theme)', () => {
-    const tokens = buildCommentary({
-      san: 'Rd8', classification: 'Best', isEnginesBest: true, bestSan: 'Rd8',
-      themes: [hangingTheme], ply: 6,
-    })
-    expect(tokens).toEqual([{ text: 'Rd8 is best' }])
-  })
-
-  it('varies the connector deterministically by ply parity', () => {
-    const even = buildCommentary({
-      san: 'Qxg4', classification: 'Blunder', isEnginesBest: false, bestSan: null, themes: [hangingTheme], ply: 4,
-    })
-    const odd = buildCommentary({
-      san: 'Qxg4', classification: 'Blunder', isEnginesBest: false, bestSan: null, themes: [hangingTheme], ply: 5,
-    })
-    expect(even[0].text.endsWith(' — ')).toBe(true)
-    expect(odd[0].text.endsWith(': ')).toBe(true)
+    const tokens = buildCommentary({ classification: 'Best', themes: [hangingTheme] })
+    expect(tokens).toEqual([])
   })
 
   it('joins two themes with ", and "', () => {
     const tokens = buildCommentary({
-      san: 'Qxg4', classification: 'Blunder', isEnginesBest: false, bestSan: null,
-      themes: [allowsMateTheme, hangingTheme], ply: 4,
+      classification: 'Blunder',
+      themes: [allowsMateTheme, hangingTheme],
     })
     expect(tokens.some(t => t.text === ', and ')).toBe(true)
     expect(tokens.filter(hasHighlight)).toHaveLength(2)

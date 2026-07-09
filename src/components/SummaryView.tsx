@@ -69,12 +69,13 @@ export function SummaryView({
       </div>
 
       <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 shrink-0 rounded-full bg-cc-surface overflow-hidden">
+        <div className="flex items-start gap-2">
+          <div className="w-14 h-14 shrink-0 rounded-lg bg-cc-surface overflow-hidden">
             <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
           </div>
-          <div className="flex-1 bg-cc-surface rounded px-3 py-2">
-            <span className="text-cc-text text-xs leading-relaxed">
+          <div className="relative flex-1 bg-white rounded-lg px-3 py-2.5 min-h-14 flex items-center">
+            <span aria-hidden className="absolute -left-1.5 top-4 w-3 h-3 bg-white rotate-45" />
+            <span className="text-[#312e2b] text-[15px] leading-snug">
               {summaryHeadline(whiteSummary, blackSummary)}
             </span>
           </div>
