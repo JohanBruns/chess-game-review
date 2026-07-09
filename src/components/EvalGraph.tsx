@@ -22,10 +22,10 @@ interface EvalGraphProps {
 
 type DataPoint = { ply: number; cp: number | null }
 
-// Only genuine highlights get a marker dot: the standout good moves (Brilliant, Great) and the
-// serious mistakes (Blunder, Miss). Routine classes (Best/Excellent/Good/Inaccuracy/Mistake) are
+// Only genuine highlights get a marker dot: the standout good moves (Brilliant, Great) and every
+// error tier (Inaccuracy, Mistake, Blunder, Miss). Routine classes (Best/Excellent/Good) are
 // intentionally left off so the bar surfaces just the turning points.
-const DOT_CLASSES = new Set<MoveClass>(['Brilliant', 'Great', 'Blunder', 'Miss'])
+const DOT_CLASSES = new Set<MoveClass>(['Brilliant', 'Great', 'Inaccuracy', 'Mistake', 'Blunder', 'Miss'])
 
 const EVAL_CLAMP = 1000
 
@@ -93,16 +93,12 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
     .filter(a => DOT_CLASSES.has(a.classification) && data[a.moveIndex + 1]?.cp != null)
     .map(a => ({ ply: a.moveIndex + 1, cp: data[a.moveIndex + 1]!.cp as number, cls: a.classification }))
 
+  // The current-ply marker's dot sits where the red line crosses the eval curve — null when
+  // there's no eval yet at that ply (e.g. before any move).
+  const currentCp = data[currentPly]?.cp ?? null
+
   return (
-    <div
-      style={{
-        width: '100%',
-        height: 112,
-        background: '#262421',
-        borderRadius: 6,
-        overflow: 'hidden',
-      }}
-    >
+    <div style={{ width: '100%', height: 90, background: '#262421' }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
@@ -116,23 +112,16 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
           <XAxis dataKey="ply" interval={0} hide />
           <YAxis domain={[-EVAL_CLAMP, EVAL_CLAMP]} hide />
           <ReferenceLine y={0} stroke="#5b5854" strokeWidth={1} />
-          <ReferenceLine x={currentPly} stroke="#81b64c" strokeWidth={2} />
+          <ReferenceLine x={currentPly} stroke="#fa412d" strokeWidth={2} />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6b6864', strokeWidth: 1 }} />
-          <defs>
-            {/* Subtle vertical fade on White's territory — solid near the eval curve, softening
-                towards the bottom edge, instead of one flat fill opacity. */}
-            <linearGradient id="evalAreaFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#e9e9e8" stopOpacity={0.95} />
-              <stop offset="100%" stopColor="#e9e9e8" stopOpacity={0.75} />
-            </linearGradient>
-          </defs>
           <Area
             type="monotone"
             dataKey="cp"
             baseValue={-EVAL_CLAMP}
             stroke="#c9c9c6"
-            strokeWidth={1.25}
-            fill="url(#evalAreaFill)"
+            strokeWidth={1}
+            fill="#e9e9e8"
+            fillOpacity={1}
             dot={false}
             connectNulls={false}
             isAnimationActive={false}
@@ -142,13 +131,16 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
               key={d.ply}
               x={d.ply}
               y={d.cp}
-              r={3.4}
+              r={3.5}
               fill={classColor(d.cls)}
               stroke="#1b1a18"
               strokeWidth={0.75}
               isFront
             />
           ))}
+          {currentCp !== null && (
+            <ReferenceDot x={currentPly} y={currentCp} r={4} fill="#fa412d" stroke="none" isFront />
+          )}
         </AreaChart>
       </ResponsiveContainer>
     </div>

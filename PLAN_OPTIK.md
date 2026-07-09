@@ -35,7 +35,7 @@
 | 4 | Coach-Bubble (weiße Sprechblase) | Sonnet | ✅ |
 | 5 | Explain/Best/Next-Buttonreihe | Sonnet | ✅ |
 | 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ✅ (Explain-Sub-Zeile zurückgestellt) |
-| 7 | Eval-Graph | Sonnet | ☐ |
+| 7 | Eval-Graph | Sonnet | ✅ |
 | 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ☐ |
 | 9 | Summary-Karte | Sonnet | ☐ |
 | 10 | Typografie-Feinschliff + Abnahme-Vergleich | Sonnet | ☐ |
