@@ -60,3 +60,33 @@ export function formatMoveTime(seconds: number): string {
   const r = s % 60
   return `${m}:${r.toString().padStart(2, '0')}`
 }
+
+// The last known %clk reading for one side as of a given ply (PlayerBar's static clock —
+// chess.com doesn't tick it live in Game Review, it just shows the reading at the current
+// position). `clocks[i]` holds the reading after ply `i+1` (see parseClocks); White's readings
+// live at odd plies (i even), Black's at even plies (i odd). Falls back to the time control's
+// starting allotment before either side has moved, or null if neither is known.
+export function remainingClockSeconds(
+  clocks: (number | null)[],
+  ply: number,
+  side: 'white' | 'black',
+  timeControl?: TimeControl | null,
+): number | null {
+  let last = timeControl?.initialSeconds ?? null
+  const startIndex = side === 'white' ? 0 : 1
+  for (let i = startIndex; i < clocks.length && i + 1 <= ply; i += 2) {
+    if (clocks[i] !== null) last = clocks[i]
+  }
+  return last
+}
+
+// "9:58" (m:ss) or "1:02:33" (h:mm:ss) for the PlayerBar clock pill — chess.com shows the
+// hours digit once a game clock reaches an hour, unlike the always-m:ss per-move spend label.
+export function formatClock(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const r = s % 60
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`
+  return `${m}:${r.toString().padStart(2, '0')}`
+}

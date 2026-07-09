@@ -3,11 +3,13 @@ import { useGame } from './hooks/useGame'
 import { useEngine } from './lib/engine/useEngine'
 import { GamePicker } from './components/GamePicker'
 import { BoardPanel } from './components/BoardPanel'
+import { PlayerBar } from './components/PlayerBar'
 import { NavControls } from './components/NavControls'
 import { MoveList } from './components/MoveList'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
+import { remainingClockSeconds } from './lib/analysis/clocks'
 import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
 import { getBestMoveArrow, getThreatArrow } from './lib/analysis/arrows'
@@ -68,6 +70,8 @@ function App() {
     goToPly,
     pgn,
     moveTimeSeconds,
+    clocks,
+    timeControl,
   } = useGame()
 
   const {
@@ -155,6 +159,10 @@ function App() {
   const [pinnedHighlight, setPinnedHighlight] = useState<ThemeHighlight | null>(null)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const handleFlip = useCallback(() => setOrientation(o => (o === 'white' ? 'black' : 'white')), [])
+  // PlayerBar placement: opponent above the board, the oriented (self) side below — flips
+  // together with the board itself.
+  const bottomSide = orientation
+  const topSide: 'white' | 'black' = orientation === 'white' ? 'black' : 'white'
   // reviewAs also sets the default board orientation ('both' behaves like 'white'). Adjusted
   // during render (the same "reset on prop change" pattern as the prevPly block below) rather
   // than an effect, so a settings change never leaves a stale-orientation frame on screen.
@@ -675,11 +683,25 @@ function App() {
             the sidebar's own min-width below). ── */}
         <div
           className="shrink-0 flex flex-col p-3 gap-2"
-          style={{ width: 'min(calc(100vh - 64px), calc(100vw - 320px))' }}
+          // The vh branch caps board size on tall-narrow windows; it must reserve the same
+          // vertical chrome as the inner row's own vh branch below (136px: two 32px PlayerBars
+          // + one 8px gap added on top of the original 64px nav/padding/gap budget).
+          style={{ width: 'min(calc(100vh - 136px), calc(100vw - 320px))' }}
         >
+          {isLoaded && (
+            <PlayerBar
+              name={(topSide === 'white' ? whiteName : blackName) ?? (topSide === 'white' ? 'White' : 'Black')}
+              elo={topSide === 'white' ? whiteElo : blackElo}
+              clockSeconds={remainingClockSeconds(clocks, currentPly, topSide, timeControl)}
+            />
+          )}
           <div
             className="flex flex-row items-stretch"
-            style={{ height: 'min(calc(100vh - 128px), calc(100vw - 384px))' }}
+            // 200px reserves the column's non-board chrome: 24px padding (p-3 top+bottom) +
+            // two 32px PlayerBars + one 32px NavControls row + three 8px gaps between them,
+            // plus the header bar above this column (~47px) and a small safety margin —
+            // 128px was the pre-PlayerBar budget (nav/padding/gaps + header only).
+            style={{ height: 'min(calc(100vh - 200px), calc(100vw - 384px))' }}
           >
             <EvalBar evalResult={viewEval} />
             <div className="aspect-square h-full">
@@ -701,6 +723,13 @@ function App() {
               />
             </div>
           </div>
+          {isLoaded && (
+            <PlayerBar
+              name={(bottomSide === 'white' ? whiteName : blackName) ?? (bottomSide === 'white' ? 'White' : 'Black')}
+              elo={bottomSide === 'white' ? whiteElo : blackElo}
+              clockSeconds={remainingClockSeconds(clocks, currentPly, bottomSide, timeControl)}
+            />
+          )}
           <NavControls
             onFirst={goToFirst}
             onPrev={goToPrev}

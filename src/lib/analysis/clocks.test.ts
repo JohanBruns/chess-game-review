@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseTimeControl, parseClocks, moveTimes, formatMoveTime } from './clocks'
+import { parseTimeControl, parseClocks, moveTimes, formatMoveTime, remainingClockSeconds, formatClock } from './clocks'
 
 describe('parseTimeControl', () => {
   it('parses a plain seconds control', () => {
@@ -75,5 +75,45 @@ describe('formatMoveTime', () => {
   })
   it('rounds fractional seconds', () => {
     expect(formatMoveTime(7.6)).toBe('0:08')
+  })
+})
+
+describe('remainingClockSeconds', () => {
+  const clocks = [598, 599, 590, 595] // White: 598,590 (i=0,2)  Black: 599,595 (i=1,3)
+  const tc = { initialSeconds: 600, incrementSeconds: 0 }
+
+  it('falls back to the time control before either side has moved', () => {
+    expect(remainingClockSeconds(clocks, 0, 'white', tc)).toBe(600)
+    expect(remainingClockSeconds(clocks, 0, 'black', tc)).toBe(600)
+  })
+
+  it('returns null before either side has moved without a time control', () => {
+    expect(remainingClockSeconds(clocks, 0, 'white', null)).toBeNull()
+  })
+
+  it('picks up the latest reading at or before the given ply', () => {
+    expect(remainingClockSeconds(clocks, 1, 'white', tc)).toBe(598)
+    expect(remainingClockSeconds(clocks, 1, 'black', tc)).toBe(600) // Black hasn't moved yet
+    expect(remainingClockSeconds(clocks, 2, 'black', tc)).toBe(599)
+    expect(remainingClockSeconds(clocks, 4, 'white', tc)).toBe(590)
+    expect(remainingClockSeconds(clocks, 4, 'black', tc)).toBe(595)
+  })
+
+  it('holds the last known reading past a null entry rather than reverting', () => {
+    const withGap = [598, null, 590, 595]
+    expect(remainingClockSeconds(withGap, 2, 'black', tc)).toBe(600) // still no real Black reading
+    expect(remainingClockSeconds(withGap, 4, 'black', tc)).toBe(595)
+  })
+})
+
+describe('formatClock', () => {
+  it('formats under an hour as m:ss', () => {
+    expect(formatClock(598)).toBe('9:58')
+  })
+  it('formats an hour or more as h:mm:ss', () => {
+    expect(formatClock(3723)).toBe('1:02:03')
+  })
+  it('clamps negative input to zero', () => {
+    expect(formatClock(-5)).toBe('0:00')
   })
 })
