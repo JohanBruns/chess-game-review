@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { reviewHeadline, formatEvalBadge, buildLineSteps, buildBestPreview, summaryHeadline } from './review'
+import {
+  reviewHeadline,
+  formatEvalBadge,
+  buildLineSteps,
+  buildBestPreview,
+  summaryHeadline,
+  explainStepMate,
+} from './review'
 import type { EvalResult } from '../engine/useEngine'
 import type { GameSummary, PhaseGrade } from './summary'
 import type { MoveClass } from './classify'
@@ -65,6 +72,26 @@ describe('reviewHeadline', () => {
 
   it('renders the blunder phrase', () => {
     expect(reviewHeadline('d6', 'Blunder', false)).toBe('d6 is a blunder')
+  })
+})
+
+describe('explainStepMate', () => {
+  it('counts down White mate-in-3 as the PV is stepped through', () => {
+    // 5-ply PV: Wmove1 Breply1 Wmove2 Breply2 Wmove3#
+    expect(explainStepMate(3, 5, 0)).toBe(2)
+    expect(explainStepMate(3, 5, 1)).toBe(2)
+    expect(explainStepMate(3, 5, 2)).toBe(1)
+    expect(explainStepMate(3, 5, 3)).toBe(1)
+    expect(explainStepMate(3, 5, 4)).toBe(0)
+  })
+
+  it('keeps the sign for a Black mate-in-2 and never returns -0', () => {
+    // 3-ply PV: Bmove1 Wreply1 Bmove2#
+    expect(explainStepMate(-2, 3, 0)).toBe(-1)
+    expect(explainStepMate(-2, 3, 1)).toBe(-1)
+    const delivered = explainStepMate(-2, 3, 2)
+    expect(delivered).toBe(0)
+    expect(Object.is(delivered, -0)).toBe(false)
   })
 })
 
