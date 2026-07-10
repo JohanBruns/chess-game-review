@@ -53,7 +53,7 @@ export function PuzzlePanel({
         >
           ←
         </button>
-        <h2 className="font-heading text-sm font-semibold">Puzzles</h2>
+        <h2 className="text-sm font-semibold">Puzzles</h2>
         {!finished && (
           <span className="ml-auto text-cc-text-faint text-xs tabular-nums">
             {index + 1} / {total}
@@ -63,7 +63,7 @@ export function PuzzlePanel({
 
       {finished ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-2 px-4 text-center">
-          <div className="text-2xl font-heading font-bold text-cc-text">
+          <div className="text-2xl font-bold text-cc-text">
             {solvedCount} / {total}
           </div>
           <p className="text-cc-text-dim text-xs">

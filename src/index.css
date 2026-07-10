@@ -8,7 +8,10 @@
   --color-cc-surface-hover: #4a4744;
   --color-cc-border: #4a4744;
   --color-cc-text: #e9e9e8;
-  --color-cc-text-dim: #b8b8b8;
+  /* Measured live against chess.com's Game Review sidebar: ordinary running text sits at
+     rgba(255,255,255,0.72), not solid white — full --color-cc-text is reserved for emphasis
+     (names, numbers, headlines). */
+  --color-cc-text-dim: rgba(255, 255, 255, 0.72);
   --color-cc-text-faint: #86847f;
   --color-cc-green: #81b64c;
   --color-cc-green-hover: #6fa63f;
@@ -17,15 +20,9 @@
   --color-cc-red-hover: #cf4834;
   --color-cc-orange: #e2903f;
 
-  /* Body text uses the platform's UI font (chess.com-style: no webfont on ordinary text);
-     headings/numbers (Game Rating, Accuracy, section titles) use Montserrat for a bit of
-     visual weight — see the `font-heading` utility below. */
+  /* chess.com uses the platform's UI font throughout — headings, numbers, and body text alike —
+     leaning on bold weights instead of a second webfont for visual hierarchy. */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-heading: "Montserrat", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-}
-
-.font-heading {
-  font-family: var(--font-heading);
 }
 
 /* Classification badge pop-in (BoardPanel) — a quick scale+fade so a landed badge (best move

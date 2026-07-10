@@ -38,7 +38,7 @@ export function PlayoutPanel({
         >
           ←
         </button>
-        <h2 className="font-heading text-sm font-semibold">Practice</h2>
+        <h2 className="text-sm font-semibold">Practice</h2>
       </div>
 
       <div className="flex flex-col gap-3 px-3 py-4">

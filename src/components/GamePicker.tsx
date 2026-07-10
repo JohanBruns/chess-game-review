@@ -147,11 +147,11 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
   return (
     <div ref={containerRef} className="relative shrink-0">
       {/* ── Top bar ── */}
-      <div className="flex gap-2 items-center px-3 py-2 border-b border-cc-border bg-cc-panel/40">
+      <div className="flex gap-2 items-center px-3 py-2 border-b border-cc-border bg-cc-panel">
         <span className="text-cc-text-dim text-xs shrink-0">User:</span>
         <input
           type="text"
-          className="w-36 bg-cc-panel text-cc-text text-xs px-2 py-1.5 rounded border border-cc-border focus:outline-none focus:border-cc-green"
+          className="w-36 bg-cc-bg-dark text-cc-text text-xs px-2 py-1.5 rounded border border-cc-border focus:outline-none focus:border-cc-green"
           placeholder="chess.com username"
           value={username}
           onChange={e => handleUsernameChange(e.target.value)}
@@ -159,7 +159,7 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
           spellCheck={false}
         />
         <button
-          className="flex items-center gap-1 px-3 py-1.5 bg-cc-green hover:bg-cc-green-hover text-white rounded font-medium text-xs disabled:opacity-40 whitespace-nowrap transition-colors"
+          className="flex items-center gap-1 px-3 py-1.5 bg-cc-surface hover:bg-cc-surface-hover text-cc-text rounded font-medium text-xs disabled:opacity-40 whitespace-nowrap transition-colors"
           disabled={!username.trim() || isLoading}
           onClick={handleFetch}
         >

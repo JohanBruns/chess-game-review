@@ -112,7 +112,7 @@ export function ReviewView({
         >
           ←
         </button>
-        <h2 className="font-heading text-sm font-semibold">Game Review</h2>
+        <h2 className="text-sm font-semibold">Game Review</h2>
       </div>
 
       <div className="shrink-0 flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">

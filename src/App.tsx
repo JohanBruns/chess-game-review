@@ -811,6 +811,7 @@ function App() {
               onStartReview={handleStartReview}
               puzzleCount={puzzleList.length}
               onStartPuzzles={handleStartPuzzles}
+              reviewAs={settings.reviewAs}
             />
           ) : sidebarView === 'review' && evalResults.length > 0 && engineError == null ? (
             <ReviewView
