@@ -187,6 +187,26 @@ function App() {
     setOrientation(settings.reviewAs === 'black' ? 'black' : 'white')
   }
 
+  // Auto-orient to the reviewed player's side purely from the loaded game — covers ?pgn= links
+  // and manual paste, which (unlike GamePicker's Recent-Games flow) never pass handleLoadPgn a
+  // reviewingSide. Keyed on `pgn` (not whiteName/blackName): a second game against the same
+  // opponent has identical names but a different pgn, and must still get its own check.
+  // knownUsername is read fresh here (not memoized) so a username typed into GamePicker's field
+  // after mount, before this game loaded, is still picked up. No known username, or no header
+  // match → orientation is left untouched (falls through to the reviewAs default above /
+  // GamePicker's reviewingSide).
+  const [prevPgn, setPrevPgn] = useState(pgn)
+  if (prevPgn !== pgn) {
+    setPrevPgn(pgn)
+    const params = new URLSearchParams(window.location.search)
+    const knownUsername = (params.get('username') ?? localStorage.getItem('chess-username'))
+      ?.trim().toLowerCase() || null
+    if (knownUsername) {
+      if (whiteName?.trim().toLowerCase() === knownUsername) setOrientation('white')
+      else if (blackName?.trim().toLowerCase() === knownUsername) setOrientation('black')
+    }
+  }
+
   // Board & piece appearance (persisted in localStorage) + the picker modal's open state.
   const { boardTheme, pieceTheme, setBoardId, setPieceId } = useTheme()
   const [themeOpen, setThemeOpen] = useState(false)
@@ -354,10 +374,6 @@ function App() {
 
   const reviewHeadlineText = reviewSub === 'explain' && bestSan != null ? `Explaining ${bestSan}` : ''
 
-  const reviewEvalBadge = formatEvalBadge(
-    reviewSub === 'idle' ? evalResults[currentPly] ?? null : evalResults[currentPly - 1] ?? null,
-  )
-
   // Class icon shown in the guided-review coach bubble: the played move's classification while
   // idle, forced to 'Best' while previewing the best move. (Explain mode ignores it — the
   // bubble shows a lightbulb there.)
@@ -483,8 +499,9 @@ function App() {
 
   // reviewingSide comes from GamePicker when a chess.com username's game is selected (it knows
   // which color that username played) — orients the board with the reviewed player at the
-  // bottom instead of always defaulting to White. Manual PGN paste has no username to derive
-  // this from, so it's omitted there and orientation falls back to today's reviewAs-driven default.
+  // bottom instead of always defaulting to White. Manual PGN paste / ?pgn= links have no
+  // reviewingSide to pass here, but still get oriented via the knownUsername render-phase
+  // fallback above (matches whiteName/blackName against a known chess-username/URL param).
   const handleLoadPgn = useCallback((newPgn: string, reviewingSide?: 'white' | 'black') => {
     clearAnalysis()
     loadPgn(newPgn)
@@ -649,6 +666,12 @@ function App() {
       ? { ...preEval, mate: explainStepMate(preEval.mate, lineSteps.length, explainStep) }
       : preEval
   }
+
+  // One computed source for both the coach bubble's badge and the eval bar — must sit after the
+  // idle/best/explain chain above (so it picks up whichever branch fired) and before the
+  // Phase-8 playout/puzzle overrides below (irrelevant here — ReviewView/the coach bubble never
+  // renders during those takeovers).
+  const reviewEvalBadge = formatEvalBadge(viewEval)
 
   // Board controls (interactivity, drop handler, ✓/✗ badge) — default to the retry-at-key-moments
   // wiring, overridden below by the Phase 8 practice/puzzle takeovers.
