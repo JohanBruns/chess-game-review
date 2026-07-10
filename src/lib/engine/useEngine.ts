@@ -12,10 +12,21 @@ export interface EvalResult {
   thirdBestMoveSan: string | null
 }
 
+// Two-pass batch analysis. Pass 1 sweeps every position single-PV on a small time budget;
+// pass 2 re-searches only the candidate positions (selected by the caller from the pass-1
+// results — see selectRefinementCandidates) with MultiPV 3 and a larger budget. `order` holds
+// the fen indices searched in the current pass; `done`/`total` drive the progress bar across
+// both passes (total grows when pass 2 starts, since candidates are unknown during pass 1).
 interface AnalysisQueue {
   fens: string[]
-  index: number
+  order: number[]
+  pos: number
+  phase: 1 | 2
+  done: number
+  total: number
 }
+
+export type CandidateSelector = (results: (EvalResult | null)[]) => number[]
 
 interface EngineState {
   isReady: boolean
@@ -39,11 +50,19 @@ const INITIAL_STATE: EngineState = {
 
 type InitPhase = 'uci' | 'isready' | 'ready'
 
-// Per-move time cap, passed alongside the depth limit (`go depth D movetime T` stops at
+// Per-move time caps, passed alongside the depth limit (`go depth D movetime T` stops at
 // whichever limit is hit first). Quiet positions still finish at full depth in well under the
 // cap; sharp middlegame positions no longer burn 10s+ each — that cap was the main reason a
-// full-game analysis took many minutes.
-const DEPTH_MOVETIME_MS: Record<number, number> = { 12: 1500, 15: 3000, 18: 6000 }
+// full-game analysis took many minutes. Keyed by the settings depth (12/15/18 = the
+// Fast/Balanced/Deep presets).
+//
+// SINGLE_MOVETIME_MS: interactive one-off evaluate() calls.
+// PASS1/PASS2: the two batch passes — pass 1 is a cheap single-PV sweep over every position,
+// pass 2 gives the selected candidate positions MultiPV 3 and a bigger budget than the old
+// analyze-everything-at-MultiPV-3 approach ever gave them.
+const SINGLE_MOVETIME_MS: Record<number, number> = { 12: 1500, 15: 3000, 18: 6000 }
+const PASS1_MOVETIME_MS: Record<number, number> = { 12: 200, 15: 300, 18: 600 }
+const PASS2_MOVETIME_MS: Record<number, number> = { 12: 700, 15: 1000, 18: 2000 }
 const DEFAULT_MOVETIME_MS = 3000
 // Grace period after the movetime cap before the watchdog assumes the engine is dead.
 const WATCHDOG_GRACE_MS = 2000
@@ -55,7 +74,16 @@ export function useEngine() {
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const initPhaseRef = useRef<InitPhase>('uci')
   const depthRef = useRef<number>(15)
+  const movetimeRef = useRef<number>(DEFAULT_MOVETIME_MS)
   const analysisQueueRef = useRef<AnalysisQueue | null>(null)
+  // Batch results accumulate here (source of truth during a batch); state.evalResults is a
+  // published copy. Needed so the pass-1 → pass-2 candidate selection can read the complete
+  // pass-1 results synchronously instead of through React state.
+  const batchResultsRef = useRef<(EvalResult | null)[]>([])
+  const selectCandidatesRef = useRef<CandidateSelector | null>(null)
+  // Single-position refinement (EngineLines on-demand): when set, the next single-eval
+  // bestmove also merges its result into evalResults[refineIndex].
+  const refineIndexRef = useRef<number | null>(null)
   const lastCpRef = useRef<number | null>(null)
   const lastMateRef = useRef<number | null>(null)
   const lastPvRef = useRef<string[]>([])
@@ -67,6 +95,12 @@ export function useEngine() {
   // instead of the batch `go depth` sweep. When set, the next `bestmove` resolves this instead of
   // touching evalResults/result. Reuses the same worker; only entered after batch analysis is idle.
   const playRequestRef = useRef<((uci: string | null) => void) | null>(null)
+  // Number of `go` commands whose `bestmove` reply is still outstanding. The engine answers
+  // strictly in order, so when a new request supersedes an in-flight search (its `go` was posted
+  // before the previous bestmove arrived — e.g. Analyze Game while an EngineLines refinement is
+  // running), the stale replies are recognized by count > 1 and swallowed instead of being
+  // attributed to the new search (which would shift every subsequent batch result by one).
+  const outstandingGoRef = useRef(0)
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
@@ -83,9 +117,10 @@ export function useEngine() {
     lastThirdBestCpRef.current = null
     lastThirdBestUciRef.current = null
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
-    const movetime = DEPTH_MOVETIME_MS[depthRef.current] ?? DEFAULT_MOVETIME_MS
+    const movetime = movetimeRef.current
     workerRef.current.postMessage(`position fen ${fen}`)
     workerRef.current.postMessage(`go depth ${depthRef.current} movetime ${movetime}`)
+    outstandingGoRef.current++
     // `go movetime` self-terminates, so this watchdog only fires if the engine went silent.
     // It must NOT advance the queue itself: the stopped search still emits `bestmove`, and if
     // the queue had already moved on, that late bestmove would be attributed to the wrong
@@ -95,26 +130,12 @@ export function useEngine() {
       workerRef.current?.postMessage('stop')
       timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null
-        const queue = analysisQueueRef.current
-        if (queue) {
-          const next = queue.index + 1
-          if (next < queue.fens.length) {
-            analysisQueueRef.current = { ...queue, index: next }
-            setState(prev => ({
-              ...prev,
-              analysisProgress: { current: next, total: queue.fens.length },
-            }))
-            postEvalRef.current(queue.fens[next])
-          } else {
-            analysisQueueRef.current = null
-            setState(prev => ({
-              ...prev,
-              isAnalyzing: false,
-              isEvaluating: false,
-              analysisProgress: null,
-            }))
-          }
+        // The search is written off as lost — don't count its (likely never-coming) bestmove.
+        outstandingGoRef.current = 0
+        if (analysisQueueRef.current) {
+          advanceBatchRef.current(null)
         } else {
+          refineIndexRef.current = null
           setState(prev => ({
             ...prev,
             isEvaluating: false,
@@ -124,11 +145,67 @@ export function useEngine() {
       }, WATCHDOG_GRACE_MS)
     }, movetime + WATCHDOG_GRACE_MS)
   }
-  // Sync the latest postEval closure into the ref after render (never during render — the
-  // worker.onmessage handler and the analysis-queue timeout both read postEvalRef.current
+  // Records one finished batch search (finalResult, or null when the engine died on it) and
+  // moves the batch forward: next position in the current pass, pass-1 → pass-2 transition
+  // (candidate selection + MultiPV switch), or finish. Called from the bestmove handler and
+  // from the dead-engine failsafe in postEval — never from both for the same search, since the
+  // failsafe only fires when no bestmove arrived.
+  const advanceBatchRef = useRef<(finalResult: EvalResult | null) => void>(() => {})
+
+  const advanceBatch = (finalResult: EvalResult | null) => {
+    const queue = analysisQueueRef.current
+    if (!queue) return
+    if (finalResult) batchResultsRef.current[queue.order[queue.pos]] = finalResult
+    const done = queue.done + 1
+    const nextPos = queue.pos + 1
+
+    if (nextPos < queue.order.length) {
+      analysisQueueRef.current = { ...queue, pos: nextPos, done }
+      setState(prev => ({
+        ...prev,
+        evalResults: [...batchResultsRef.current],
+        analysisProgress: { current: done, total: queue.total },
+      }))
+      postEvalRef.current(queue.fens[queue.order[nextPos]])
+      return
+    }
+
+    if (queue.phase === 1) {
+      const candidates = (selectCandidatesRef.current?.([...batchResultsRef.current]) ?? [])
+        .filter(i => Number.isInteger(i) && i >= 0 && i < queue.fens.length)
+      if (candidates.length > 0) {
+        workerRef.current?.postMessage('setoption name MultiPV value 3')
+        movetimeRef.current = PASS2_MOVETIME_MS[depthRef.current] ?? 1000
+        const total = queue.total + candidates.length
+        analysisQueueRef.current = { ...queue, phase: 2, order: candidates, pos: 0, done, total }
+        setState(prev => ({
+          ...prev,
+          evalResults: [...batchResultsRef.current],
+          analysisProgress: { current: done, total },
+        }))
+        postEvalRef.current(queue.fens[candidates[0]])
+        return
+      }
+      // No candidates: pass 1 ran at MultiPV 1, restore the default for single evals.
+      workerRef.current?.postMessage('setoption name MultiPV value 3')
+    }
+
+    analysisQueueRef.current = null
+    setState(prev => ({
+      ...prev,
+      evalResults: [...batchResultsRef.current],
+      isAnalyzing: false,
+      isEvaluating: false,
+      analysisProgress: null,
+    }))
+  }
+
+  // Sync the latest closures into their refs after render (never during render — the
+  // worker.onmessage handler and the analysis-queue timeout both read these refs
   // asynchronously, so they always see this post-commit value).
   useEffect(() => {
     postEvalRef.current = postEval
+    advanceBatchRef.current = advanceBatch
   })
 
   useEffect(() => {
@@ -215,6 +292,12 @@ export function useEngine() {
       }
 
       if (line.startsWith('bestmove')) {
+        // Superseded-search check FIRST (before touching the watchdog): if a newer `go` is
+        // already outstanding, this bestmove belongs to an older, replaced search — swallow it
+        // and leave the live search's watchdog alone.
+        outstandingGoRef.current = Math.max(0, outstandingGoRef.current - 1)
+        if (outstandingGoRef.current > 0) return
+
         function uciPvToSan(fen: string, uciMoves: string[]): string {
           const chess = new Chess(fen)
           const sans: string[] = []
@@ -270,39 +353,25 @@ export function useEngine() {
           thirdBestMoveSan: uciToSan(evaluatingFenRef.current, lastThirdBestUciRef.current),
         }
 
-        const queue = analysisQueueRef.current
-        if (queue) {
-          const next = queue.index + 1
-          setState(prev => {
-            const newResults = [...prev.evalResults]
-            newResults[queue.index] = finalResult
-            if (next < queue.fens.length) {
-              return {
-                ...prev,
-                evalResults: newResults,
-                analysisProgress: { current: next, total: queue.fens.length },
-              }
-            }
-            return {
-              ...prev,
-              evalResults: newResults,
-              isAnalyzing: false,
-              isEvaluating: false,
-              analysisProgress: null,
-            }
-          })
-          if (next < queue.fens.length) {
-            analysisQueueRef.current = { ...queue, index: next }
-            postEvalRef.current(queue.fens[next])
-          } else {
-            analysisQueueRef.current = null
-          }
+        if (analysisQueueRef.current) {
+          advanceBatchRef.current(finalResult)
         } else {
-          setState(prev => ({
-            ...prev,
-            isEvaluating: false,
-            result: finalResult,
-          }))
+          // Single eval — optionally a refinement (EngineLines on-demand): merge the fresh
+          // MultiPV result into the stored batch result for that position as well.
+          const refineIndex = refineIndexRef.current
+          refineIndexRef.current = null
+          if (refineIndex != null && refineIndex < batchResultsRef.current.length) {
+            batchResultsRef.current[refineIndex] = finalResult
+          }
+          setState(prev => {
+            const next = { ...prev, isEvaluating: false, result: finalResult }
+            if (refineIndex != null && refineIndex < prev.evalResults.length) {
+              const merged = [...prev.evalResults]
+              merged[refineIndex] = finalResult
+              next.evalResults = merged
+            }
+            return next
+          })
         }
       }
     }
@@ -328,8 +397,21 @@ export function useEngine() {
   const evaluate = useCallback((fen: string, depth = 15) => {
     if (!workerRef.current) return
     depthRef.current = depth
+    movetimeRef.current = SINGLE_MOVETIME_MS[depth] ?? DEFAULT_MOVETIME_MS
     analysisQueueRef.current = null
+    refineIndexRef.current = null
     setState(prev => ({ ...prev, isEvaluating: true, isAnalyzing: false, result: null, error: null }))
+    postEvalRef.current(fen)
+  }, [])
+
+  // EngineLines on-demand: a single MultiPV-3 search whose result is also merged into
+  // evalResults[fenIndex] — used when the current position only has a pass-1 (single-PV)
+  // result but the engine-lines panel needs the 2nd/3rd lines. No-op during a batch.
+  const refinePosition = useCallback((fenIndex: number, fen: string) => {
+    if (!workerRef.current || analysisQueueRef.current) return
+    movetimeRef.current = PASS2_MOVETIME_MS[depthRef.current] ?? 1000
+    refineIndexRef.current = fenIndex
+    setState(prev => ({ ...prev, isEvaluating: true, error: null }))
     postEvalRef.current(fen)
   }, [])
 
@@ -338,7 +420,13 @@ export function useEngine() {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
+    // A pass-1 batch runs at MultiPV 1 — restore the single-eval default when aborting one.
+    if (analysisQueueRef.current?.phase === 1) {
+      workerRef.current?.postMessage('setoption name MultiPV value 3')
+    }
     analysisQueueRef.current = null
+    batchResultsRef.current = []
+    refineIndexRef.current = null
     setState(prev => ({
       ...prev,
       evalResults: [],
@@ -350,14 +438,30 @@ export function useEngine() {
     }))
   }, [])
 
-  const analyzeGame = useCallback((fens: string[], depth = 15) => {
+  const analyzeGame = useCallback((fens: string[], depth = 15, selectCandidates?: CandidateSelector) => {
     if (!workerRef.current || fens.length === 0) return
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current)
       timeoutRef.current = null
     }
     depthRef.current = depth
-    analysisQueueRef.current = { fens, index: 0 }
+    movetimeRef.current = PASS1_MOVETIME_MS[depth] ?? 300
+    selectCandidatesRef.current = selectCandidates ?? null
+    refineIndexRef.current = null
+    batchResultsRef.current = new Array(fens.length).fill(null)
+    // End a possibly in-flight single search quickly; its bestmove is swallowed via the
+    // outstanding-go counter instead of being misattributed to the batch's first position.
+    if (outstandingGoRef.current > 0) workerRef.current.postMessage('stop')
+    // Pass 1 is a single-PV sweep; MultiPV goes back to 3 for pass 2 (or on finish/abort).
+    workerRef.current.postMessage('setoption name MultiPV value 1')
+    analysisQueueRef.current = {
+      fens,
+      order: fens.map((_, i) => i),
+      pos: 0,
+      phase: 1,
+      done: 0,
+      total: fens.length,
+    }
     setState(prev => ({
       ...prev,
       isAnalyzing: true,
@@ -383,6 +487,7 @@ export function useEngine() {
       }
       if (playRequestRef.current) playRequestRef.current(null) // supersede any stale request
       playRequestRef.current = resolve
+      refineIndexRef.current = null // a superseded in-flight refinement must not merge later
       evaluatingFenRef.current = fen
       lastCpRef.current = null
       lastMateRef.current = null
@@ -395,10 +500,12 @@ export function useEngine() {
       setState(prev => ({ ...prev, isEvaluating: true, error: null }))
       worker.postMessage(`position fen ${fen}`)
       worker.postMessage(`go movetime ${movetimeMs}`)
+      outstandingGoRef.current++
       // Watchdog: `go movetime` self-terminates, but force a stop + null-resolve if it goes silent.
       timeoutRef.current = setTimeout(() => {
         timeoutRef.current = null
         worker.postMessage('stop')
+        outstandingGoRef.current = 0 // search written off — don't count its bestmove anymore
         const pending = playRequestRef.current
         if (pending) {
           playRequestRef.current = null
@@ -420,6 +527,7 @@ export function useEngine() {
     evaluate,
     analyzeGame,
     clearAnalysis,
+    refinePosition,
     requestPlayMove,
   }
 }

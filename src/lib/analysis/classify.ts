@@ -123,7 +123,7 @@ export function winPct(cp: number): number {
   return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * cp)) - 1)
 }
 
-function evalToCp(r: EvalResult): number {
+export function evalToCp(r: EvalResult): number {
   if (r.cp !== null) return r.cp
   if (r.mate !== null) return r.mate > 0 ? 10000 : -10000
   return 0

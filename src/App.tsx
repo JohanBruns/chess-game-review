@@ -15,6 +15,7 @@ import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
 import { getBestMoveArrow, getThreatArrow } from './lib/analysis/arrows'
 import { getEngineLines } from './lib/analysis/lines'
+import { selectRefinementCandidates } from './lib/analysis/candidates'
 import {
   reviewHeadlineParts,
   formatEvalBadge,
@@ -85,12 +86,14 @@ function App() {
   const {
     isReady,
     isAnalyzing,
+    isEvaluating,
     result,
     evalResults,
     analysisProgress,
     error: engineError,
     analyzeGame,
     clearAnalysis,
+    refinePosition,
     requestPlayMove,
   } = useEngine()
 
@@ -429,6 +432,23 @@ function App() {
     return getEngineLines(evalResults[currentPly] ?? result)
   }, [settings.showEngineLines, evalResults, currentPly, result])
 
+  // EngineLines on-demand refinement: after the two-pass analysis, non-candidate positions only
+  // carry a single-PV result — when the lines panel is open on one of those, run one MultiPV-3
+  // search and merge it back into evalResults. The requested-set guards against re-firing on a
+  // position where even MultiPV 3 yields no 2nd line (e.g. only one legal move).
+  const refineRequestedRef = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    refineRequestedRef.current.clear()
+  }, [fens, isAnalyzing])
+  useEffect(() => {
+    if (!settings.showEngineLines || isAnalyzing || isEvaluating) return
+    const stored = evalResults[currentPly]
+    if (!stored || stored.secondBestMoveSan != null) return
+    if (refineRequestedRef.current.has(currentPly)) return
+    refineRequestedRef.current.add(currentPly)
+    refinePosition(currentPly, fens[currentPly])
+  }, [settings.showEngineLines, isAnalyzing, isEvaluating, evalResults, currentPly, fens, refinePosition])
+
   const handleExplain = useCallback(() => {
     setReviewSub('explain')
     setExplainStep(0)
@@ -455,8 +475,10 @@ function App() {
   }, [])
 
   const handleAnalyzeGame = useCallback(
-    () => analyzeGame(fens, settings.depth),
-    [analyzeGame, fens, settings.depth],
+    // Two-pass batch: pass 1 sweeps every position single-PV; the selector picks which
+    // positions get the MultiPV-3 pass-2 refinement (see selectRefinementCandidates).
+    () => analyzeGame(fens, settings.depth, results => selectRefinementCandidates(moves, results)),
+    [analyzeGame, fens, moves, settings.depth],
   )
 
   // reviewingSide comes from GamePicker when a chess.com username's game is selected (it knows

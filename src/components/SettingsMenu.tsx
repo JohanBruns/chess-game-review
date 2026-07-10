@@ -86,15 +86,15 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
               </select>
             </div>
             <div className="flex items-center justify-between gap-3 px-1">
-              <span className="text-sm text-cc-text">Analysis depth</span>
+              <span className="text-sm text-cc-text">Analysis</span>
               <select
                 value={settings.depth}
                 onChange={e => onChange({ depth: Number(e.target.value) as ReviewSettings['depth'] })}
                 className="bg-cc-surface text-cc-text text-sm rounded px-2 py-1 border border-cc-border"
               >
-                <option value={12}>12</option>
-                <option value={15}>15</option>
-                <option value={18}>18</option>
+                <option value={12}>Fast</option>
+                <option value={15}>Balanced</option>
+                <option value={18}>Deep</option>
               </select>
             </div>
           </section>
