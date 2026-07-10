@@ -722,7 +722,7 @@ function App() {
             // 128px was the pre-PlayerBar budget (nav/padding/gaps + header only).
             style={{ height: 'min(calc(100vh - 200px), calc(100vw - 384px))' }}
           >
-            <EvalBar evalResult={viewEval} />
+            <EvalBar evalResult={viewEval} orientation={orientation} />
             <div className="aspect-square h-full">
               <BoardPanel
                 fen={viewFen}

@@ -36,7 +36,7 @@
 | 5 | Explain/Best/Next-Buttonreihe | Sonnet | ✅ |
 | 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ✅ (Explain-Sub-Zeile zurückgestellt) |
 | 7 | Eval-Graph | Sonnet | ✅ |
-| 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ☐ |
+| 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ✅ |
 | 9 | Summary-Karte | Sonnet | ☐ |
 | 10 | Typografie-Feinschliff + Abnahme-Vergleich | Sonnet | ☐ |
 
@@ -257,6 +257,31 @@ Positionslinie, farbige Fehler-Dots); Klick-zu-Ply und Tooltip funktionieren wei
 
 **Fertig wenn:** Blunder-Ansicht side-by-side: Badge-Größe/-Position, Feld-Tints und
 Pfeilfarben stimmen mit chess.com überein.
+
+**Umgesetzt (09.07.2026, live gegen `Board&Game/review/Screenshot_22.png` per PIL nachgemessen + im
+Dev-Server DOM-verifiziert):**
+1. **Eval-Bar** (`EvalBar.tsx`): Breite 40 → **22 px**, radius **3 px**, Label **10 px bold** (tabular).
+   Zusätzlich **orientation-aware gemacht** (neuer `orientation`-Prop aus `App.tsx`): chess.com kippt
+   die Bar mit dem Brett — in Schwarz-Perspektive sitzt Weiß **oben** (Screenshot_23 = +4.2 oben).
+   Vorher war Weiß hart unten verdrahtet → für Schwarz-reviewte Partien inkonsistent mit dem (seit
+   `fa421f6`) gespiegelten Brett. Label reitet jetzt auf der Kante der **führenden** Seite unabhängig
+   von der Orientierung (`labelAtBottom = whiteLeads === whiteAtBottom`). DOM-verifiziert (Flip → Weiß-Fill
+   + Label wandern nach oben).
+2. **Badge** (`BoardPanel.tsx`): fix 20 px → **`w-[5%] aspect-square`** = 5 % der Brettbreite = **40 % der
+   Feldbreite** (am Screenshot gemessen: 37–40 % des Feldes, zentriert auf der oberen-rechten Feld-Ecke,
+   ragt leicht raus). DOM-verifiziert: 7 px / 145 px Board = 5 % = 40 % eines Feldes. Result-Badge (retry
+   ✓/✗) analog auf `w-[6%]`.
+3. **From/To-Tints:** Live geklärt → **beide Felder = Klassenfarbe** (Screenshot_22: d7+d6 beide salmon-rot,
+   `(223,116,88)` über dunklem Feld). Unser Code tönt schon from+to mit `CLASS_COLOR` @0.55 → **korrekt,
+   keine Änderung.** (Die frühere Plan-Vermutung „to = Standard-Highlight" war eine Verwechslung mit dem
+   Ziel-Feld des Best-Move-Pfeils, das chess.com orange hervorhebt.)
+4. **Pfeilfarben:** Plan-Hypothese „Antwortpfeil hellblau `#4fa8ff`" **widerlegt** — der Bestrafungspfeil
+   nach einem Blunder ist im Screenshot eindeutig **korallenrot** (Body `(203,84,63)`, Spitze `(232,102,58)`).
+   Unser Threat-Pfeil ist bereits rot (`THREAT_ARROW_COLOR #e5533d` = `(229,83,61)`, G/B praktisch identisch)
+   → **matcht, keine Änderung.** Der grüne „hättest-du-spielen-sollen"-Pfeil (`bestMoveArrow`) ist ein
+   ANDERER Pfeil (aus der Vor-Zug-Stellung) und bleibt grün; für ihn liegt kein widersprechender Beleg vor.
+   Severity-Coding des Best-Pfeils bräuchte Referenzen für Nicht-Blunder-Fälle → als optionaler Nachzug offen,
+   nicht geraten.
 
 ---
 
