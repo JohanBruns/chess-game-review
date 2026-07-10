@@ -39,9 +39,14 @@ const INITIAL_STATE: EngineState = {
 
 type InitPhase = 'uci' | 'isready' | 'ready'
 
-// Watchdog duration per search depth — deeper searches legitimately take longer, so a flat
-// timeout would either time out valid depth-18 searches or waste time waiting at depth 12.
-const DEPTH_TIMEOUT_MS: Record<number, number> = { 12: 7000, 15: 10000, 18: 20000 }
+// Per-move time cap, passed alongside the depth limit (`go depth D movetime T` stops at
+// whichever limit is hit first). Quiet positions still finish at full depth in well under the
+// cap; sharp middlegame positions no longer burn 10s+ each — that cap was the main reason a
+// full-game analysis took many minutes.
+const DEPTH_MOVETIME_MS: Record<number, number> = { 12: 1500, 15: 3000, 18: 6000 }
+const DEFAULT_MOVETIME_MS = 3000
+// Grace period after the movetime cap before the watchdog assumes the engine is dead.
+const WATCHDOG_GRACE_MS = 2000
 
 export function useEngine() {
   const [state, setState] = useState<EngineState>(INITIAL_STATE)
@@ -78,38 +83,46 @@ export function useEngine() {
     lastThirdBestCpRef.current = null
     lastThirdBestUciRef.current = null
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
+    const movetime = DEPTH_MOVETIME_MS[depthRef.current] ?? DEFAULT_MOVETIME_MS
     workerRef.current.postMessage(`position fen ${fen}`)
-    workerRef.current.postMessage(`go depth ${depthRef.current}`)
+    workerRef.current.postMessage(`go depth ${depthRef.current} movetime ${movetime}`)
+    // `go movetime` self-terminates, so this watchdog only fires if the engine went silent.
+    // It must NOT advance the queue itself: the stopped search still emits `bestmove`, and if
+    // the queue had already moved on, that late bestmove would be attributed to the wrong
+    // position and advance the queue a second time. So: ask the engine to stop, and only if
+    // even that produces no bestmove (engine truly dead), fail via the inner timer.
     timeoutRef.current = setTimeout(() => {
       workerRef.current?.postMessage('stop')
-      timeoutRef.current = null
-      const queue = analysisQueueRef.current
-      if (queue) {
-        const next = queue.index + 1
-        if (next < queue.fens.length) {
-          analysisQueueRef.current = { ...queue, index: next }
-          setState(prev => ({
-            ...prev,
-            analysisProgress: { current: next, total: queue.fens.length },
-          }))
-          postEvalRef.current(queue.fens[next])
+      timeoutRef.current = setTimeout(() => {
+        timeoutRef.current = null
+        const queue = analysisQueueRef.current
+        if (queue) {
+          const next = queue.index + 1
+          if (next < queue.fens.length) {
+            analysisQueueRef.current = { ...queue, index: next }
+            setState(prev => ({
+              ...prev,
+              analysisProgress: { current: next, total: queue.fens.length },
+            }))
+            postEvalRef.current(queue.fens[next])
+          } else {
+            analysisQueueRef.current = null
+            setState(prev => ({
+              ...prev,
+              isAnalyzing: false,
+              isEvaluating: false,
+              analysisProgress: null,
+            }))
+          }
         } else {
-          analysisQueueRef.current = null
           setState(prev => ({
             ...prev,
-            isAnalyzing: false,
             isEvaluating: false,
-            analysisProgress: null,
+            error: 'Timeout: the engine did not respond in time.',
           }))
         }
-      } else {
-        setState(prev => ({
-          ...prev,
-          isEvaluating: false,
-          error: 'Timeout: the engine did not respond in time.',
-        }))
-      }
-    }, DEPTH_TIMEOUT_MS[depthRef.current] ?? 10_000)
+      }, WATCHDOG_GRACE_MS)
+    }, movetime + WATCHDOG_GRACE_MS)
   }
   // Sync the latest postEval closure into the ref after render (never during render — the
   // worker.onmessage handler and the analysis-queue timeout both read postEvalRef.current
@@ -124,7 +137,10 @@ export function useEngine() {
 
     worker.onmessage = (e: MessageEvent<string>) => {
       const line = e.data.trim()
-      if (import.meta.env.DEV) console.log('[SF]', line)
+      // `info` lines arrive by the thousands during a batch analysis (every depth iteration ×
+      // MultiPV line × position) and console.log at that volume measurably slows the analysis
+      // with DevTools open — only log the sparse protocol lines (bestmove, init, errors).
+      if (import.meta.env.DEV && !line.startsWith('info')) console.log('[SF]', line)
 
       if (initPhaseRef.current === 'uci' && line === 'uciok') {
         initPhaseRef.current = 'isready'
@@ -135,6 +151,9 @@ export function useEngine() {
       if (initPhaseRef.current === 'isready' && line === 'readyok') {
         initPhaseRef.current = 'ready'
         worker.postMessage('setoption name MultiPV value 3')
+        // Sequential whole-game analysis revisits closely related positions; the default 16MB
+        // hash thrashes and throws those transposition-table hits away.
+        worker.postMessage('setoption name Hash value 128')
         setState(prev => ({ ...prev, isReady: true }))
         return
       }
