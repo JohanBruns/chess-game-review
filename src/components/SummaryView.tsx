@@ -32,6 +32,37 @@ interface SummaryViewProps {
   // The "Puzzles (n)" button is hidden when there are none.
   puzzleCount: number
   onStartPuzzles: () => void
+  // Whose side is being reviewed (settings.reviewAs) — the matching avatar gets a green
+  // highlight ring, chess.com-style. 'both' has no single reviewed side, so neither is ringed.
+  reviewAs: 'white' | 'black' | 'both'
+}
+
+// Every player-comparison row (names, Players/avatars, Accuracy, classification counts, Game
+// Rating, phase grades) shares this exact 4-column template — measured live against chess.com
+// (Screenshot_20/_1/_2): label left (flex), then two 64px value columns (white/black) with a
+// 32px icon column between them. Sharing one template is what keeps every row's values lined up
+// under each other instead of drifting per-row (the plan's "values stick to the outer edges" bug).
+function GridRow({
+  label,
+  left,
+  icon,
+  right,
+  className = '',
+}: {
+  label: React.ReactNode
+  left: React.ReactNode
+  icon?: React.ReactNode
+  right: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={`grid grid-cols-[1fr_64px_32px_64px] items-center gap-1 ${className}`}>
+      <span className="text-cc-text-faint text-xs truncate">{label}</span>
+      <div className="flex justify-center">{left}</div>
+      <div className="flex justify-center">{icon}</div>
+      <div className="flex justify-center">{right}</div>
+    </div>
+  )
 }
 
 // Sidebar "chapter 1" — chess.com's post-analysis Game Review summary. Structure verified
@@ -55,6 +86,7 @@ export function SummaryView({
   onStartReview,
   puzzleCount,
   onStartPuzzles,
+  reviewAs,
 }: SummaryViewProps) {
   const [tableExpanded, setTableExpanded] = useState(true)
   const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
@@ -64,8 +96,9 @@ export function SummaryView({
     <div className="relative flex flex-col h-full overflow-y-auto animate-chapter-fade-in">
       {celebrate && <ConfettiBurst />}
 
-      <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
-        <h2 className="font-heading text-sm font-semibold">Game Review</h2>
+      <div className="shrink-0 flex items-center justify-center gap-1.5 px-2 py-2 border-b border-cc-border/60">
+        <img src="/marks/best_128x.png" alt="" className="w-4 h-4" />
+        <h2 className="text-sm font-semibold">Game Review</h2>
       </div>
 
       <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
@@ -90,59 +123,67 @@ export function SummaryView({
       </div>
 
       <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        <div className="flex items-center justify-between text-sm gap-2">
-          <span className="font-medium truncate">
-            {whiteName}{whiteElo ? ` (${whiteElo})` : ''}
-          </span>
-          <span className="font-medium truncate text-right">
-            {blackName}{blackElo ? ` (${blackElo})` : ''}
-          </span>
-        </div>
+        <GridRow
+          label=""
+          left={
+            <span className="font-semibold text-sm truncate">
+              {whiteName}{whiteElo ? ` (${whiteElo})` : ''}
+            </span>
+          }
+          right={
+            <span className="font-semibold text-sm truncate">
+              {blackName}{blackElo ? ` (${blackElo})` : ''}
+            </span>
+          }
+        />
+        <GridRow
+          label="Players"
+          left={<PlayerAvatar name={whiteName} highlighted={reviewAs === 'white'} />}
+          right={<PlayerAvatar name={blackName} highlighted={reviewAs === 'black'} />}
+        />
 
-        <div className="flex items-center justify-between gap-2 px-1">
-          <AccuracyPill accuracy={whiteSummary.accuracy} light />
-          <span className="text-cc-text-faint text-xs shrink-0">Accuracy</span>
-          <AccuracyPill accuracy={blackSummary.accuracy} light={false} />
-        </div>
+        <GridRow
+          label="Accuracy"
+          left={<AccuracyPill accuracy={whiteSummary.accuracy} light />}
+          right={<AccuracyPill accuracy={blackSummary.accuracy} light={false} />}
+        />
 
         <button
           onClick={() => setTableExpanded(e => !e)}
-          className="flex items-center justify-center gap-1 rounded hover:bg-cc-surface/40 py-1 transition-colors text-cc-text-faint text-xs"
+          aria-label={tableExpanded ? 'Hide details' : 'Show details'}
+          className="flex items-center justify-center rounded hover:bg-cc-surface/40 py-1 transition-colors text-cc-text-faint text-xs"
         >
-          {tableExpanded ? '▲ Hide details' : '▼ Show details'}
+          {tableExpanded ? '▲' : '▼'}
         </button>
 
         {tableExpanded && (
           <>
             <div className="flex flex-col gap-0.5 text-xs">
               {CLASS_DISPLAY_ORDER.map(cls => (
-                <div key={cls} className="flex items-center justify-between px-1 py-0.5">
-                  <span className="font-semibold w-5 text-center">
-                    {whiteSummary.classificationCounts[cls]}
-                  </span>
-                  <span className="flex items-center gap-1.5 text-cc-text-dim flex-1 justify-center min-w-0">
-                    <img src={CLASS_ICON[cls]} alt={cls} className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{cls}</span>
-                  </span>
-                  <span className="font-semibold w-5 text-center">
-                    {blackSummary.classificationCounts[cls]}
-                  </span>
-                </div>
+                <GridRow
+                  key={cls}
+                  label={cls}
+                  left={<span className="font-semibold">{whiteSummary.classificationCounts[cls]}</span>}
+                  icon={<img src={CLASS_ICON[cls]} alt={cls} className="w-4 h-4" />}
+                  right={<span className="font-semibold">{blackSummary.classificationCounts[cls]}</span>}
+                />
               ))}
             </div>
 
-            <div className="flex items-center justify-between text-xs px-1 pt-2 border-t border-cc-border/60">
-              <RatingPill rating={whiteSummary.gameRating} />
-              <span className="text-cc-text-faint">Game Rating</span>
-              <RatingPill rating={blackSummary.gameRating} />
-            </div>
+            <GridRow
+              className="pt-2 border-t border-cc-border/60"
+              label="Game Rating"
+              left={<RatingPill rating={whiteSummary.gameRating} />}
+              right={<RatingPill rating={blackSummary.gameRating} />}
+            />
 
             {PHASE_ROWS.map(({ key, label }) => (
-              <div key={key} className="flex items-center justify-between text-xs px-1">
-                <PhaseIcon grade={whiteSummary.phaseGrades[key]} />
-                <span className="text-cc-text-faint">{label}</span>
-                <PhaseIcon grade={blackSummary.phaseGrades[key]} />
-              </div>
+              <GridRow
+                key={key}
+                label={label}
+                left={<PhaseIcon grade={whiteSummary.phaseGrades[key]} />}
+                right={<PhaseIcon grade={blackSummary.phaseGrades[key]} />}
+              />
             ))}
           </>
         )}
@@ -153,14 +194,14 @@ export function SummaryView({
       <div className="shrink-0 p-2 flex flex-col gap-2">
         <button
           onClick={onStartReview}
-          className="w-full px-3 py-2.5 rounded bg-cc-green hover:bg-cc-green-hover text-white text-sm font-semibold transition-colors"
+          className="w-full h-12 rounded-lg bg-cc-green hover:bg-cc-green-hover text-white text-[15px] font-bold transition-colors"
         >
           Start Review
         </button>
         {puzzleCount > 0 && (
           <button
             onClick={onStartPuzzles}
-            className="w-full px-3 py-2 rounded bg-cc-surface hover:bg-cc-surface-hover text-cc-text text-sm font-semibold transition-colors"
+            className="w-full h-12 rounded-lg bg-cc-surface hover:bg-cc-surface-hover text-cc-text text-[15px] font-bold transition-colors"
           >
             Puzzles ({puzzleCount})
           </button>
@@ -170,10 +211,23 @@ export function SummaryView({
   )
 }
 
+function PlayerAvatar({ name, highlighted }: { name: string; highlighted: boolean }) {
+  const initial = name.trim().charAt(0).toUpperCase() || '?'
+  return (
+    <div
+      className={`w-12 h-12 rounded-lg bg-cc-surface flex items-center justify-center text-cc-text-dim font-bold select-none ${
+        highlighted ? 'ring-2 ring-cc-green' : ''
+      }`}
+    >
+      {initial}
+    </div>
+  )
+}
+
 function AccuracyPill({ accuracy, light }: { accuracy: number | null; light: boolean }) {
   return (
     <span
-      className={`font-heading px-2 py-1 rounded font-semibold text-sm ${
+      className={`px-2 py-1 rounded font-semibold text-sm ${
         light ? 'bg-cc-text text-cc-bg' : 'bg-cc-bg-dark text-cc-text border border-cc-border'
       }`}
     >
@@ -184,14 +238,14 @@ function AccuracyPill({ accuracy, light }: { accuracy: number | null; light: boo
 
 function RatingPill({ rating }: { rating: number | null }) {
   return (
-    <span className="font-heading px-2 py-0.5 rounded bg-cc-surface font-bold text-cc-text min-w-10 text-center">
+    <span className="px-2 py-0.5 rounded bg-cc-surface font-bold text-cc-text min-w-10 text-center">
       {rating ?? '–'}
     </span>
   )
 }
 
 function PhaseIcon({ grade }: { grade: PhaseGrade | null | undefined }) {
-  if (!grade) return <span className="w-4 h-4 inline-block" />
+  if (!grade) return <span className="text-cc-text-faint">–</span>
   return <img src={CLASS_ICON[grade]} alt={grade} title={grade} className="w-4 h-4" />
 }
 

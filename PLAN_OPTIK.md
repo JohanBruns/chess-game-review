@@ -37,8 +37,8 @@
 | 6 | Zugliste (Figurinen, Icon-Politik, Zeilen) | **Opus** | ✅ (Explain-Sub-Zeile zurückgestellt) |
 | 7 | Eval-Graph | Sonnet | ✅ |
 | 8 | Eval-Bar + Brett-Details (Badge, Tints, Pfeile) | **Opus** | ✅ |
-| 9 | Summary-Karte | Sonnet | ☐ |
-| 10 | Typografie-Feinschliff + Abnahme-Vergleich | Sonnet | ☐ |
+| 9 | Summary-Karte | Sonnet | ✅ |
+| 10 | Typografie-Feinschliff + Abnahme-Vergleich | Sonnet | ✅ (Abnahme-Screenshot-Serie ausstehend) |
 
 ## Gemessene chess.com-Referenzwerte (DevTools, live 09.07.2026)
 
@@ -309,6 +309,23 @@ keine Avatare; Kopf ohne Icon.
 **Fertig wenn:** Side-by-side mit den beiden Summary-Screenshots von heute: gleiche
 Spaltenausrichtung, Pills, Chevron, Buttons.
 
+**Umgesetzt (10.07.2026, live DOM-verifiziert gegen `Board&Game/review/Screenshot_20/_1/_2.png`,
+Pixel-Messung per PIL bestätigte identische Spaltenzentren Players/Accuracy/Zähltabelle/
+Game-Rating/Phasen):** Neue gemeinsame `GridRow`-Komponente in `SummaryView.tsx`
+(`grid-cols-[1fr_64px_32px_64px]`), von JEDER Vergleichszeile genutzt — DOM-Messung bestätigt
+alle Zeilen exakt dieselben Spalten-x-Positionen (785/64px, 853/32px, 889/64px). Kopf jetzt
+zentriert mit grünem Stern-Icon (`best_128x.png`, wiederverwendet statt neuem Asset). Neue
+`PlayerAvatar`-Komponente (48 px, Initialen-Platzhalter wie Schritt 2, `ring-2 ring-cc-green`
+für die Seite aus `settings.reviewAs`, dafür neuer `reviewAs`-Prop aus `App.tsx` durchgereicht).
+Namen jetzt als eigene Zeile über den Avataren (vorher nebeneinander gemischt mit der
+Accuracy-Zeile). **Accuracy-Label-Bug gefixt:** Label war vorher MITTIG zwischen den Pills
+(`justify-between`); Live-Vergleich zeigt, dass „Accuracy" (wie „Brilliant" etc.) LINKS steht —
+jetzt über GridRow vereinheitlicht. Chevron-Button zeigt nur noch `▲`/`▼` (kein „Hide details"-Text
+mehr, `aria-label` trägt die Semantik). `PhaseIcon` zeigt jetzt `–` statt leerer Box für
+fehlende Phasen (Endgame bei kurzen Partien, live im Screenshot bestätigt). Start-Review/
+Puzzles-Buttons auf `h-12`(48px)/`rounded-lg`/`text-[15px] font-bold` vereinheitlicht.
+272 Tests grün, tsc/eslint sauber.
+
 ---
 
 ## Schritt 10 — Typografie-Feinschliff + Abnahme · **Sonnet**
@@ -326,6 +343,28 @@ Spaltenausrichtung, Pills, Chevron, Buttons.
    als „eigenes Feature" dokumentieren.
 
 **Fertig wenn:** Screenshot-Serie zeigt Parität; Restabweichungen sind dokumentiert und gewollt.
+
+**Umgesetzt (10.07.2026), Punkte 1–3, live verifiziert:**
+1. `--font-heading`/Montserrat komplett entfernt (nicht nur auf Zahlen-Pills reduziert — chess.com
+   nutzt wirklich durchgehend System-Stack). `@fontsource/montserrat`-Imports aus `main.tsx` raus,
+   Package deinstalliert (`npm uninstall`, package.json+lock aktualisiert). Alle 8 `font-heading`-
+   Nutzstellen (`ReviewView`, `SummaryView`×3, `PlayoutPanel`, `PuzzlePanel`×2, `SettingsMenu`,
+   `ThemePicker`) auf System-Stack umgestellt. DOM-verifiziert: `getComputedStyle(h2).fontFamily`
+   = `system-ui, -apple-system, "Segoe UI", …`.
+2. `--color-cc-text-dim`: `#b8b8b8` → `rgba(255,255,255,0.72)` (exakter Plan-Messwert). Bewusst NUR
+   die Variable angepasst (keine Fließtext-vs-Betont-Neuklassifizierung der 72 `text-cc-text`- vs.
+   30 `text-cc-text-dim`-Stellen im Code — das wäre ein eigener, riskanter Audit-Schritt gewesen,
+   nicht das, was „anpassen" im Plantext verlangt). DOM-verifiziert: `getComputedStyle(...).color`
+   = `rgba(255, 255, 255, 0.72)`.
+3. `GamePicker.tsx`-Topbar: `bg-cc-panel/40` → solides `bg-cc-panel` (dunkler), Username-Input auf
+   `bg-cc-bg-dark`, „Recent Games"-Button von auffälligem `bg-cc-green` auf dezentes
+   `bg-cc-surface` umgestellt (chess.com hat an dieser App-eigenen Stelle keine Referenz — nur
+   „dezenter" laut Plan-Vorgabe). Funktional unverändert (Fetch/Dropdown/Manual-Toggle).
+4. **Abnahme-Screenshot-Serie NICHT gemacht** — bräuchte den offenen chess.com-Referenz-Tab
+   nebeneinander (wie in den Original-Screenshots vom 09.07.), diese Session hatte nur die
+   lokalen Referenz-Bilder unter `Board&Game/review/`. Stattdessen alle Punkte 1–3 einzeln live
+   im Dev-Server verifiziert (Screenshots + DOM-Messung, s.o.). Offener Nachzug: eine echte
+   Seite-an-Seite-Session mit chess.com offen, falls noch Detailabweichungen auffallen.
 
 ---
 

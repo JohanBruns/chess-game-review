@@ -44,7 +44,7 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
         onMouseDown={e => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-cc-border bg-cc-panel">
-          <h2 className="font-heading text-sm font-semibold text-cc-text">Settings</h2>
+          <h2 className="text-sm font-semibold text-cc-text">Settings</h2>
           <button
             className="px-2 py-1 rounded text-cc-text-dim hover:bg-cc-surface hover:text-cc-text text-sm"
             onClick={onClose}
