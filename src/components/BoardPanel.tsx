@@ -176,7 +176,9 @@ export function BoardPanel({
             key={`${badge.src}-${lastMoveTo}`}
             src={badge.src}
             alt={classification}
-            className="absolute w-5 h-5 drop-shadow-lg animate-badge-pop-in"
+            // ~40% of a square (measured off a live chess.com review) → 5% of the board width;
+            // centered on the target square's top-right corner so it spills slightly past the edge.
+            className="absolute w-[5%] aspect-square drop-shadow-lg animate-badge-pop-in"
             style={{
               left: `${badge.left}%`,
               top:  `${badge.top}%`,
@@ -191,7 +193,8 @@ export function BoardPanel({
             key={`${resultBadgePos.src}-${resultBadge!.square}`}
             src={resultBadgePos.src}
             alt={resultBadge!.correct ? 'Correct' : 'Incorrect'}
-            className="absolute w-6 h-6 drop-shadow-lg animate-badge-pop-in"
+            // Slightly larger than the classification badge, same corner-anchored scaling.
+            className="absolute w-[6%] aspect-square drop-shadow-lg animate-badge-pop-in"
             style={{
               left: `${resultBadgePos.left}%`,
               top:  `${resultBadgePos.top}%`,
