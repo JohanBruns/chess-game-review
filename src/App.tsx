@@ -32,6 +32,7 @@ import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { ReviewView } from './components/ReviewView'
+import { BoardErrorBoundary } from './components/BoardErrorBoundary'
 import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
 import { PlayoutPanel } from './components/PlayoutPanel'
@@ -769,22 +770,24 @@ function App() {
           >
             <EvalBar evalResult={viewEval} orientation={orientation} />
             <div className="aspect-square h-full">
-              <BoardPanel
-                fen={viewFen}
-                lastMoveFrom={viewFrom}
-                lastMoveTo={viewTo}
-                classification={viewClass}
-                bestMoveArrow={viewArrow}
-                extraArrows={boardExtraArrows}
-                extraSquareHighlights={boardExtraSquares}
-                showBadges={settings.showBoardBadges}
-                resultBadge={boardResultBadge}
-                orientation={orientation}
-                interactive={boardInteractive}
-                onPieceDrop={boardOnDrop}
-                piecesBasePath={pieceTheme.basePath}
-                boardImageUrl={boardTheme.url}
-              />
+              <BoardErrorBoundary>
+                <BoardPanel
+                  fen={viewFen}
+                  lastMoveFrom={viewFrom}
+                  lastMoveTo={viewTo}
+                  classification={viewClass}
+                  bestMoveArrow={viewArrow}
+                  extraArrows={boardExtraArrows}
+                  extraSquareHighlights={boardExtraSquares}
+                  showBadges={settings.showBoardBadges}
+                  resultBadge={boardResultBadge}
+                  orientation={orientation}
+                  interactive={boardInteractive}
+                  onPieceDrop={boardOnDrop}
+                  piecesBasePath={pieceTheme.basePath}
+                  boardImageUrl={boardTheme.url}
+                />
+              </BoardErrorBoundary>
             </div>
           </div>
           {isLoaded && (
