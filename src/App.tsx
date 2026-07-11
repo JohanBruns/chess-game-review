@@ -91,6 +91,7 @@ function App() {
     evalResults,
     analysisProgress,
     error: engineError,
+    evaluate,
     analyzeGame,
     clearAnalysis,
     refinePosition,
@@ -465,22 +466,31 @@ function App() {
     refinePosition(currentPly, fens[currentPly])
   }, [settings.showEngineLines, isAnalyzing, isEvaluating, evalResults, currentPly, fens, refinePosition])
 
+  // Entering/stepping the explain line also live-evaluates the shown PV position on the
+  // (otherwise idle) primary worker, so the eval bar tracks what's on the board instead of
+  // freezing on the pre-move eval. Kicked off inside the handlers — batched with the step
+  // change, so no frame ever renders the previous step's `result`.
   const handleExplain = useCallback(() => {
     setReviewSub('explain')
     setExplainStep(0)
-  }, [])
+    if (lineSteps[0]) evaluate(lineSteps[0].fen, settings.depth)
+  }, [lineSteps, evaluate, settings.depth])
 
   const handleBest = useCallback(() => {
     setReviewSub('best')
   }, [])
 
   const handleLinePrev = useCallback(() => {
-    setExplainStep(s => Math.max(0, s - 1))
-  }, [])
+    const next = Math.max(0, explainStep - 1)
+    setExplainStep(next)
+    if (next !== explainStep && lineSteps[next]) evaluate(lineSteps[next].fen, settings.depth)
+  }, [explainStep, lineSteps, evaluate, settings.depth])
 
   const handleLineNext = useCallback(() => {
-    setExplainStep(s => Math.min(lineSteps.length - 1, s + 1))
-  }, [lineSteps.length])
+    const next = Math.min(lineSteps.length - 1, explainStep + 1)
+    setExplainStep(next)
+    if (next !== explainStep && lineSteps[next]) evaluate(lineSteps[next].fen, settings.depth)
+  }, [explainStep, lineSteps, evaluate, settings.depth])
 
   const handleGotIt = useCallback(() => {
     setReviewSub('idle')
@@ -659,13 +669,15 @@ function App() {
     viewFrom = step.from
     viewTo = step.to
     viewArrow = undefined
-    // The pre-move eval is a genuinely optimal line, so its cp value doesn't change as you step
-    // through it — but a mate count must still count down (see explainStepMate), or the eval bar
-    // looks frozen the whole way through a forced-mate PV.
-    const preEval = evalResults[currentPly - 1] ?? result
-    viewEval = preEval && preEval.mate !== null
+    // The eval bar follows the live evaluation of the shown PV position (`result`, streamed
+    // by the search the explain handlers kick off — typically within ~100ms). Until its first
+    // score arrives, fall back to the pre-move eval, with a forced-mate count stepped down
+    // along the line (explainStepMate) so a mate PV doesn't look frozen either.
+    const preEval = evalResults[currentPly - 1] ?? null
+    const fallback = preEval && preEval.mate !== null
       ? { ...preEval, mate: explainStepMate(preEval.mate, lineSteps.length, explainStep) }
       : preEval
+    viewEval = result ?? fallback
   }
 
   // One computed source for both the coach bubble's badge and the eval bar — must sit after the
