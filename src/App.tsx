@@ -573,9 +573,12 @@ function App() {
   // of firing immediately after it.
   useEffect(() => {
     if (!settings.autoplay || sidebarView !== 'review' || reviewSub !== 'idle' || !canGoNext) return
+    // Practice / puzzle modes own the board (same guard as the keyboard nav below) — without
+    // this, autoplay keeps stepping the review ply behind a running practice game.
+    if (playout.active || puzzles.active) return
     const id = setTimeout(() => goToNext(), AUTOPLAY_INTERVAL_MS)
     return () => clearTimeout(id)
-  }, [settings.autoplay, sidebarView, reviewSub, canGoNext, goToNext, currentPly])
+  }, [settings.autoplay, sidebarView, reviewSub, canGoNext, goToNext, currentPly, playout.active, puzzles.active])
 
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
