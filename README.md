@@ -99,11 +99,11 @@ By default, the extension sends games to the hosted version of the app. To use y
 
 ### Architecture
 
-Three strictly separated layers:
+Two strictly separated layers:
 
 1. **Engine layer** — Stockfish WASM evaluates positions deterministically, no LLM involved
 2. **UI layer** — React components for board, evaluation, graphs, move list
-3. **Coaching layer (optional)** — Claude API explains the engine's numbers in natural language, but doesn't evaluate itself
+
 
 ### Useful commands
 
