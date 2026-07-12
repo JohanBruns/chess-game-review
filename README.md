@@ -46,7 +46,7 @@ The tool is now running locally on your machine. You can paste a game as PGN (th
 
 > Once you're done, just close the terminal window to stop the tool.
 
-### Step 4 (optional) — Load games directly from chess.com
+### Step 4 (optional, but recommended) — Load games directly from chess.com
 
 If you don't want to copy games manually, there's a small browser extension that adds an "Analyze" button directly to chess.com.
 
