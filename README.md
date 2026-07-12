@@ -3,12 +3,13 @@
 A tool that analyzes your chess games — similar to chess.com's "Game Review" feature. It shows you which moves were good, which were bad, where you went wrong, and how to improve.
 
 <p align="center">
-  <img src="docs/images/blunder.png" alt="The tool flags a blunder directly on the board" width="80%">
+  <img src="docs/images/game_summary.png" alt="Summary of a game with accuracy, best moves, and mistakes" width="80%">
 </p>
 
 <p align="center">
-  <img src="docs/images/game_summary.png" alt="Summary of a game with accuracy, best moves, and mistakes" width="80%">
+  <img src="docs/images/blunder.png" alt="The tool flags a blunder directly on the board" width="80%">
 </p>
+
 
 ---
 
