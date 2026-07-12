@@ -17,7 +17,7 @@ A tool that analyzes your chess games — similar to chess.com's "Game Review" f
 
 The fastest way to use this tool is the Chrome extension by itself — no installs, no terminal, no Node.js. Analysis runs in a hosted version of the app, so you just need the extension.
 
-1. Download the [`extension/`](https://github.com/JohanBruns/chess-game-review/tree/main/extension) folder from this project
+1. Download the `extension/` folder from this project
 2. Open `chrome://extensions` in Chrome
 3. Turn on **"Developer mode"** in the top right
 4. Click **"Load unpacked"** and select the `extension/` folder
