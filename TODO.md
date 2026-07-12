@@ -1,3 +1,0 @@
-# Offene Aufgaben
-
-(keine)
