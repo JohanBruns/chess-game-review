@@ -12,8 +12,25 @@ A tool that analyzes your chess games — similar to chess.com's "Game Review" f
 
 ---
 
-## Installation Guide
+## Quick Start (recommended for most people)
 
+The fastest way to use this tool is the Chrome extension by itself — no installs, no terminal, no Node.js. Analysis runs in a hosted version of the app, so you just need the extension.
+
+1. Download the `extension/` folder from this project
+2. Open `chrome://extensions` in Chrome
+3. Turn on **"Developer mode"** in the top right
+4. Click **"Load unpacked"** and select the `extension/` folder
+5. Open any finished game on chess.com and click the new extension icon — the game opens automatically in the analysis tool
+
+There's also an even simpler option without an extension at all: a so-called **bookmarklet** (a bookmark with built-in functionality). Details in [`extension/README.md`](extension/README.md).
+
+> The extension sends games to a hosted instance of this app by default. If you'd rather run your own private, independent copy, see **Self-Hosting** below.
+
+---
+
+## Self-Hosting (optional, for your own independent copy)
+
+Run the tool entirely on your own computer instead of using the hosted version. Useful if you want to work offline, keep everything private, or just don't want to depend on someone else's server. No programming knowledge required — just follow these steps in order.
 
 ### Step 1 — Install a small helper program (Node.js)
 
@@ -43,17 +60,14 @@ The tool is now running locally on your machine. You can paste a game as PGN (th
 
 > Once you're done, just close the terminal window to stop the tool.
 
-### Step 4 (optional, but recommended) — Load games directly from chess.com
+### Step 4 — Point the extension at your local copy
 
-If you don't want to copy games manually, there's a small browser extension that adds an "Analyze" button directly to chess.com.
+By default, the extension sends games to the hosted version of the app. To use your own local copy instead:
 
-1. Open `chrome://extensions` in Chrome
-2. Turn on **"Developer mode"** in the top right
-3. Click **"Load unpacked"** and select the `extension/` folder from this project
-4. Important: the tool from Step 3 must still be running
-5. Open any game on chess.com and click the new extension icon — the game opens automatically in the analysis tool
-
-There's also an even simpler option without an extension: a so-called **bookmarklet** (a bookmark with built-in functionality). Details in [`extension/README.md`](extension/README.md).
+1. Load the extension as described in **Quick Start** above
+2. Open the extension popup on chess.com
+3. Replace the URL field with `http://localhost:5173`
+4. Make sure the tool from Step 3 is still running whenever you use the extension
 
 ---
 
