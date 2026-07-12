@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { GameSummary, PhaseGrade } from '../lib/analysis/summary'
+import type { MoveClass } from '../lib/analysis/classify'
 import { CLASS_ICON, CLASS_DISPLAY_ORDER } from '../lib/analysis/classIcons'
+import { classColor } from '../lib/analysis/classColors'
 import { summaryHeadline } from '../lib/analysis/review'
 import type { EvalResult } from '../lib/engine/useEngine'
 import type { MoveAnalysis } from '../lib/analysis/classify'
@@ -9,6 +11,13 @@ import { EvalGraph } from './EvalGraph'
 // Accuracy threshold for the confetti celebration burst — matches chess.com's "excellent game"
 // bar (see summaryHeadline's own >=90 check for the coach headline).
 const CELEBRATION_ACCURACY = 90
+
+// chess.com's summary table prints the label AND both counts in the classification color
+// (Screenshot: Brilliant teal, Great blue, Best/Excellent/Good green, …). Book's CLASS_COLOR
+// is the yellow last-move square tint, not the tan of the book icon / chess.com's Book row
+// text — override it for this table only.
+const BOOK_TABLE_COLOR = 'rgb(168, 138, 101)'
+const tableColor = (cls: MoveClass) => (cls === 'Book' ? BOOK_TABLE_COLOR : classColor(cls))
 
 const PHASE_ROWS: { key: 'opening' | 'middlegame' | 'endgame'; label: string }[] = [
   { key: 'opening', label: 'Opening' },
@@ -158,14 +167,26 @@ export function SummaryView({
 
         {tableExpanded && (
           <>
-            <div className="flex flex-col gap-0.5 text-xs">
+            <div className="flex flex-col gap-1.5">
               {CLASS_DISPLAY_ORDER.map(cls => (
                 <GridRow
                   key={cls}
-                  label={cls}
-                  left={<span className="font-semibold">{whiteSummary.classificationCounts[cls]}</span>}
-                  icon={<img src={CLASS_ICON[cls]} alt={cls} className="w-4 h-4" />}
-                  right={<span className="font-semibold">{blackSummary.classificationCounts[cls]}</span>}
+                  label={
+                    <span className="text-sm font-semibold" style={{ color: tableColor(cls) }}>
+                      {cls}
+                    </span>
+                  }
+                  left={
+                    <span className="text-[15px] font-bold" style={{ color: tableColor(cls) }}>
+                      {whiteSummary.classificationCounts[cls]}
+                    </span>
+                  }
+                  icon={<img src={CLASS_ICON[cls]} alt={cls} className="w-5 h-5" />}
+                  right={
+                    <span className="text-[15px] font-bold" style={{ color: tableColor(cls) }}>
+                      {blackSummary.classificationCounts[cls]}
+                    </span>
+                  }
                 />
               ))}
             </div>
