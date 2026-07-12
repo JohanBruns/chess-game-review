@@ -12,13 +12,10 @@ A tool that analyzes your chess games — similar to chess.com's "Game Review" f
 
 ---
 
-## Guide: Getting the tool running
+## Installation Guide
 
-You don't need any programming knowledge — just follow these steps in order.
 
 ### Step 1 — Install a small helper program (Node.js)
-
-The tool runs on your computer and needs a free helper program called **Node.js**.
 
 1. Open [nodejs.org](https://nodejs.org)
 2. Download the version labeled **"LTS"** (this is the recommended, stable version)
@@ -46,7 +43,7 @@ The tool is now running locally on your machine. You can paste a game as PGN (th
 
 > Once you're done, just close the terminal window to stop the tool.
 
-### Step 4 (optional) — Load games directly from chess.com
+### Step 4 (optional, but recommended) — Load games directly from chess.com
 
 If you don't want to copy games manually, there's a small browser extension that adds an "Analyze" button directly to chess.com.
 
