@@ -12,13 +12,10 @@ A tool that analyzes your chess games — similar to chess.com's "Game Review" f
 
 ---
 
-## Guide: Getting the tool running
+## Installation Guide
 
-You don't need any programming knowledge — just follow these steps in order.
 
 ### Step 1 — Install a small helper program (Node.js)
-
-The tool runs on your computer and needs a free helper program called **Node.js**.
 
 1. Open [nodejs.org](https://nodejs.org)
 2. Download the version labeled **"LTS"** (this is the recommended, stable version)
