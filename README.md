@@ -1,139 +1,135 @@
 # Chess Game Review
 
-Ein Tool, das deine Schachpartien analysiert — so wie die "Game Review"-Funktion von chess.com. Es zeigt dir, welche Züge gut und welche schlecht waren, wo du einen Fehler gemacht hast und wie du dich verbessern kannst.
+A tool that analyzes your chess games — similar to chess.com's "Game Review" feature. It shows you which moves were good, which were bad, where you went wrong, and how to improve.
 
 <p align="center">
-  <img src="docs/images/blunder.png" alt="Das Tool markiert einen Fehlzug (Blunder) direkt auf dem Brett" width="80%">
+  <img src="docs/images/blunder.png" alt="The tool flags a blunder directly on the board" width="80%">
 </p>
 
-Im Beispiel oben erkennt das Tool sofort: Der Zug `Qxe5` war ein **Blunder** (ein schwerer Fehler) — die Bewertung springt um +5.47 zugunsten des Gegners. Genau solche Momente macht dir das Tool sichtbar, Zug für Zug.
-
-Am Ende der Analyse bekommst du eine Übersicht über die ganze Partie:
-
 <p align="center">
-  <img src="docs/images/game_summary.png" alt="Zusammenfassung einer Partie mit Genauigkeit, besten Zügen und Fehlern" width="80%">
+  <img src="docs/images/game_summary.png" alt="Summary of a game with accuracy, best moves, and mistakes" width="80%">
 </p>
 
 ---
 
-## Anleitung: So bekommst du das Tool zum Laufen
+## Guide: Getting the tool running
 
-Du brauchst kein Programmierwissen dafür — folge einfach diesen Schritten der Reihe nach.
+You don't need any programming knowledge — just follow these steps in order.
 
-### Schritt 1 — Ein kleines Hilfsprogramm installieren (Node.js)
+### Step 1 — Install a small helper program (Node.js)
 
-Das Tool läuft auf deinem Computer und braucht dafür ein kostenloses Hilfsprogramm namens **Node.js**.
+The tool runs on your computer and needs a free helper program called **Node.js**.
 
-1. Öffne [nodejs.org](https://nodejs.org)
-2. Lade die Version mit der Aufschrift **"LTS"** herunter (das ist die empfohlene, stabile Version)
-3. Installiere sie wie jedes andere Programm (einfach "Weiter" klicken)
+1. Open [nodejs.org](https://nodejs.org)
+2. Download the version labeled **"LTS"** (this is the recommended, stable version)
+3. Install it like any other program (just click "Next")
 
-### Schritt 2 — Das Projekt herunterladen
+### Step 2 — Download the project
 
-Lade dir diesen Projektordner herunter (z. B. über den grünen "Code"-Button auf GitHub → "Download ZIP") und entpacke ihn irgendwo auf deinem Computer.
+Download this project folder (e.g. via the green "Code" button on GitHub → "Download ZIP") and unzip it anywhere on your computer.
 
-### Schritt 3 — Das Tool starten
+### Step 3 — Start the tool
 
-1. Öffne den entpackten Ordner
-2. Öffne darin ein Terminal-Fenster (Rechtsklick im Ordner → "Terminal hier öffnen" bzw. "Open in Terminal")
-3. Tippe folgenden Befehl ein und drücke Enter — das lädt einmalig alles, was das Tool zum Laufen braucht:
+1. Open the unzipped folder
+2. Open a terminal window inside it (right-click in the folder → "Open Terminal here" / "Open in Terminal")
+3. Type the following command and press Enter — this downloads everything the tool needs, once:
    ```
    npm install
    ```
-4. Danach startest du das Tool mit:
+4. Then start the tool with:
    ```
    npm run dev
    ```
-5. Es erscheint eine Adresse wie `http://localhost:5173` — öffne diese im Browser
+5. An address like `http://localhost:5173` will appear — open it in your browser
 
-Das Tool läuft jetzt bei dir lokal. Du kannst eine Partie per PGN einfügen (das ist der Text-Export einer Schachpartie) und die Analyse startet automatisch.
+The tool is now running locally on your machine. You can paste a game as PGN (that's the text export of a chess game) and the analysis starts automatically.
 
-> Sobald du fertig bist, kannst du das Terminal-Fenster einfach schließen, um das Tool wieder zu beenden.
+> Once you're done, just close the terminal window to stop the tool.
 
-### Schritt 4 (optional) — Partien direkt von chess.com laden
+### Step 4 (optional) — Load games directly from chess.com
 
-Wenn du keine Partien manuell kopieren willst, gibt es eine kleine Browser-Erweiterung, die den "Analysieren"-Knopf direkt auf chess.com hinzufügt.
+If you don't want to copy games manually, there's a small browser extension that adds an "Analyze" button directly to chess.com.
 
-1. Öffne in Chrome die Seite `chrome://extensions`
-2. Schalte oben rechts den **"Entwicklermodus"** ein
-3. Klicke auf **"Entpackte Erweiterung laden"** und wähle den Ordner `extension/` aus diesem Projekt
-4. Wichtig: Das Tool aus Schritt 3 muss dafür weiterhin laufen
-5. Öffne jetzt eine beliebige Partie auf chess.com und klicke auf das neue Erweiterungs-Icon — die Partie öffnet sich automatisch im Analyse-Tool
+1. Open `chrome://extensions` in Chrome
+2. Turn on **"Developer mode"** in the top right
+3. Click **"Load unpacked"** and select the `extension/` folder from this project
+4. Important: the tool from Step 3 must still be running
+5. Open any game on chess.com and click the new extension icon — the game opens automatically in the analysis tool
 
-Alternativ gibt es auch eine noch einfachere Variante ganz ohne Erweiterung: ein sogenanntes **Bookmarklet** (ein Lesezeichen mit eingebauter Funktion). Details dazu stehen in [`extension/README.md`](extension/README.md).
-
----
-
-## Was du in der Analyse siehst
-
-- **Zug-Bewertungen** — jeder Zug bekommt ein Label wie Beste, Gut, Ungenauigkeit, Fehler oder Blunder
-- **Bewertungsverlauf** — ein Graph zeigt, wann sich die Partie zugunsten welcher Seite gedreht hat
-- **Genauigkeit in %** — wie präzise jede Seite insgesamt gespielt hat
-- **Eröffnungserkennung** — welche bekannte Eröffnung gespielt wurde
-- **Coaching-Erklärungen** *(optional)* — kurze, verständliche Erklärungen zu einzelnen Zügen
+There's also an even simpler option without an extension: a so-called **bookmarklet** (a bookmark with built-in functionality). Details in [`extension/README.md`](extension/README.md).
 
 ---
 
-## Für Entwickler:innen
+## What you'll see in the analysis
+
+- **Move ratings** — every move gets a label like Best, Good, Inaccuracy, Mistake, or Blunder
+- **Evaluation graph** — a chart showing when the game swung in whose favor
+- **Accuracy %** — how precisely each side played overall
+- **Opening recognition** — which known opening was played
+- **Coaching explanations** *(optional)* — short, plain-language explanations of individual moves
+
+---
+
+## For developers
 
 <details>
-<summary>Technische Details anzeigen</summary>
+<summary>Show technical details</summary>
 
 ### Tech Stack
 
-- **Frontend:** React 19 mit TypeScript, gebaut mit Vite
-- **Brett:** react-chessboard
-- **Schachlogik:** chess.js (Zugvalidierung, PGN-Parsing)
-- **Engine:** Stockfish 18 (WebAssembly, läuft in einem Web Worker)
-- **Graphen:** Recharts
+- **Frontend:** React 19 with TypeScript, built with Vite
+- **Board:** react-chessboard
+- **Chess logic:** chess.js (move validation, PGN parsing)
+- **Engine:** Stockfish 18 (WebAssembly, runs in a Web Worker)
+- **Charts:** Recharts
 - **Styling:** Tailwind CSS
 - **Tests:** Vitest
 
-### Architektur
+### Architecture
 
-Drei strikt getrennte Schichten:
+Three strictly separated layers:
 
-1. **Engine-Schicht** — Stockfish WASM bewertet Stellungen deterministisch, kein LLM involviert
-2. **UI-Schicht** — React-Komponenten für Brett, Bewertung, Graphen, Zugliste
-3. **Coaching-Schicht (optional)** — Claude API erklärt die Engine-Zahlen in natürlicher Sprache, bewertet aber nicht selbst
+1. **Engine layer** — Stockfish WASM evaluates positions deterministically, no LLM involved
+2. **UI layer** — React components for board, evaluation, graphs, move list
+3. **Coaching layer (optional)** — Claude API explains the engine's numbers in natural language, but doesn't evaluate itself
 
-### Nützliche Befehle
+### Useful commands
 
 ```bash
-npm run dev     # Entwicklungsserver starten
-npm run build   # Produktions-Build erstellen
-npm run lint    # Linter ausführen
-npm test        # Tests ausführen
+npm run dev     # start dev server
+npm run build   # create production build
+npm run lint    # run linter
+npm test        # run tests
 ```
 
-### Projektstruktur
+### Project structure
 
 ```
 ├── src/
-│   ├── components/        # React-Komponenten (Brett, Eval, Coaching, ...)
+│   ├── components/        # React components (board, eval, coaching, ...)
 │   ├── lib/
-│   │   ├── analysis/      # Analyse-Logik (Klassifizierung, Accuracy)
-│   │   └── engine/        # Engine-Kommunikation und Web Worker
-│   ├── hooks/             # Custom Hooks (useGame, useCoaching)
-│   ├── data/               # Statische Daten (Eröffnungsdatenbank)
+│   │   ├── analysis/      # Analysis logic (classification, accuracy)
+│   │   └── engine/        # Engine communication and Web Worker
+│   ├── hooks/             # Custom hooks (useGame, useCoaching)
+│   ├── data/               # Static data (openings database)
 │   ├── App.tsx
 │   └── main.tsx
 ├── public/
-│   ├── engine/             # Stockfish-WASM-Dateien
-│   ├── pieces/             # Schachfiguren-SVGs
-│   ├── sounds/             # Zug-Sounds
-│   └── marks/              # Klassifizierungs-Icons
-├── extension/               # Browser-Erweiterung
-├── Board&Game/              # Design-Assets
+│   ├── engine/             # Stockfish WASM files
+│   ├── pieces/             # Chess piece SVGs
+│   ├── sounds/             # Move sounds
+│   └── marks/              # Classification icons
+├── extension/               # Browser extension
+├── Board&Game/              # Design assets
 └── package.json
 ```
 
-### Tastenkürzel
+### Keyboard shortcuts
 
-- **Pfeiltasten links/rechts** — zwischen Zügen navigieren
-- **Pos1/Ende** — zum Anfang/Ende der Partie springen
+- **Left/Right arrow keys** — navigate between moves
+- **Home/End** — jump to start/end of game
 
-### Ressourcen
+### Resources
 
 - [Stockfish Documentation](https://stockfishchess.org/)
 - [chess.js Documentation](https://github.com/jhlywa/chess.js)
@@ -145,10 +141,10 @@ npm test        # Tests ausführen
 
 ---
 
-## Mitmachen
+## Contributing
 
-Das ist ein privates Lernprojekt. Forke es gerne und passe es für deine eigenen Zwecke an!
+This is a personal learning project. Feel free to fork it and adapt it for your own use!
 
-## Lizenz
+## License
 
 MIT
