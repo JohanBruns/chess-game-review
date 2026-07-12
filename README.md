@@ -1,133 +1,154 @@
-# Chess Game Review 
-# No AI Slop
+# Chess Game Review
 
-A web-based chess game analysis tool inspired by chess.com's Game Review feature. Analyze your games with real-time engine evaluation (Stockfish), move classification, accuracy metrics, and detailed coaching insights.
+Ein Tool, das deine Schachpartien analysiert — so wie die "Game Review"-Funktion von chess.com. Es zeigt dir, welche Züge gut und welche schlecht waren, wo du einen Fehler gemacht hast und wie du dich verbessern kannst.
 
-## Features
+<p align="center">
+  <img src="docs/images/blunder.png" alt="Das Tool markiert einen Fehlzug (Blunder) direkt auf dem Brett" width="80%">
+</p>
 
-- **PGN/FEN Loading** — Import your games from PGN notation or load positions via FEN
-- **Real-time Engine Analysis** — Stockfish WASM engine evaluates every position instantly
-- **Move Classification** — Automatic move ratings (Best, Excellent, Good, Inaccuracy, Mistake, Blunder)
-- **Eval Graph** — Visual representation of evaluation changes throughout the game
-- **Accuracy Metrics** — Per-player accuracy percentages based on engine analysis
-- **Opening Recognition** — Displays ECO opening names and classifications
-- **Coaching Mode** — Optional AI-powered explanations of moves using Claude API
-- **Browser Extension** — Analyze games directly from chess.com without manual PGN copying
+Im Beispiel oben erkennt das Tool sofort: Der Zug `Qxe5` war ein **Blunder** (ein schwerer Fehler) — die Bewertung springt um +5.47 zugunsten des Gegners. Genau solche Momente macht dir das Tool sichtbar, Zug für Zug.
 
-## Getting Started
+Am Ende der Analyse bekommst du eine Übersicht über die ganze Partie:
 
-### Prerequisites
+<p align="center">
+  <img src="docs/images/game_summary.png" alt="Zusammenfassung einer Partie mit Genauigkeit, besten Zügen und Fehlern" width="80%">
+</p>
 
-- Node.js 18+ and npm
-- Modern web browser with WebAssembly support
+---
 
-### Installation
+## Anleitung: So bekommst du das Tool zum Laufen
 
-```bash
-npm install
-```
+Du brauchst kein Programmierwissen dafür — folge einfach diesen Schritten der Reihe nach.
 
-### Development
+### Schritt 1 — Ein kleines Hilfsprogramm installieren (Node.js)
 
-```bash
-npm run dev
-```
+Das Tool läuft auf deinem Computer und braucht dafür ein kostenloses Hilfsprogramm namens **Node.js**.
 
-The app will start at `http://localhost:5173`. Open it in your browser and paste a PGN or FEN to begin analyzing.
+1. Öffne [nodejs.org](https://nodejs.org)
+2. Lade die Version mit der Aufschrift **"LTS"** herunter (das ist die empfohlene, stabile Version)
+3. Installiere sie wie jedes andere Programm (einfach "Weiter" klicken)
 
-### Building for Production
+### Schritt 2 — Das Projekt herunterladen
 
-```bash
-npm run build
-```
+Lade dir diesen Projektordner herunter (z. B. über den grünen "Code"-Button auf GitHub → "Download ZIP") und entpacke ihn irgendwo auf deinem Computer.
 
-### Linting
+### Schritt 3 — Das Tool starten
 
-```bash
-npm lint
-```
+1. Öffne den entpackten Ordner
+2. Öffne darin ein Terminal-Fenster (Rechtsklick im Ordner → "Terminal hier öffnen" bzw. "Open in Terminal")
+3. Tippe folgenden Befehl ein und drücke Enter — das lädt einmalig alles, was das Tool zum Laufen braucht:
+   ```
+   npm install
+   ```
+4. Danach startest du das Tool mit:
+   ```
+   npm run dev
+   ```
+5. Es erscheint eine Adresse wie `http://localhost:5173` — öffne diese im Browser
 
-### Running Tests
+Das Tool läuft jetzt bei dir lokal. Du kannst eine Partie per PGN einfügen (das ist der Text-Export einer Schachpartie) und die Analyse startet automatisch.
 
-```bash
-npm test
-```
+> Sobald du fertig bist, kannst du das Terminal-Fenster einfach schließen, um das Tool wieder zu beenden.
 
-## Tech Stack
+### Schritt 4 (optional) — Partien direkt von chess.com laden
 
-- **Frontend Framework:** React 19 with TypeScript
-- **Build Tool:** Vite
-- **UI Components:** react-chessboard for board rendering
+Wenn du keine Partien manuell kopieren willst, gibt es eine kleine Browser-Erweiterung, die den "Analysieren"-Knopf direkt auf chess.com hinzufügt.
+
+1. Öffne in Chrome die Seite `chrome://extensions`
+2. Schalte oben rechts den **"Entwicklermodus"** ein
+3. Klicke auf **"Entpackte Erweiterung laden"** und wähle den Ordner `extension/` aus diesem Projekt
+4. Wichtig: Das Tool aus Schritt 3 muss dafür weiterhin laufen
+5. Öffne jetzt eine beliebige Partie auf chess.com und klicke auf das neue Erweiterungs-Icon — die Partie öffnet sich automatisch im Analyse-Tool
+
+Alternativ gibt es auch eine noch einfachere Variante ganz ohne Erweiterung: ein sogenanntes **Bookmarklet** (ein Lesezeichen mit eingebauter Funktion). Details dazu stehen in [`extension/README.md`](extension/README.md).
+
+---
+
+## Was du in der Analyse siehst
+
+- **Zug-Bewertungen** — jeder Zug bekommt ein Label wie Beste, Gut, Ungenauigkeit, Fehler oder Blunder
+- **Bewertungsverlauf** — ein Graph zeigt, wann sich die Partie zugunsten welcher Seite gedreht hat
+- **Genauigkeit in %** — wie präzise jede Seite insgesamt gespielt hat
+- **Eröffnungserkennung** — welche bekannte Eröffnung gespielt wurde
+- **Coaching-Erklärungen** *(optional)* — kurze, verständliche Erklärungen zu einzelnen Zügen
+
+---
+
+## Für Entwickler:innen
+
+<details>
+<summary>Technische Details anzeigen</summary>
+
+### Tech Stack
+
+- **Frontend:** React 19 mit TypeScript, gebaut mit Vite
+- **Brett:** react-chessboard
+- **Schachlogik:** chess.js (Zugvalidierung, PGN-Parsing)
+- **Engine:** Stockfish 18 (WebAssembly, läuft in einem Web Worker)
+- **Graphen:** Recharts
 - **Styling:** Tailwind CSS
-- **Chess Logic:** chess.js for move validation and PGN parsing
-- **Analysis Engine:** Stockfish 18 (WebAssembly, runs in Web Worker)
-- **Charting:** Recharts for evaluation graphs
-- **Testing:** Vitest for unit tests
+- **Tests:** Vitest
 
-## Architecture
+### Architektur
 
-The application follows a strict three-layer architecture:
+Drei strikt getrennte Schichten:
 
-1. **Engine Layer** — Stockfish WASM evaluates positions and provides deterministic analysis (no ML/LLM involvement)
-2. **UI Layer** — React components for board, evaluation, graphs, and move lists
-3. **Coaching Layer** (Optional) — Claude API generates natural language explanations of engine evaluations
+1. **Engine-Schicht** — Stockfish WASM bewertet Stellungen deterministisch, kein LLM involviert
+2. **UI-Schicht** — React-Komponenten für Brett, Bewertung, Graphen, Zugliste
+3. **Coaching-Schicht (optional)** — Claude API erklärt die Engine-Zahlen in natürlicher Sprache, bewertet aber nicht selbst
 
-## Keyboard Shortcuts
+### Nützliche Befehle
 
-- **Left/Right Arrow Keys** — Navigate between moves
-- **Home/End** — Jump to start/end of game
+```bash
+npm run dev     # Entwicklungsserver starten
+npm run build   # Produktions-Build erstellen
+npm run lint    # Linter ausführen
+npm test        # Tests ausführen
+```
 
-## Browser Extension
-
-A Chrome extension is included to analyze games directly from chess.com:
-
-### Option A: Bookmarklet 
-1. Create a new bookmark
-2. Paste the content of `extension/bookmarklet.js` as the URL
-3. Click the bookmark on any chess.com game page
-
-### Option B: Chrome Extension (Recommended)
-1. Open `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked" and select the `extension/` folder
-4. Click the extension icon on chess.com game pages
-
-See `extension/README.md` for more details.
-
-## Project Structure
+### Projektstruktur
 
 ```
 ├── src/
-│   ├── components/        # React components (board, eval, coaching, etc.)
+│   ├── components/        # React-Komponenten (Brett, Eval, Coaching, ...)
 │   ├── lib/
-│   │   ├── analysis/      # Core analysis logic (classification, accuracy)
-│   │   └── engine/        # Engine communication and Web Worker
-│   ├── hooks/             # Custom React hooks (useGame, useCoaching)
-│   ├── data/              # Static data (openings database)
+│   │   ├── analysis/      # Analyse-Logik (Klassifizierung, Accuracy)
+│   │   └── engine/        # Engine-Kommunikation und Web Worker
+│   ├── hooks/             # Custom Hooks (useGame, useCoaching)
+│   ├── data/               # Statische Daten (Eröffnungsdatenbank)
 │   ├── App.tsx
 │   └── main.tsx
 ├── public/
-│   ├── engine/            # Stockfish WASM files
-│   ├── pieces/            # Chess piece SVGs
-│   ├── sounds/            # Move sounds
-│   └── marks/             # Classification icons
-├── extension/             # Browser extension files
-├── Board&Game/            # Design assets and chess piece graphics
+│   ├── engine/             # Stockfish-WASM-Dateien
+│   ├── pieces/             # Schachfiguren-SVGs
+│   ├── sounds/             # Zug-Sounds
+│   └── marks/              # Klassifizierungs-Icons
+├── extension/               # Browser-Erweiterung
+├── Board&Game/              # Design-Assets
 └── package.json
 ```
 
-## Contributing
+### Tastenkürzel
 
-This is a personal project for learning chess analysis. Feel free to fork and adapt it for your own use!
+- **Pfeiltasten links/rechts** — zwischen Zügen navigieren
+- **Pos1/Ende** — zum Anfang/Ende der Partie springen
 
-## License
-
-MIT
-
-## Resources
+### Ressourcen
 
 - [Stockfish Documentation](https://stockfishchess.org/)
-- [chess.js Documentation](https://chillychessprogramming.github.io/chess.js/)
+- [chess.js Documentation](https://github.com/jhlywa/chess.js)
 - [React Documentation](https://react.dev/)
 - [Tailwind CSS Documentation](https://tailwindcss.com/)
 - [Lichess Opening Database](https://github.com/lichess-org/chess-openings)
+
+</details>
+
+---
+
+## Mitmachen
+
+Das ist ein privates Lernprojekt. Forke es gerne und passe es für deine eigenen Zwecke an!
+
+## Lizenz
+
+MIT
