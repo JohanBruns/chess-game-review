@@ -1,31 +1,31 @@
 # Chess Analyzer — Browser Extension
 
-Lädt chess.com-Partien automatisch ins lokale Analyse-Tool.
+Automatically loads chess.com games into the analysis tool.
 
-## Voraussetzung
+## Requirement
 
-`npm run dev` im `game-review`-Ordner muss laufen (Port 5173).
+None by default — the extension sends games to the hosted version of the app. If you're running your own local copy instead (see the main [README](../README.md#self-hosting-optional-for-your-own-independent-copy)), `npm run dev` must be running in the `game-review` folder (port 5173), and you'll need to point the extension at `http://localhost:5173`.
 
-## Option A: Bookmarklet (kein Extension-Setup nötig)
+## Option A: Bookmarklet (no extension setup needed)
 
-1. Neues Lesezeichen anlegen
-2. Als URL den Inhalt von `bookmarklet.js` eintragen (eine Zeile, beginnt mit `javascript:`)
-3. Auf einer chess.com-Spielseite das Lesezeichen anklicken → App öffnet sich
+1. Create a new bookmark
+2. Paste the contents of `bookmarklet.js` as the URL (one line, starts with `javascript:`)
+3. Click the bookmark on a chess.com game page → the app opens
 
 ## Option B: Chrome Extension (Manifest V3)
 
-1. Chrome öffnen → `chrome://extensions`
-2. "Entwicklermodus" einschalten (oben rechts)
-3. "Entpackte Erweiterung laden" → diesen `extension/`-Ordner auswählen
-4. Auf chess.com eine Partie öffnen → Extension-Icon klicken → "Partie analysieren"
+1. Open Chrome → `chrome://extensions`
+2. Turn on "Developer mode" (top right)
+3. "Load unpacked" → select this `extension/` folder
+4. Open a game on chess.com → click the extension icon → "Analyze Game"
 
-## PGN-Extraktion (zwei Strategien)
+## PGN Extraction (two strategies)
 
-1. **`__NEXT_DATA__`-Script** — schnell, kein Netzwerk-Request nötig; funktioniert wenn chess.com Next.js für diese Seite nutzt
-2. **Inoffizieller Callback-Endpoint** — `https://www.chess.com/callback/live/game/{id}` — Fallback; instabil, kann wegfallen
+1. **`__NEXT_DATA__` script** — fast, no network request needed; works when chess.com uses Next.js for this page
+2. **Unofficial callback endpoint** — `https://www.chess.com/callback/live/game/{id}` — fallback; unstable, may break without notice
 
-## Bekannte Einschränkungen
+## Known Limitations
 
-- URL-Längenlimit: ~8000 Zeichen. Sehr lange Partien (500+ Züge) können das überschreiten.
-- chess.com ändert gelegentlich seine interne Seitenstruktur → Strategie 1 kann dann kurzfristig brechen.
-- Funktioniert nur für abgeschlossene Partien; laufende Live-Partien sind über den Callback-Endpoint abrufbar.
+- URL length limit: ~8000 characters. Very long games (500+ moves) may exceed this.
+- chess.com occasionally changes its internal page structure → strategy 1 can break temporarily as a result.
+- Only works for finished games; ongoing live games can be fetched via the callback endpoint.
