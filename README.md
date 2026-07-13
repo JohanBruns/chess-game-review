@@ -17,7 +17,7 @@ A tool that analyzes your chess games — similar to chess.com's "Game Review" f
 
 The fastest way to use this tool is the Chrome extension by itself — no installs, no terminal, no Node.js. Analysis runs in a hosted version of the app, so you just need the extension.
 
-1. Download the [`extension/`](https://github.com/JohanBruns/chess-game-review/tree/main/extension) folder from this project
+1. Download the `extension/` folder from this project
 2. Open `chrome://extensions` in Chrome
 3. Turn on **"Developer mode"** in the top right
 4. Click **"Load unpacked"** and select the `extension/` folder
@@ -99,11 +99,11 @@ By default, the extension sends games to the hosted version of the app. To use y
 
 ### Architecture
 
-Three strictly separated layers:
+Two strictly separated layers:
 
 1. **Engine layer** — Stockfish WASM evaluates positions deterministically, no LLM involved
 2. **UI layer** — React components for board, evaluation, graphs, move list
-3. **Coaching layer (optional)** — Claude API explains the engine's numbers in natural language, but doesn't evaluate itself
+
 
 ### Useful commands
 
