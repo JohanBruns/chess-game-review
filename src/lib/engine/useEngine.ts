@@ -1,21 +1,14 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { analyzeBatch, abortBatch } from './enginePool'
-import { parseInfoScore, uciToSan, uciPvToSan } from './uci'
+import { loadCached, mergeResults, missingIndices, storeCached } from './analysisCache'
+import { parseInfoScore, uciToSan, uciPvToSan, type EvalResult } from './uci'
 
-export interface EvalResult {
-  cp: number | null
-  mate: number | null
-  bestMoveSan: string | null
-  pv: string | null
-  secondBestCp: number | null
-  secondBestMoveSan: string | null
-  thirdBestCp: number | null
-  thirdBestMoveSan: string | null
-}
+export type { EvalResult } from './uci'
 
 // Whole-game batch analysis: every position gets one MultiPV-3 search at the settings depth,
-// run in parallel on the enginePool workers (see enginePool.ts). The primary worker below only
-// serves the interactive paths (evaluate, refinePosition, requestPlayMove).
+// run in parallel on the enginePool workers (see enginePool.ts) — unless the per-position
+// IndexedDB cache (analysisCache.ts) already holds it. The primary worker below only serves
+// the interactive paths (evaluate, refinePosition, requestPlayMove).
 //
 // Publishing is deliberately decoupled from the engines (measured 2026-07): pushing
 // evalResults into state after every position re-renders the whole app (move classification
@@ -359,22 +352,12 @@ export function useEngine() {
       evalResults: new Array(fens.length).fill(null),
       analysisProgress: { current: 0, total: fens.length },
     }))
-    analyzeBatch(fens, depth, (done, total) => {
-      if (batchGenRef.current !== gen) return
-      // Throttled progress-only publish — see the header comment: evalResults stays
-      // reference-stable during the batch so the O(n) memo chain never recomputes mid-run.
-      const now = performance.now()
-      if (now - lastPublishRef.current >= PUBLISH_INTERVAL_MS) {
-        lastPublishRef.current = now
-        setState(prev => ({ ...prev, analysisProgress: { current: done, total } }))
-      }
-    }).then(results => {
-      if (batchGenRef.current !== gen) return // aborted or superseded
+    const finish = (results: (EvalResult | null)[], searched: number) => {
       batchActiveRef.current = false
       batchResultsRef.current = results
       if (import.meta.env.DEV) {
-        console.log('[SF] batch analysis:', fens.length, 'positions in',
-          Math.round(performance.now() - batchStartRef.current), 'ms')
+        console.log('[SF] batch analysis:', fens.length, 'positions (', fens.length - searched,
+          'from cache ) in', Math.round(performance.now() - batchStartRef.current), 'ms')
       }
       setState(prev => ({
         ...prev,
@@ -383,6 +366,32 @@ export function useEngine() {
         isEvaluating: false,
         analysisProgress: null,
       }))
+    }
+    // Cached positions (see analysisCache.ts) skip the engine; only the misses go to the pool,
+    // and progress counts the cache hits as already done.
+    loadCached(fens, depth).then(cached => {
+      if (batchGenRef.current !== gen) return undefined // aborted or superseded during lookup
+      const missing = missingIndices(cached)
+      if (missing.length === 0) {
+        finish(cached, 0)
+        return undefined
+      }
+      const missingFens = missing.map(i => fens[i])
+      const fromCache = fens.length - missing.length
+      return analyzeBatch(missingFens, depth, (done) => {
+        if (batchGenRef.current !== gen) return
+        // Throttled progress-only publish — see the header comment: evalResults stays
+        // reference-stable during the batch so the O(n) memo chain never recomputes mid-run.
+        const now = performance.now()
+        if (now - lastPublishRef.current >= PUBLISH_INTERVAL_MS) {
+          lastPublishRef.current = now
+          setState(prev => ({ ...prev, analysisProgress: { current: fromCache + done, total: fens.length } }))
+        }
+      }).then(fresh => {
+        if (batchGenRef.current !== gen) return // aborted or superseded
+        void storeCached(missingFens, depth, fresh)
+        finish(mergeResults(cached, missing, fresh), missing.length)
+      })
     }).catch(() => {
       if (batchGenRef.current !== gen) return
       batchActiveRef.current = false
