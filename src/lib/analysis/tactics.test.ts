@@ -29,6 +29,24 @@ describe('detectThemes', () => {
     expect(hanging!.highlight.squares).toContain('e5')
   })
 
+  it('does not call the capturing piece hanging after an even trade', () => {
+    // 4.Bxc6 in the Ruy Lopez Exchange: the bishop can be recaptured, but it just took a
+    // knight of equal value — a trade, not a hanging piece.
+    const fen = 'r1bqkbnr/1ppp1ppp/p1n5/1B2p3/4P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 0 4'
+    const themes = detectThemes(playMove(fen, 'Bxc6'), QUIET, QUIET, null)
+    expect(themes.find(t => t.kind === 'hangingPiece')).toBeUndefined()
+  })
+
+  it('still flags a capture that loses material on the exchange', () => {
+    // Qxe5+ grabs a pawn, but the d6-pawn recaptures: the queen (9) goes for a pawn (1) —
+    // net 8, clearly hanging despite the capture compensation.
+    const fen = '4k3/8/3p4/4p3/8/8/4Q3/4K3 w - - 0 1'
+    const themes = detectThemes(playMove(fen, 'Qxe5+'), QUIET, QUIET, null)
+    const hanging = themes.find(t => t.kind === 'hangingPiece')
+    expect(hanging).toBeDefined()
+    expect(hanging!.description).toContain('queen on e5')
+  })
+
   it('detects a knight fork of king and rook', () => {
     const move = playMove('r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1', 'Nc7+')
     const themes = detectThemes(move, QUIET, QUIET, null)
