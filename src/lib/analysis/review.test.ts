@@ -58,6 +58,12 @@ describe('reviewHeadline', () => {
     expect(reviewHeadline('O-O', 'Blunder', true)).toBe('O-O is best')
   })
 
+  it('keeps Brilliant/Great labels when the move is also the engine best', () => {
+    // 6.Nxf7 in the Fried Liver: the engine's top move AND a Brilliant sacrifice.
+    expect(reviewHeadline('Nxf7', 'Brilliant', true)).toBe('Nxf7 is a brilliant move')
+    expect(reviewHeadline('Rc4', 'Great', true)).toBe('Rc4 is a great move')
+  })
+
   it('says "is best" when classification itself is Best, even if isEnginesBest is false', () => {
     expect(reviewHeadline('Nf3', 'Best', false)).toBe('Nf3 is best')
   })
