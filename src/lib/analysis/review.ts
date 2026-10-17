@@ -41,10 +41,13 @@ const CLASS_PHRASE: Record<Exclude<MoveClass, 'Book' | 'Best'>, [middle: string,
 
 // isEnginesBest covers the (classification !== 'Best') edge case where the played move
 // happens to equal the engine's top move but got classified otherwise (shouldn't normally
-// happen, but keeps the headline honest if it does).
+// happen, but keeps the headline honest if it does). Brilliant/Great are the exception: they
+// are usually the engine's top move too, and their own label must win over plain "best".
 export function reviewHeadlineParts(san: string, cls: MoveClass, isEnginesBest: boolean): HeadlineParts {
   if (cls === 'Book') return { san, middle: 'is a', classWord: 'book move' }
-  if (isEnginesBest || cls === 'Best') return { san, middle: 'is', classWord: 'best' }
+  if (cls !== 'Brilliant' && cls !== 'Great' && (isEnginesBest || cls === 'Best')) {
+    return { san, middle: 'is', classWord: 'best' }
+  }
   const [middle, classWord] = CLASS_PHRASE[cls]
   return { san, middle, classWord }
 }
