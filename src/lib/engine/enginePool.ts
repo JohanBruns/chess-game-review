@@ -1,28 +1,24 @@
-import type { EvalResult } from './useEngine'
-import { parseInfoScore, uciToSan, uciPvToSan } from './uci'
+import {
+  accumulateInfo, analysisCommands, batchMovetimeMs, finishSearch, newSearch, ANALYSIS_OPTION_COMMANDS,
+  type EvalResult, type SearchAccumulator,
+} from './uci'
 
 // Worker pool for the whole-game batch analysis. N independent single-thread WASM engine
 // instances (the exact same build the primary worker uses — NOT the rejected pthread
 // multi-thread build) pull positions from a shared cursor, so the ~100-500ms searches run
-// in parallel instead of serially. Results are identical to the serial sweep (fixed depth);
-// only the wall time scales with the machine's cores. The pool is only used by
+// in parallel instead of serially. Every search starts from a cleared hash (see
+// analysisCommands), so a position's result depends only on (fen, depth): identical to the
+// serial sweep, identical across runs, and safe to cache (analysisCache.ts). Only the wall
+// time scales with the machine's cores. The pool is only used by
 // useEngine.analyzeGame — all interactive paths (evaluate/refinePosition/requestPlayMove)
 // stay on the primary worker.
 
-// Per-position time caps, passed alongside the depth limit (`go depth D movetime T` stops
-// at whichever limit is hit first). Depth terminates virtually every search long before
-// these caps; they only rein in pathological outlier positions. Keyed by the settings
-// depth (12/15/18 = the Fast/Balanced/Deep presets).
-const BATCH_MOVETIME_MS: Record<number, number> = { 12: 7000, 15: 10000, 18: 20000 }
 // Grace period after the movetime cap before the watchdog assumes an engine is dead.
 const WATCHDOG_GRACE_MS = 2000
 const INIT_TIMEOUT_MS = 15000
 // Diminishing returns + RAM beyond 4 instances; one core stays free for the main thread
 // (a busy main thread delays bestmove delivery — see useEngine's publish-throttle notes).
 const MAX_POOL_SIZE = 4
-// Smaller than the primary worker's 128MB — N instances run at once, and each one only
-// sees a slice of the game, so a big shared transposition table pays off less.
-const POOL_HASH_MB = 32
 
 export function poolSize(): number {
   return Math.min(MAX_POOL_SIZE, Math.max(1, (navigator.hardwareConcurrency ?? 4) - 1))
@@ -31,14 +27,7 @@ export function poolSize(): number {
 interface SearchState {
   batch: Batch
   idx: number
-  fen: string
-  cp: number | null
-  mate: number | null
-  pv: string[]
-  secondCp: number | null
-  secondUci: string | null
-  thirdCp: number | null
-  thirdUci: string | null
+  acc: SearchAccumulator
   stopTimer: ReturnType<typeof setTimeout> | null
   graceTimer: ReturnType<typeof setTimeout> | null
 }
@@ -104,20 +93,12 @@ function pump(pw: PoolWorker) {
   const s: SearchState = {
     batch,
     idx,
-    fen: batch.fens[idx],
-    cp: null,
-    mate: null,
-    pv: [],
-    secondCp: null,
-    secondUci: null,
-    thirdCp: null,
-    thirdUci: null,
+    acc: newSearch(batch.fens[idx]),
     stopTimer: null,
     graceTimer: null,
   }
   pw.search = s
-  pw.worker.postMessage(`position fen ${s.fen}`)
-  pw.worker.postMessage(`go depth ${batch.depth} movetime ${batch.movetime}`)
+  for (const cmd of analysisCommands(s.acc.fen, batch.depth, batch.movetime)) pw.worker.postMessage(cmd)
   pw.outstanding++
   // `go movetime` self-terminates, so this only fires if the engine went silent: ask it to
   // stop, and only if even that produces no bestmove (engine truly dead), write the
@@ -142,20 +123,7 @@ function handleMessage(pw: PoolWorker, line: string) {
   const s = pw.search
 
   if (line.startsWith('info')) {
-    if (!s) return
-    const info = parseInfoScore(line, s.fen.split(' ')[1] === 'b')
-    if (!info) return
-    if (info.multipvIdx === 1) {
-      s.cp = info.cp
-      s.mate = info.mate
-      if (info.pvUci.length > 0) s.pv = info.pvUci.slice(0, 10)
-    } else if (info.multipvIdx === 2 && info.cp !== null) {
-      s.secondCp = info.cp
-      if (info.pvUci.length > 0) s.secondUci = info.pvUci[0]
-    } else if (info.multipvIdx === 3 && info.cp !== null) {
-      s.thirdCp = info.cp
-      if (info.pvUci.length > 0) s.thirdUci = info.pvUci[0]
-    }
+    if (s) accumulateInfo(s.acc, line)
     return
   }
 
@@ -167,17 +135,7 @@ function handleMessage(pw: PoolWorker, line: string) {
       clearTimers(s)
       const batch = s.batch
       if (batch === activeBatch && !batch.aborted && !batch.settled) {
-        const uciMove = line.split(' ')[1]
-        batch.results[s.idx] = {
-          cp: s.cp,
-          mate: s.mate,
-          bestMoveSan: uciToSan(s.fen, uciMove),
-          pv: s.pv.length > 0 ? uciPvToSan(s.fen, s.pv) : null,
-          secondBestCp: s.secondCp,
-          secondBestMoveSan: uciToSan(s.fen, s.secondUci),
-          thirdBestCp: s.thirdCp,
-          thirdBestMoveSan: uciToSan(s.fen, s.thirdUci),
-        }
+        batch.results[s.idx] = finishSearch(s.acc, line)
         batch.done++
         batch.remaining--
         batch.onProgress(batch.done, batch.fens.length)
@@ -210,8 +168,7 @@ function spawnWorker(): PoolWorker {
       }
       if (phase === 'isready' && line === 'readyok') {
         clearTimeout(timeout)
-        worker.postMessage('setoption name MultiPV value 3')
-        worker.postMessage(`setoption name Hash value ${POOL_HASH_MB}`)
+        for (const cmd of ANALYSIS_OPTION_COMMANDS) worker.postMessage(cmd)
         worker.onmessage = (ev: MessageEvent<string>) => handleMessage(pw, String(ev.data).trim())
         resolve()
       }
@@ -266,7 +223,7 @@ export async function analyzeBatch(
     const batch: Batch = {
       fens,
       depth,
-      movetime: BATCH_MOVETIME_MS[depth] ?? 10000,
+      movetime: batchMovetimeMs(depth),
       results: new Array<EvalResult | null>(fens.length).fill(null),
       cursor: 0,
       remaining: fens.length,
