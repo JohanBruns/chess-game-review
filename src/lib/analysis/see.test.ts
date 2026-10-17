@@ -41,6 +41,21 @@ describe('seeGain', () => {
     expect(seeGain('4k3/8/4p3/3n4/4P3/8/8/3QK3 w - - 0 1', 'd5')).toBe(3)
   })
 
+  it('skips a pinned cheapest attacker and starts with the next one', () => {
+    // d4xe5 would win the f6-defended knight for a pawn (3), but the d4 pawn is pinned to the
+    // a4 king by the h4 rook. The exchange must start with Nxe5 instead: knight for knight = 0.
+    expect(seeGain('7k/8/5p2/4n3/K2P3r/5N2/8/8 w - - 0 1', 'e5')).toBe(0)
+  })
+
+  it('counts a promoting capture', () => {
+    // gxh8=Q takes the undefended rook.
+    expect(seeGain('k6r/6P1/8/8/8/8/8/K7 w - - 0 1', 'h8')).toBe(5)
+  })
+
+  it('returns 0 when the square holds a piece of the side to move', () => {
+    expect(seeGain('4k3/8/8/3n4/8/8/8/3RK3 w - - 0 1', 'd1')).toBe(0)
+  })
+
   it('returns 0 for an invalid FEN instead of throwing', () => {
     expect(seeGain('not a fen', 'e4')).toBe(0)
   })
