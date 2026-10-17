@@ -20,22 +20,31 @@ export function seeGain(fen: string, square: Square): number {
 }
 
 function seeGainOn(chess: Chess, square: Square): number {
-  const captures = chess
-    .moves({ verbose: true })
-    .filter(m => m.to === square && m.captured)
-  if (captures.length === 0) return 0
+  const target = chess.get(square)
+  if (!target || target.color === chess.turn()) return 0
 
-  // Capture with the least valuable attacker first (king last — it can only
-  // recapture when the square is undefended anyway, which legality enforces).
-  let cheapest = captures[0]
-  for (const m of captures) {
-    if (orderVal(m.piece) < orderVal(cheapest.piece)) cheapest = m
+  // Capture with the least valuable attacker first (king last — it can only recapture when
+  // the square is undefended anyway, which legality enforces). attackers() is pseudo-legal, so
+  // walk them cheapest-first and take the first capture chess.js accepts (a pinned piece or a
+  // king stepping into check is rejected). Deliberately not moves({ verbose: true }): that
+  // builds every legal move with before/after FENs just to filter a handful of captures, and
+  // made SEE the dominant cost of classifying a game (~1.3s of ~2s for 108 plies).
+  const attackers = chess.attackers(square, chess.turn())
+    .map(from => ({ from, value: orderVal(chess.get(from)?.type ?? 'k') }))
+    .sort((a, b) => a.value - b.value)
+  const promotes = square[1] === '8' || square[1] === '1'
+  for (const { from } of attackers) {
+    const isPawn = chess.get(from)?.type === 'p'
+    try {
+      chess.move({ from, to: square, promotion: isPawn && promotes ? 'q' : undefined })
+    } catch {
+      continue // illegal (pin / king safety) — try the next-cheapest attacker
+    }
+    const gain = (PIECE_VAL[target.type] ?? 0) - seeGainOn(chess, square)
+    chess.undo()
+    return Math.max(0, gain)
   }
-
-  chess.move(cheapest)
-  const gain = (PIECE_VAL[cheapest.captured!] ?? 0) - seeGainOn(chess, square)
-  chess.undo()
-  return Math.max(0, gain)
+  return 0
 }
 
 function orderVal(piece: string): number {
