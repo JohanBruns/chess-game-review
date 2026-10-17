@@ -16,6 +16,7 @@ const TOGGLES: { key: keyof ReviewSettings; label: string }[] = [
   { key: 'coachEnabled', label: 'Coach' },
   { key: 'soundEnabled', label: 'Sound' },
   { key: 'autoplay', label: 'Autoplay (Review)' },
+  { key: 'autoAnalyze', label: 'Analyze games automatically' },
 ]
 
 // chess.com-style gear settings modal: persisted toggles (via useSettings/localStorage) for the

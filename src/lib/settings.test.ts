@@ -36,6 +36,11 @@ describe('mergeSettings', () => {
     expect(merged.soundEnabled).toBe(DEFAULT_SETTINGS.soundEnabled)
   })
 
+  it('turns auto-analysis on for settings stored before the toggle existed', () => {
+    const merged = mergeSettings({ showBestMoveArrow: false })
+    expect(merged.autoAnalyze).toBe(true)
+  })
+
   it('round-trips a full valid settings object unchanged', () => {
     const custom: typeof DEFAULT_SETTINGS = {
       showBestMoveArrow: false,
@@ -45,6 +50,7 @@ describe('mergeSettings', () => {
       coachEnabled: false,
       soundEnabled: false,
       autoplay: true,
+      autoAnalyze: false,
       reviewAs: 'white',
       depth: 12,
     }
