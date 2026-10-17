@@ -506,6 +506,19 @@ function App() {
     [analyzeGame, fens, settings.depth],
   )
 
+  // settings.autoAnalyze: start the analysis as soon as a game is loaded, like chess.com — once
+  // per loaded game (keyed on the fens array identity, which only changes on a new load). Waits
+  // for the engine to be ready; a game that already has (or is getting) an analysis is skipped,
+  // and a later depth change doesn't re-trigger. Cached positions make a revisit instant.
+  const autoAnalyzedFensRef = useRef<string[] | null>(null)
+  useEffect(() => {
+    if (!settings.autoAnalyze || !isReady || fens.length === 0) return
+    if (autoAnalyzedFensRef.current === fens) return
+    autoAnalyzedFensRef.current = fens
+    if (isAnalyzing || evalResults.length > 0) return
+    analyzeGame(fens, settings.depth)
+  }, [settings.autoAnalyze, settings.depth, isReady, fens, isAnalyzing, evalResults.length, analyzeGame])
+
   // reviewingSide comes from GamePicker when a chess.com username's game is selected (it knows
   // which color that username played) — orients the board with the reviewed player at the
   // bottom instead of always defaulting to White. Manual PGN paste / ?pgn= links have no

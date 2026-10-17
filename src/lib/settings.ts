@@ -6,6 +6,9 @@ export interface ReviewSettings {
   coachEnabled: boolean
   soundEnabled: boolean
   autoplay: boolean
+  // Start the whole-game analysis as soon as a game is loaded (chess.com behavior) instead of
+  // waiting for the Analyze button.
+  autoAnalyze: boolean
   reviewAs: 'white' | 'black' | 'both'
   depth: 12 | 15 | 18
 }
@@ -18,6 +21,7 @@ export const DEFAULT_SETTINGS: ReviewSettings = {
   coachEnabled: true,
   soundEnabled: true,
   autoplay: false,
+  autoAnalyze: true,
   reviewAs: 'both',
   depth: 15,
 }
@@ -30,6 +34,7 @@ const BOOLEAN_KEYS = [
   'coachEnabled',
   'soundEnabled',
   'autoplay',
+  'autoAnalyze',
 ] as const satisfies readonly (keyof ReviewSettings)[]
 
 // Merges a possibly-partial/possibly-corrupt parsed object (e.g. from localStorage, hand-edited

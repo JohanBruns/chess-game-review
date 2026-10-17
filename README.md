@@ -57,7 +57,7 @@ Download this project folder (e.g. via the green "Code" button on GitHub → "Do
    ```
 5. An address like `http://localhost:5173` will appear — open it in your browser
 
-The tool is now running locally on your machine. You can paste a game as PGN (that's the text export of a chess game) and the analysis starts automatically.
+The tool is now running locally on your machine. You can paste a game as PGN (that's the text export of a chess game) and the analysis starts automatically (you can turn that off in the ⚙ settings). Games you've analyzed before open instantly, because results are cached in your browser.
 
 > Once you're done, just close the terminal window to stop the tool.
 
