@@ -1,0 +1,186 @@
+{
+ "id": "170666529854",
+ "url": "https://www.chess.com/game/live/170666529854",
+ "depth": 15,
+ "whiteElo": 722,
+ "blackElo": 694,
+ "sans": [
+  "e4",
+  "e5",
+  "Nf3",
+  "Nc6",
+  "Bc4",
+  "Nf6",
+  "Ng5",
+  "d5",
+  "exd5",
+  "Nxd5",
+  "Nxf7",
+  "Kxf7",
+  "Qf3+",
+  "Kg8",
+  "Bxd5+"
+ ],
+ "evalResults": [
+  {
+   "cp": 28,
+   "mate": null,
+   "bestMoveSan": "e4",
+   "pv": "e4 e6 d4 d5 e5 c5 c3 Nc6 Nf3 Nge7",
+   "secondBestCp": 22,
+   "secondBestMoveSan": "e3",
+   "thirdBestCp": 19,
+   "thirdBestMoveSan": "Nf3"
+  },
+  {
+   "cp": 30,
+   "mate": null,
+   "bestMoveSan": "e6",
+   "pv": "e6 d4 d5 e5 c5 c3 Nc6 Nf3 Bd7 Be2",
+   "secondBestCp": 34,
+   "secondBestMoveSan": "e5",
+   "thirdBestCp": 39,
+   "thirdBestMoveSan": "c5"
+  },
+  {
+   "cp": 37,
+   "mate": null,
+   "bestMoveSan": "Nf3",
+   "pv": "Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8",
+   "secondBestCp": 33,
+   "secondBestMoveSan": "Nc3",
+   "thirdBestCp": 13,
+   "thirdBestMoveSan": "d4"
+  },
+  {
+   "cp": 34,
+   "mate": null,
+   "bestMoveSan": "Nc6",
+   "pv": "Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8 f3",
+   "secondBestCp": 36,
+   "secondBestMoveSan": "Nf6",
+   "thirdBestCp": 47,
+   "thirdBestMoveSan": "d6"
+  },
+  {
+   "cp": 38,
+   "mate": null,
+   "bestMoveSan": "d4",
+   "pv": "d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8 f3 Be6",
+   "secondBestCp": 19,
+   "secondBestMoveSan": "Bc4",
+   "thirdBestCp": 18,
+   "thirdBestMoveSan": "Nc3"
+  },
+  {
+   "cp": 21,
+   "mate": null,
+   "bestMoveSan": "Bc5",
+   "pv": "Bc5 Nc3 Nf6 d3 h6 O-O O-O Ne2 d5 exd5",
+   "secondBestCp": 22,
+   "secondBestMoveSan": "Nf6",
+   "thirdBestCp": 36,
+   "thirdBestMoveSan": "d6"
+  },
+  {
+   "cp": 28,
+   "mate": null,
+   "bestMoveSan": "d3",
+   "pv": "d3 Be7 Nc3 O-O O-O d6 a4 Be6 Bxe6 fxe6",
+   "secondBestCp": 21,
+   "secondBestMoveSan": "d4",
+   "thirdBestCp": 16,
+   "thirdBestMoveSan": "Ng5"
+  },
+  {
+   "cp": 30,
+   "mate": null,
+   "bestMoveSan": "d5",
+   "pv": "d5 exd5 Na5 d3 Nxc4 dxc4 Bc5 O-O O-O Nc3",
+   "secondBestCp": 104,
+   "secondBestMoveSan": "Bc5",
+   "thirdBestCp": 156,
+   "thirdBestMoveSan": "Nxe4"
+  },
+  {
+   "cp": 3,
+   "mate": null,
+   "bestMoveSan": "exd5",
+   "pv": "exd5 b5 Bxb5 Qxd5 Bxc6+ Qxc6 O-O h6 Qf3 e4",
+   "secondBestCp": -115,
+   "secondBestMoveSan": "Bb3",
+   "thirdBestCp": -120,
+   "thirdBestMoveSan": "Bb5"
+  },
+  {
+   "cp": -5,
+   "mate": null,
+   "bestMoveSan": "b5",
+   "pv": "b5 Bf1 Nd4 c3 Nxd5 Ne4 Qh4 Ng3 Bg4 f3",
+   "secondBestCp": -2,
+   "secondBestMoveSan": "Na5",
+   "thirdBestCp": 23,
+   "thirdBestMoveSan": "Nd4"
+  },
+  {
+   "cp": 119,
+   "mate": null,
+   "bestMoveSan": "Nxf7",
+   "pv": "Nxf7 Kxf7 Qf3+ Qf6 Bxd5+ Ke8 Bxc6+ bxc6 Qe3 Bd6",
+   "secondBestCp": 73,
+   "secondBestMoveSan": "d4",
+   "thirdBestCp": 14,
+   "thirdBestMoveSan": "Qh5"
+  },
+  {
+   "cp": 121,
+   "mate": null,
+   "bestMoveSan": "Kxf7",
+   "pv": "Kxf7 Qf3+ Ke6 Nc3 Nb4 Qe4 c6 a3 Nxc2+ Qxc2",
+   "secondBestCp": 249,
+   "secondBestMoveSan": "Qh4",
+   "thirdBestCp": 339,
+   "thirdBestMoveSan": "Qf6"
+  },
+  {
+   "cp": 93,
+   "mate": null,
+   "bestMoveSan": "Qf3+",
+   "pv": "Qf3+ Ke6 Nc3 Nb4 Bb3 c6 a3 Qf6 Qxf6+ gxf6",
+   "secondBestCp": -139,
+   "secondBestMoveSan": "O-O",
+   "thirdBestCp": -213,
+   "thirdBestMoveSan": "d4"
+  },
+  {
+   "cp": 163,
+   "mate": null,
+   "bestMoveSan": "Ke6",
+   "pv": "Ke6 Nc3 Nd4 Bxd5+ Kd6 Qd1 c6 Be4 Qh4 O-O",
+   "secondBestCp": 177,
+   "secondBestMoveSan": "Qf6",
+   "thirdBestCp": 188,
+   "thirdBestMoveSan": "Ke8"
+  },
+  {
+   "cp": 10000,
+   "mate": 3,
+   "bestMoveSan": "Bxd5+",
+   "pv": "Bxd5+ Qxd5 Qxd5+ Be6 Qxe6#",
+   "secondBestCp": 10000,
+   "secondBestMoveSan": "Qxd5+",
+   "thirdBestCp": 140,
+   "thirdBestMoveSan": "Nc3"
+  },
+  {
+   "cp": 10000,
+   "mate": 2,
+   "bestMoveSan": "Qxd5",
+   "pv": "Qxd5 Qxd5+ Be6 Qxe6#",
+   "secondBestCp": 10000,
+   "secondBestMoveSan": "Be6",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
+  }
+ ]
+}

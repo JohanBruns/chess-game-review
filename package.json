@@ -23,7 +23,8 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "capture:parity": "node scripts/captureParityFixtures.ts"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.1",

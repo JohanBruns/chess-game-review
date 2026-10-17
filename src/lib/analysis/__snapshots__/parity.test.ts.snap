@@ -1,0 +1,51 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`classification snapshot > 147779282758 1`] = `
+{
+  "accuracy": {
+    "black": 94.2,
+    "white": 78.8,
+  },
+  "classes": "kkBEBEgBgEgEgEEBgBX!EBmBgBBgggEBBgBEggBBEgiBEBiiBBBgiB",
+}
+`;
+
+exports[`classification snapshot > 170666529854 1`] = `
+{
+  "accuracy": {
+    "black": 44.2,
+    "white": 100,
+  },
+  "classes": "kkkkkkkkkk!BBXB",
+}
+`;
+
+exports[`classification snapshot > 170984117356 1`] = `
+{
+  "accuracy": {
+    "black": 46.9,
+    "white": 63.1,
+  },
+  "classes": "kkkkkkkEBBiBiBiiEgBBmmgBBgBgimgEBBBXxiBBBXGEBf!fB",
+}
+`;
+
+exports[`classification snapshot > 170988770322 1`] = `
+{
+  "accuracy": {
+    "black": 80.5,
+    "white": 74.4,
+  },
+  "classes": "kkkEBBBBiiBXGgx!GEmgBXBBBggBBEgiEgmGiBEmBgBEBBEiXBXXgmXGBEEBiBBiBgiBEEBBiBBEEEEEEEEEEEBEBEfBEBBEfEBEfEEBEBBE",
+}
+`;
+
+exports[`classification snapshot > 171190174548 1`] = `
+{
+  "accuracy": {
+    "black": 66.4,
+    "white": 72.1,
+  },
+  "classes": "kkkkkkkkEiBiEiiiBBiiXBEiXXXEggEmimBEEBBBgXGBBEgBgBBiBBBBmGmBmXBXGEBBEEEBEE",
+}
+`;
