@@ -20,7 +20,6 @@ import {
   formatEvalBadge,
   buildLineSteps,
   buildBestPreview,
-  explainStepMate,
 } from './lib/analysis/review'
 import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
@@ -44,6 +43,7 @@ import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
+import { deriveBoardView } from './lib/boardView'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
 // arrow so both can show at once. Square tint is translucent so the piece stays legible.
@@ -654,92 +654,39 @@ function App() {
     return () => window.removeEventListener('keydown', handleKey)
   }, [goToFirst, goToPrev, goToNext, goToLast, handleFlip, reviewSub, sidebarView, canGoNext, handleLinePrev, handleLineNext, handleGotIt, playout.active, puzzles.active])
 
-  // Board view for the current retry/review sub-mode. Defaults to the plain "current
-  // position" view; the best/explain sub-modes override fen/classification/badge/arrow to
-  // preview the engine's recommendation instead of the position that's actually loaded.
-  // Retry mode always wins (unrelated feature, takes precedence over review sub-modes).
-  let viewFen = trialFen ?? currentFen
-  let viewClass: MoveClass | undefined = retryMoveIndex === null ? analysis?.classification : undefined
-  let viewFrom: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].from : undefined
-  let viewTo: string | undefined = retryMoveIndex === null && currentPly > 0 ? moves[currentPly - 1].to : undefined
-  let viewArrow = retryMoveIndex !== null ? retryRevealArrow : bestMoveArrow
-  // Defaults to the main line's eval. The best/explain preview branches below override it to
-  // the pre-move eval (evalResults[currentPly - 1]) — a PV is best play, so that's exactly the
-  // evaluation the previewed line/best-move reaches. Keeps the eval bar in sync with viewFen
-  // instead of freezing on the post-move eval while the board shows a different position.
-  let viewEval = evalResults[currentPly] ?? result
-
-  if (retryMoveIndex === null && reviewSub === 'best' && bestPreview) {
-    viewFen = bestPreview.fen
-    viewClass = 'Best'
-    viewFrom = bestPreview.from
-    viewTo = bestPreview.to
-    viewArrow = { from: bestPreview.from, to: bestPreview.to }
-    viewEval = evalResults[currentPly - 1] ?? result
-  } else if (retryMoveIndex === null && reviewSub === 'explain' && lineSteps[explainStep]) {
-    const step = lineSteps[explainStep]
-    viewFen = step.fen
-    viewClass = 'Book'
-    viewFrom = step.from
-    viewTo = step.to
-    viewArrow = undefined
-    // The eval bar follows the live evaluation of the shown PV position (`result`, streamed
-    // by the search the explain handlers kick off — typically within ~100ms). Until its first
-    // score arrives, fall back to the pre-move eval, with a forced-mate count stepped down
-    // along the line (explainStepMate) so a mate PV doesn't look frozen either.
-    const preEval = evalResults[currentPly - 1] ?? null
-    const fallback = preEval && preEval.mate !== null
-      ? { ...preEval, mate: explainStepMate(preEval.mate, lineSteps.length, explainStep) }
-      : preEval
-    viewEval = result ?? fallback
-  }
-
-  // One computed source for both the coach bubble's badge and the eval bar — must sit after the
-  // idle/best/explain chain above (so it picks up whichever branch fired) and before the
-  // Phase-8 playout/puzzle overrides below (irrelevant here — ReviewView/the coach bubble never
-  // renders during those takeovers).
-  const reviewEvalBadge = formatEvalBadge(viewEval)
-
-  // Board controls (interactivity, drop handler, ✓/✗ badge) — default to the retry-at-key-moments
-  // wiring, overridden below by the Phase 8 practice/puzzle takeovers.
-  let boardInteractive = retryMoveIndex !== null && trialFen === null
-  let boardOnDrop: ((from: string, to: string) => boolean) | undefined = handleTrialDrop
-  let boardResultBadge: { square: string; correct: boolean } | undefined =
-    retryMoveIndex !== null && attemptResult && attemptResult.isCorrect !== null
-      ? { square: attemptResult.to, correct: attemptResult.isCorrect }
-      : undefined
-  // Coach/threat/engine-line overlays are review-chapter features — suppress them while a
-  // practice/puzzle game owns the board (both branches set these to undefined).
-  let boardExtraArrows = extraArrows
-  let boardExtraSquares = extraSquareHighlights
-
-  if (playout.active && playout.fen) {
-    viewFen = playout.fen
-    viewFrom = playout.lastMove?.from
-    viewTo = playout.lastMove?.to
-    viewClass = undefined
-    viewArrow = undefined
-    viewEval = result ?? viewEval // live eval from the play-out search
-    boardInteractive = playout.isUserTurn
-    boardOnDrop = playout.applyUserMove
-    boardResultBadge = undefined
-    boardExtraArrows = undefined
-    boardExtraSquares = undefined
-  } else if (puzzles.active && puzzles.current) {
-    const attempt = puzzles.attempt
-    const showBest = puzzles.revealed && puzzleBestPreview
-    viewFen = attempt?.fen ?? (showBest ? puzzleBestPreview!.fen : puzzles.current.fenBefore)
-    viewClass = undefined
-    viewFrom = showBest ? puzzleBestPreview!.from : undefined
-    viewTo = showBest ? puzzleBestPreview!.to : undefined
-    viewArrow = showBest ? { from: puzzleBestPreview!.from, to: puzzleBestPreview!.to } : undefined
-    viewEval = evalResults[puzzles.current.moveIndex] ?? null
-    boardInteractive = attempt === null && !puzzles.revealed
-    boardOnDrop = puzzles.tryMove
-    boardResultBadge = attempt ? { square: attempt.to, correct: attempt.correct } : undefined
-    boardExtraArrows = undefined
-    boardExtraSquares = undefined
-  }
+  // What the board column shows — the current position, or whichever mode owns the board
+  // (practice > puzzle > retry > best/explain preview). See lib/boardView.ts for the rules.
+  const boardView = deriveBoardView({
+    currentFen,
+    lastMove: currentPly > 0 ? moves[currentPly - 1] : null,
+    classification: analysis?.classification,
+    bestMoveArrow,
+    evalAfter: evalResults[currentPly] ?? null,
+    evalBefore: currentPly > 0 ? evalResults[currentPly - 1] ?? null : null,
+    liveEval: result,
+    retry: retryMoveIndex !== null
+      ? { trialFen, revealArrow: retryRevealArrow, attempt: attemptResult }
+      : null,
+    review: { sub: reviewSub, bestPreview, lineSteps, explainStep },
+    extraArrows,
+    extraSquares: extraSquareHighlights,
+    onRetryDrop: handleTrialDrop,
+    playout: playout.active && playout.fen
+      ? { fen: playout.fen, lastMove: playout.lastMove, isUserTurn: playout.isUserTurn, onDrop: playout.applyUserMove }
+      : null,
+    puzzle: puzzles.active && puzzles.current
+      ? {
+          fenBefore: puzzles.current.fenBefore,
+          evalBefore: evalResults[puzzles.current.moveIndex] ?? null,
+          attempt: puzzles.attempt,
+          revealed: puzzles.revealed,
+          bestPreview: puzzleBestPreview,
+          onDrop: puzzles.tryMove,
+        }
+      : null,
+  })
+  // One computed source for both the coach bubble's badge and the eval bar.
+  const reviewEvalBadge = formatEvalBadge(boardView.reviewEval)
 
   return (
     <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
@@ -794,22 +741,22 @@ function App() {
             // 128px was the pre-PlayerBar budget (nav/padding/gaps + header only).
             style={{ height: 'min(calc(100vh - 200px), calc(100vw - 384px))' }}
           >
-            <EvalBar evalResult={viewEval} orientation={orientation} />
+            <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
             <div className="aspect-square h-full">
               <BoardErrorBoundary>
                 <BoardPanel
-                  fen={viewFen}
-                  lastMoveFrom={viewFrom}
-                  lastMoveTo={viewTo}
-                  classification={viewClass}
-                  bestMoveArrow={viewArrow}
-                  extraArrows={boardExtraArrows}
-                  extraSquareHighlights={boardExtraSquares}
+                  fen={boardView.fen}
+                  lastMoveFrom={boardView.lastMoveFrom}
+                  lastMoveTo={boardView.lastMoveTo}
+                  classification={boardView.classification}
+                  bestMoveArrow={boardView.arrow}
+                  extraArrows={boardView.extraArrows}
+                  extraSquareHighlights={boardView.extraSquares}
                   showBadges={settings.showBoardBadges}
-                  resultBadge={boardResultBadge}
+                  resultBadge={boardView.resultBadge}
                   orientation={orientation}
-                  interactive={boardInteractive}
-                  onPieceDrop={boardOnDrop}
+                  interactive={boardView.interactive}
+                  onPieceDrop={boardView.onDrop}
                   piecesBasePath={pieceTheme.basePath}
                   boardImageUrl={boardTheme.url}
                 />
