@@ -43,6 +43,7 @@ import { useSettings } from './hooks/useSettings'
 import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
+import { readStorage, USERNAME_KEY } from './lib/storage'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
 // arrow so both can show at once. Square tint is translucent so the piece stays legible.
@@ -200,7 +201,7 @@ function App() {
   if (prevPgn !== pgn) {
     setPrevPgn(pgn)
     const params = new URLSearchParams(window.location.search)
-    const knownUsername = (params.get('username') ?? localStorage.getItem('chess-username'))
+    const knownUsername = (params.get('username') ?? readStorage(USERNAME_KEY))
       ?.trim().toLowerCase() || null
     if (knownUsername) {
       if (whiteName?.trim().toLowerCase() === knownUsername) setOrientation('white')

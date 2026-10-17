@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { PgnInput } from './PgnInput'
+import { readStorage, writeStorage, USERNAME_KEY } from '../lib/storage'
 
 interface ChessComPlayer {
   username: string
@@ -72,7 +73,7 @@ async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
 
 export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePickerProps) {
   const [username, setUsername] = useState<string>(
-    () => localStorage.getItem('chess-username') ?? '',
+    () => readStorage(USERNAME_KEY) ?? '',
   )
   const [isLoading, setIsLoading] = useState(false)
   const [games, setGames] = useState<ChessComGame[]>([])
@@ -94,7 +95,7 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
 
   const handleUsernameChange = (val: string) => {
     setUsername(val)
-    localStorage.setItem('chess-username', val)
+    writeStorage(USERNAME_KEY, val)
   }
 
   const handleFetch = useCallback(async () => {
@@ -124,7 +125,7 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
     if (initialUsername && appliedInitialUsernameRef.current !== initialUsername) {
       appliedInitialUsernameRef.current = initialUsername
       setUsername(initialUsername)
-      localStorage.setItem('chess-username', initialUsername)
+      writeStorage(USERNAME_KEY, initialUsername)
     }
   }, [initialUsername])
 
