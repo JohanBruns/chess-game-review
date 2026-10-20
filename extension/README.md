@@ -19,10 +19,11 @@ None by default — the extension sends games to the hosted version of the app. 
 3. "Load unpacked" → select this `extension/` folder
 4. Open a game on chess.com → click the extension icon → "Analyze Game"
 
-## PGN Extraction (two strategies)
+## PGN Extraction (in order)
 
-1. **`__NEXT_DATA__` script** — fast, no network request needed; works when chess.com uses Next.js for this page
-2. **Unofficial callback endpoint** — `https://www.chess.com/callback/live/game/{id}` — fallback; unstable, may break without notice
+1. **Unofficial callback endpoint** — `https://www.chess.com/callback/{live|daily}/game/{id}` — available the moment the game ends. It has no PGN field, so the PGN is rebuilt from `pgnHeaders`, the TCN-encoded `moveList` (decoded to coordinate moves like `e2e4`, which chess.js accepts) and `moveTimestamps` (→ `%clk` annotations). Unofficial; may break without notice.
+2. **Official public API** — `https://api.chess.com/pub/player/{username}/games/{YYYY}/{MM}` — stable, but needs a username and can lag a few minutes behind a just-finished game.
+3. **`__NEXT_DATA__` script** — last resort, in case chess.com serves the page via Next.js.
 
 ## Known Limitations
 

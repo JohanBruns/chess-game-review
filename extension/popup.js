@@ -58,7 +58,12 @@ btn.addEventListener('click', async () => {
       return
     }
 
-    const url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
+    let url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
+    // Lange Partien: erst die {[%clk …]}-Kommentare opfern, bevor wir aufgeben
+    if (url.length > 8000) {
+      const pgnWithoutComments = pgn.replace(/\s*\{[^}]*\}/g, '')
+      url = `${baseUrl}/?pgn=${encodeURIComponent(pgnWithoutComments)}`
+    }
 
     // URL-Längenlimit (~8000 Zeichen); bei Überschreitung Warnung
     if (url.length > 8000) {
