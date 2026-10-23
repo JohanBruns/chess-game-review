@@ -55,3 +55,28 @@
 .animate-confetti-fall {
   animation: confetti-fall 900ms ease-in forwards;
 }
+/* Board column sizing (App). Desktop / tablet: board beside the fixed-width sidebar.
+   .board-column's vh branch caps board size on tall-narrow windows; it must reserve the same
+   vertical chrome as .board-row's own vh branch (136px: two 32px PlayerBars + one 8px gap
+   added on top of the original 64px nav/padding/gap budget). .board-row's 200px reserves the
+   column's non-board chrome: 24px padding (p-3 top+bottom) + two 32px PlayerBars + one 32px
+   NavControls row + three 8px gaps between them, plus the header bar above this column
+   (~47px) and a small safety margin. */
+.board-column {
+  width: min(calc(100vh - 136px), calc(100vw - 320px));
+}
+.board-row {
+  height: min(calc(100vh - 200px), calc(100vw - 384px));
+}
+/* Phones (below Tailwind's md breakpoint): board stacked above the sidebar at full width —
+   the row is as tall as the board is wide: viewport minus p-2 padding (16px) minus the 22px
+   EvalBar. Capped at 55% of the height so the sidebar below keeps some room. */
+@media (max-width: 767.98px) {
+  .board-column {
+    width: 100%;
+  }
+  .board-row {
+    height: min(calc(100vw - 38px), 55dvh);
+    align-self: center;
+  }
+}

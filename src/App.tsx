@@ -43,6 +43,7 @@ import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
+import { parseSharedGame, fetchSharedGamePgn } from './lib/chesscom'
 import { deriveBoardView } from './lib/boardView'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
@@ -604,6 +605,31 @@ function App() {
     return () => clearTimeout(id)
   }, [settings.autoplay, sidebarView, reviewSub, canGoNext, goToNext, currentPly, playout.active, puzzles.active])
 
+  // chess.com game links — the chess.com app's "Share" text (?share=… from the iOS Shortcut,
+  // see docs/iphone.md) or a link pasted into the manual field — resolve to a PGN
+  // asynchronously; anything that isn't a link goes straight to handleLoadPgn. The request
+  // counter drops a slow lookup's result once a newer load has started.
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const linkRequestRef = useRef(0)
+  const handleLoadInput = useCallback((text: string, reviewingSide?: 'white' | 'black') => {
+    const request = ++linkRequestRef.current
+    setLinkError(null)
+    const shared = parseSharedGame(text)
+    if (!shared) {
+      setLinkLoading(false)
+      handleLoadPgn(text, reviewingSide)
+      return
+    }
+    setLinkLoading(true)
+    fetchSharedGamePgn(shared, readStorage(USERNAME_KEY)).then(sharedPgn => {
+      if (request !== linkRequestRef.current) return
+      setLinkLoading(false)
+      if (sharedPgn) handleLoadPgn(sharedPgn)
+      else setLinkError('Could not load this chess.com game.')
+    })
+  }, [handleLoadPgn])
+
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
   const urlParamsHandledRef = useRef(false)
@@ -611,11 +637,15 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pgn = params.get('pgn')
+    const share = params.get('share')
     const username = params.get('username')
 
     if (!urlParamsHandledRef.current && pgn) {
       urlParamsHandledRef.current = true
       handleLoadPgn(pgn)
+    } else if (!urlParamsHandledRef.current && share) {
+      urlParamsHandledRef.current = true
+      handleLoadInput(share)
     } else if (!urlParamsHandledRef.current && username) {
       urlParamsHandledRef.current = true
       setInitialUsername(username)
@@ -689,10 +719,11 @@ function App() {
   const reviewEvalBadge = formatEvalBadge(boardView.reviewEval)
 
   return (
-    <div className="h-screen bg-cc-bg text-cc-text flex flex-col overflow-hidden">
+    <div className="h-screen h-dvh bg-cc-bg text-cc-text flex flex-col overflow-hidden">
       <GamePicker
-        onLoad={handleLoadPgn}
-        error={error}
+        onLoad={handleLoadInput}
+        error={linkError ?? error}
+        loading={linkLoading}
         initialUsername={initialUsername}
         autoFetch={autoFetch}
       />
@@ -713,19 +744,15 @@ function App() {
         onChange={updateSettings}
       />
 
-      <div className="flex flex-1 min-h-0">
+      {/* Phones (< md) stack the board above the sidebar; wider screens put them side by side. */}
+      <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
             Capped by min() against viewport width so a narrow-but-tall window can't force
             the board wider than the screen and crush the sidebar (reserves the sidebar's
             fixed 400px, or 320px on narrow windows where the sidebar itself shrinks — see
-            the sidebar's own min-width below). ── */}
-        <div
-          className="shrink-0 flex flex-col p-3 gap-2"
-          // The vh branch caps board size on tall-narrow windows; it must reserve the same
-          // vertical chrome as the inner row's own vh branch below (136px: two 32px PlayerBars
-          // + one 8px gap added on top of the original 64px nav/padding/gap budget).
-          style={{ width: 'min(calc(100vh - 136px), calc(100vw - 320px))' }}
-        >
+            the sidebar's own min-width below). Sizes live in index.css (.board-column /
+            .board-row) because the phone layout swaps them at a breakpoint. ── */}
+        <div className="board-column shrink-0 flex flex-col p-2 gap-1 md:p-3 md:gap-2">
           {isLoaded && (
             <PlayerBar
               name={(topSide === 'white' ? whiteName : blackName) ?? (topSide === 'white' ? 'White' : 'Black')}
@@ -733,14 +760,7 @@ function App() {
               clockSeconds={remainingClockSeconds(clocks, currentPly, topSide, timeControl)}
             />
           )}
-          <div
-            className="flex flex-row items-stretch"
-            // 200px reserves the column's non-board chrome: 24px padding (p-3 top+bottom) +
-            // two 32px PlayerBars + one 32px NavControls row + three 8px gaps between them,
-            // plus the header bar above this column (~47px) and a small safety margin —
-            // 128px was the pre-PlayerBar budget (nav/padding/gaps + header only).
-            style={{ height: 'min(calc(100vh - 200px), calc(100vw - 384px))' }}
-          >
+          <div className="board-row flex flex-row items-stretch">
             <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
             <div className="aspect-square h-full">
               <BoardErrorBoundary>
@@ -789,7 +809,7 @@ function App() {
             ~400px, never flex-filling the viewport) — shrinks down to 320px before the board
             column (which reserves at least that much, see its width formula above) gives up
             any more room. ── */}
-        <div className="w-[400px] min-w-[320px] shrink border-l border-cc-border flex flex-col overflow-hidden">
+        <div className="w-full flex-1 min-h-0 border-t md:w-[400px] md:min-w-[320px] md:flex-initial md:border-t-0 md:border-l border-cc-border flex flex-col overflow-hidden">
           <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
           {playout.active ? (
             <PlayoutPanel

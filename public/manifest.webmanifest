@@ -1,0 +1,14 @@
+{
+  "name": "Chess Game Review",
+  "short_name": "Game Review",
+  "description": "Analyze your chess games with Stockfish — move ratings, accuracy and coaching.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#302e2b",
+  "theme_color": "#302e2b",
+  "icons": [
+    { "src": "/pwa/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/pwa/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
