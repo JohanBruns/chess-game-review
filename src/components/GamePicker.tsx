@@ -22,6 +22,8 @@ interface GamePickerProps {
   // selection) — lets the caller orient the board with the reviewed player at the bottom.
   onLoad: (pgn: string, side?: 'white' | 'black') => void
   error: string | null
+  // A chess.com game link is being resolved to a PGN (see App's handleLoadInput).
+  loading?: boolean
   initialUsername?: string | null
   autoFetch?: boolean
 }
@@ -71,7 +73,7 @@ async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
     .slice(0, 20)
 }
 
-export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePickerProps) {
+export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch }: GamePickerProps) {
   const [username, setUsername] = useState<string>(
     () => readStorage(USERNAME_KEY) ?? '',
   )
@@ -148,8 +150,8 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
   return (
     <div ref={containerRef} className="relative shrink-0">
       {/* ── Top bar ── */}
-      <div className="flex gap-2 items-center px-3 py-2 border-b border-cc-border bg-cc-panel">
-        <span className="text-cc-text-dim text-xs shrink-0">User:</span>
+      <div className="flex flex-wrap gap-2 items-center px-3 py-2 border-b border-cc-border bg-cc-panel">
+        <span className="hidden sm:inline text-cc-text-dim text-xs shrink-0">User:</span>
         <input
           type="text"
           className="w-36 bg-cc-bg-dark text-cc-text text-xs px-2 py-1.5 rounded border border-cc-border focus:outline-none focus:border-cc-green"
@@ -176,8 +178,10 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
         >
           ✎ Manual
         </button>
-        {displayError && (
-          <span className="text-cc-red text-[11px] truncate ml-1">{displayError}</span>
+        {loading ? (
+          <span className="basis-full sm:basis-auto text-cc-text-dim text-[11px] truncate ml-1">Loading game from chess.com…</span>
+        ) : displayError && (
+          <span className="basis-full sm:basis-auto text-cc-red text-[11px] truncate ml-1">{displayError}</span>
         )}
       </div>
 

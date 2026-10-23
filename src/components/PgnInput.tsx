@@ -12,7 +12,7 @@ export function PgnInput({ onLoad, error }: PgnInputProps) {
     <div className="flex gap-2 items-start px-3 py-2 border-b border-cc-border bg-cc-panel/40 shrink-0">
       <textarea
         className="flex-1 h-12 resize-none bg-cc-panel text-cc-text font-mono text-xs p-2 rounded border border-cc-border focus:outline-none focus:border-cc-green"
-        placeholder="Paste PGN here…"
+        placeholder="Paste PGN or chess.com game link…"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         spellCheck={false}
