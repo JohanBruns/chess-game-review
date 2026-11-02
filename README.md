@@ -29,6 +29,12 @@ There's also an even simpler option without an extension at all: a so-called **b
 
 ---
 
+## On iPhone
+
+No extension needed: an iOS Shortcut puts **Analyze game** into the chess.com app's share sheet, and the app can be added to the Home Screen. On phones the board sits above the analysis. Setup: [`docs/iphone.md`](docs/iphone.md).
+
+---
+
 ## Self-Hosting (optional, for your own independent copy)
 
 Run the tool entirely on your own computer instead of using the hosted version. Useful if you want to work offline, keep everything private, or just don't want to depend on someone else's server. No programming knowledge required — just follow these steps in order.
