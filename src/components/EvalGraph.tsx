@@ -98,11 +98,13 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
   const currentCp = data[currentPly]?.cp ?? null
 
   return (
-    <div style={{ width: '100%', height: 90, background: '#262421' }}>
+    // chess.com's game arc (measured 2026-11-02): 80px tall, 5px radius, #403d39 background with
+    // White's share as a solid white area, drawn edge to edge.
+    <div className="w-full h-20 rounded-[5px] overflow-hidden" style={{ background: '#403d39' }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={data}
-          margin={{ top: 6, right: 6, left: 6, bottom: 6 }}
+          margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
           onClick={handleClick}
           style={{ cursor: 'pointer' }}
         >
@@ -111,16 +113,15 @@ export function EvalGraph({ evalResults, currentPly, onSelectPly, moveAnalyses }
               above the curve (Black's share). Higher eval → the white area rises. */}
           <XAxis dataKey="ply" interval={0} hide />
           <YAxis domain={[-EVAL_CLAMP, EVAL_CLAMP]} hide />
-          <ReferenceLine y={0} stroke="#5b5854" strokeWidth={1} />
+          <ReferenceLine y={0} stroke="#8b8987" strokeWidth={1} />
           <ReferenceLine x={currentPly} stroke="#fa412d" strokeWidth={2} />
           <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#6b6864', strokeWidth: 1 }} />
           <Area
             type="monotone"
             dataKey="cp"
             baseValue={-EVAL_CLAMP}
-            stroke="#c9c9c6"
-            strokeWidth={1}
-            fill="#e9e9e8"
+            stroke="none"
+            fill="#ffffff"
             fillOpacity={1}
             dot={false}
             connectNulls={false}

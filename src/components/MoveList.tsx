@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type { Move } from 'chess.js'
 import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
 import { CLASS_ICON } from '../lib/analysis/classIcons'
-import { classColor } from '../lib/analysis/classColors'
+import { classTextColor } from '../lib/analysis/classColors'
 import { formatMoveTime } from '../lib/analysis/clocks'
 
 // Which classifications chess.com surfaces in the move list — an inline icon AND a colored SAN.
@@ -76,50 +76,49 @@ export function MoveList({
     })
   }
 
+  // Row geometry measured against chess.com's move list (1440x900): 30px rows with 15px side
+  // padding, the move number in the first 40px, White's move from +40px and Black's from +140px,
+  // and every second row lifted by a faint 2% white tint.
   return (
-    <div className="flex-1 min-h-[220px] overflow-y-auto">
-      <table className="w-full border-collapse">
-        <tbody>
-          {rows.map(({ moveNumber, whitePly, blackPly }) => (
-            <tr
-              key={moveNumber}
-              className={`group h-[30px] ${moveNumber % 2 === 0 ? 'bg-cc-bg-dark/40' : ''}`}
-            >
-              <td className="text-cc-text-faint pr-1 pl-2 select-none w-7 text-right text-[11px] align-middle">
-                {moveNumber}.
-              </td>
-              <td className="w-[46%] align-middle">
-                <MoveButton
-                  san={moves[whitePly - 1].san}
-                  ply={whitePly}
-                  currentPly={currentPly}
-                  onClick={onSelectPly}
-                  selectedRef={selectedRef}
-                  analysis={moveAnalyses?.[whitePly - 1] ?? null}
-                  isKeyMoment={keyMoments?.has(whitePly - 1) ?? false}
-                  timeSeconds={showMoveTimes ? moveTimeSeconds?.[whitePly - 1] ?? null : null}
-                  onRetry={onRetry}
-                />
-              </td>
-              <td className="w-[46%] align-middle">
-                {blackPly !== null && (
-                  <MoveButton
-                    san={moves[blackPly - 1].san}
-                    ply={blackPly}
-                    currentPly={currentPly}
-                    onClick={onSelectPly}
-                    selectedRef={selectedRef}
-                    analysis={moveAnalyses?.[blackPly - 1] ?? null}
-                    isKeyMoment={keyMoments?.has(blackPly - 1) ?? false}
-                    timeSeconds={showMoveTimes ? moveTimeSeconds?.[blackPly - 1] ?? null : null}
-                    onRetry={onRetry}
-                  />
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="flex-1 min-h-[120px] overflow-y-auto">
+      {rows.map(({ moveNumber, whitePly, blackPly }) => (
+        <div
+          key={moveNumber}
+          className={`group h-[30px] flex items-center pl-[15px] pr-2 ${moveNumber % 2 === 0 ? 'bg-white/2' : ''}`}
+        >
+          <span className="w-[25px] shrink-0 text-[13px] font-semibold text-white/50 select-none">
+            {moveNumber}.
+          </span>
+          <span className="w-[100px] shrink-0 min-w-0">
+            <MoveButton
+              san={moves[whitePly - 1].san}
+              ply={whitePly}
+              currentPly={currentPly}
+              onClick={onSelectPly}
+              selectedRef={selectedRef}
+              analysis={moveAnalyses?.[whitePly - 1] ?? null}
+              isKeyMoment={keyMoments?.has(whitePly - 1) ?? false}
+              timeSeconds={showMoveTimes ? moveTimeSeconds?.[whitePly - 1] ?? null : null}
+              onRetry={onRetry}
+            />
+          </span>
+          <span className="flex-1 min-w-0">
+            {blackPly !== null && (
+              <MoveButton
+                san={moves[blackPly - 1].san}
+                ply={blackPly}
+                currentPly={currentPly}
+                onClick={onSelectPly}
+                selectedRef={selectedRef}
+                analysis={moveAnalyses?.[blackPly - 1] ?? null}
+                isKeyMoment={keyMoments?.has(blackPly - 1) ?? false}
+                timeSeconds={showMoveTimes ? moveTimeSeconds?.[blackPly - 1] ?? null : null}
+                onRetry={onRetry}
+              />
+            )}
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
@@ -141,29 +140,33 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
   const marked = analysis != null && MARKED_CLASSES.has(analysis.classification)
   const { figurine, text } = splitSan(san)
 
+  // chess.com keeps a 20px gutter left of every SAN for the classification icon, so marked and
+  // unmarked moves stay aligned; the selected move gets a 14% white chip with a 3px bottom edge.
   return (
     <span className="flex items-center gap-0.5">
-      <button
-        ref={isActive ? selectedRef : null}
-        className={`text-left px-1 py-0.5 rounded-[2px] text-[13px] font-bold leading-5 transition-colors flex items-center ${
-          isActive ? 'bg-white/[0.14]' : 'hover:bg-cc-surface-hover/40'
-        } ${marked ? '' : 'text-cc-text'}`}
-        style={marked ? { color: classColor(analysis!.classification) } : undefined}
-        onClick={() => onClick(ply)}
-      >
-        {analysis && MARKED_CLASSES.has(analysis.classification) && (
+      <span className="w-5 h-[18px] shrink-0 flex items-center">
+        {marked && (
           <img
-            src={CLASS_ICON[analysis.classification]}
-            alt={analysis.classification}
-            title={analysis.classification}
-            className="inline w-4 h-4 mr-1 align-middle shrink-0"
+            src={CLASS_ICON[analysis!.classification]}
+            alt={analysis!.classification}
+            title={analysis!.classification}
+            className="w-[18px] h-[18px]"
           />
         )}
-        {figurine && <span className="mr-0.5 text-[15px] leading-none">{figurine}</span>}
+      </span>
+      <button
+        ref={isActive ? selectedRef : null}
+        className={`h-6 px-1 rounded-[2px] text-[13px] font-bold leading-6 transition-colors flex items-center whitespace-nowrap ${
+          isActive ? 'bg-white/14 border-b-[3px] border-white/10 leading-[21px] text-white' : 'hover:bg-white/7'
+        } ${marked || isActive ? '' : 'text-white/72'}`}
+        style={marked && !isActive ? { color: classTextColor(analysis!.classification) } : undefined}
+        onClick={() => onClick(ply)}
+      >
+        {figurine && <span className="mr-px text-[15px] leading-none">{figurine}</span>}
         {text}
       </button>
       {timeSeconds != null && (
-        <span className="text-[10px] text-cc-text-faint tabular-nums">
+        <span className="text-[10px] text-white/50 tabular-nums">
           {formatMoveTime(timeSeconds)}
         </span>
       )}

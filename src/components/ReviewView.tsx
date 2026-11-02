@@ -1,18 +1,26 @@
 import type { ReactNode } from 'react'
 import type { MoveClass } from '../lib/analysis/classify'
 import { CLASS_ICON } from '../lib/analysis/classIcons'
-import { classColor } from '../lib/analysis/classColors'
+import { classTextColor } from '../lib/analysis/classColors'
 import type { CommentToken } from '../lib/analysis/commentary'
 import type { HeadlineParts } from '../lib/analysis/review'
 import type { ThemeHighlight } from '../lib/analysis/tactics'
 import { CoachBubble } from './CoachBubble'
+import { CoachSpeech } from './CoachSpeech'
+import { SidebarHeader } from './SidebarHeader'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconBulb,
+  IconCheck,
+  IconChevronLeft,
+  IconChevronRight,
+  IconPlay,
+  IconStar,
+} from './icons'
 
 interface ReviewViewProps {
   onBack: () => void
-  // Phase 8: "Practice" hands the current position to the play-out-vs-engine mode. Disabled until
-  // the engine is ready and there's a real position to play (currentPly > 0).
-  onPractice: () => void
-  canPractice: boolean
 
   // Coach state — mirrors the old ReviewPanel's idle/best/explain sub-modes, now hoisted to
   // the top of the sidebar chapter (chess.com puts the coach above the move list, not below).
@@ -56,25 +64,22 @@ interface ReviewViewProps {
   retry?: ReactNode
 }
 
-// 36px tall, 5px radius, bold 14px, icon+label centered — matches chess.com's Explain/Best/Next
-// row (verified against the reference screenshots).
+// chess.com's flow buttons under the coach bubble: 40px tall, 5px radius, 14px/600 label with a
+// 20px icon — green gradient for the main action, the grey gradient skin for the others.
 const PRIMARY_BTN =
-  'h-9 rounded-[5px] bg-cc-green text-white text-sm font-bold hover:bg-cc-green-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5'
+  'cc-btn-primary h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2'
 const SECONDARY_BTN =
-  'h-9 rounded-[5px] bg-[#3a3937] text-white/85 text-sm font-bold hover:bg-cc-surface-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5'
-const BTN_ICON = 'text-base leading-none'
+  'cc-btn-secondary h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2'
 
-// Sidebar "chapter 2" — chess.com's guided Game Review walkthrough. Structure verified against
-// the reference screenshots (Board&Game/review/Screenshot_3/21/22/23/24/27/28, 2026-07-08): a
-// back-arrow header, the coach bubble on top (class icon + move headline + eval badge), an
-// Explain/Best/Next button row, the move list filling the middle, and a mini eval graph at the
-// bottom. "Next" steps the game one move at a time from ply 1 to the end (chess.com does NOT use
-// a key-moment agenda — the coach comments on every move), so it simply reuses App's goToNext.
-// This view REPLACES the setup/summary sidebar contents — see sidebarView in App.tsx.
+// Sidebar "chapter 2" — chess.com's guided Game Review walkthrough, measured live (2026-11-02,
+// 1440x900): a back-arrow header, the coach bubble on top (class icon + move headline + light
+// eval pill, top-aligned with the coach), an Explain/Best/Next button row, the move list filling
+// the middle, and the 80px eval graph at the bottom. "Next" steps the game one move at a time
+// from ply 1 to the end (chess.com does NOT use a key-moment agenda — the coach comments on every
+// move), so it simply reuses App's goToNext. This view REPLACES the setup/summary sidebar
+// contents — see sidebarView in App.tsx.
 export function ReviewView({
   onBack,
-  onPractice,
-  canPractice,
   active,
   coachEnabled,
   headline,
@@ -104,164 +109,165 @@ export function ReviewView({
 }: ReviewViewProps) {
   return (
     <div className="flex flex-col h-full overflow-hidden animate-chapter-fade-in">
-      <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
-        <button
-          onClick={onBack}
-          aria-label="Back to summary"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-cc-surface/60 transition-colors text-cc-text-dim"
-        >
-          ←
-        </button>
-        <h2 className="text-sm font-semibold">Game Review</h2>
-      </div>
+      <SidebarHeader
+        title="Game Review"
+        icon={<img src="/marks/best_128x.png" alt="" className="w-6 h-6" />}
+        start={{ icon: <IconArrowLeft />, label: 'Back to summary', onClick: onBack }}
+      />
 
-      <div className="shrink-0 flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        {coachEnabled && (
-          <div className="flex items-start gap-2">
-            <div className="w-14 h-14 shrink-0 rounded-lg bg-cc-surface overflow-hidden">
-              <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
-            </div>
-            <div className="relative flex-1 bg-white rounded-lg px-3 py-2.5 min-h-14">
-              <span
-                aria-hidden
-                className="absolute -left-1.5 top-4 w-3 h-3 bg-white rotate-45"
-              />
-              {active ? (
-                <>
-                  {evalBadge && (
-                    <span className="absolute top-2 right-2 bg-[#312e2b] text-white text-[13px] font-bold rounded px-1.5 py-0.5">
-                      {evalBadge}
-                    </span>
-                  )}
-                  <div className="flex flex-col gap-1 pr-10">
-                    <span className="flex items-center gap-1.5 text-[15px] leading-snug text-[#312e2b]">
+      <div className="flex-1 min-h-0 flex flex-col px-4 pt-4">
+        <div className="shrink-0 flex flex-col gap-2">
+          {coachEnabled && (
+            // chess.com reserves a fixed 156px for the coach so the buttons below never jump
+            // between short and long comments.
+            <div className="min-h-[156px]">
+              <CoachSpeech align="top">
+                {active ? (
+                  // chess.com's move-feedback box: a first row with the class icon, the class name
+                  // and a light eval pill, then the explanation below (15px/500).
+                  <div className="flex flex-col min-h-[90px]">
+                    <div className="h-[30px] flex items-start gap-1.5">
                       {sub === 'explain' ? (
-                        <span aria-hidden className="shrink-0">💡</span>
+                        <IconBulb size={24} className="shrink-0 mt-0.5 text-[#f7c631]" />
                       ) : (
                         coachClass && (
-                          <img
-                            src={CLASS_ICON[coachClass]}
-                            alt={coachClass}
-                            className="w-4 h-4 shrink-0"
-                          />
+                          <img src={CLASS_ICON[coachClass]} alt="" className="w-6 h-6 shrink-0 mt-0.5" />
                         )
                       )}
+                      <span className="flex-1 min-w-0 font-semibold pt-[3px] truncate">
+                        {sub === 'explain' ? 'Explain' : coachClass}
+                      </span>
+                      {/* Light pill while White is better, dark while Black is (chess.com's
+                          score-text positive/negative). */}
+                      {evalBadge && (
+                        <span
+                          className={`shrink-0 rounded-[3px] px-[5px] py-px font-bold ${
+                            evalBadge.startsWith('-') ? 'bg-[#312e2b] text-white' : 'bg-[#e7e6e5]'
+                          }`}
+                        >
+                          {evalBadge}
+                        </span>
+                      )}
+                    </div>
+                    <span>
                       {sub !== 'explain' && headlineParts && coachClass ? (
-                        <span>
-                          <span className="font-bold" style={{ color: classColor(coachClass) }}>
+                        <>
+                          <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
                             {headlineParts.san}
                           </span>{' '}
-                          <span>{headlineParts.middle}</span>{' '}
-                          <span className="font-bold" style={{ color: classColor(coachClass) }}>
+                          {headlineParts.middle}{' '}
+                          <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
                             {headlineParts.classWord}
                           </span>
-                        </span>
+                          .
+                        </>
                       ) : (
-                        <span className="font-semibold">{headline}</span>
+                        headline
+                      )}
+                      {sub === 'idle' && commentary && commentary.length > 0 && (
+                        <>
+                          {' '}
+                          <CoachBubble
+                            tokens={commentary}
+                            activeHighlight={activeHighlight}
+                            onHover={onHoverHighlight}
+                            onPin={onPinHighlight}
+                          />
+                        </>
                       )}
                     </span>
-                    {sub === 'idle' && commentary && commentary.length > 0 && (
-                      <span className="text-[13px] leading-relaxed text-[#312e2b]/85">
-                        <CoachBubble
-                          tokens={commentary}
-                          activeHighlight={activeHighlight}
-                          onHover={onHoverHighlight}
-                          onPin={onPinHighlight}
-                        />
-                      </span>
-                    )}
                   </div>
-                </>
-              ) : (
-                <span className="text-[#312e2b]/50 text-[13px] italic">
-                  Step through your moves with Next.
-                </span>
-              )}
+                ) : (
+                  <span className="text-[#312e2b]/60">Step through your moves with Next.</span>
+                )}
+              </CoachSpeech>
             </div>
-          </div>
-        )}
+          )}
 
-        {active && sub === 'idle' && (
-          <div className="flex gap-2">
-            <button onClick={onExplain} disabled={!canExplain} className={`${SECONDARY_BTN} flex-1`}>
-              <span aria-hidden className={BTN_ICON}>💡</span> Explain
-            </button>
-            {canBest && (
-              <button onClick={onBest} className={`${SECONDARY_BTN} flex-1`}>
-                <span aria-hidden className={BTN_ICON}>⭐</span> Best
-              </button>
-            )}
-            <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} flex-1`}>
-              <span aria-hidden className={BTN_ICON}>→</span> Next
-            </button>
-          </div>
-        )}
-
-        {active && sub === 'best' && (
-          <button onClick={onResume} className={`${PRIMARY_BTN} w-full`}>
-            <span aria-hidden className={BTN_ICON}>▶</span> Resume
-          </button>
-        )}
-
-        {active && sub === 'explain' && (
-          <>
+          {/* chess.com drops the labels once several flow buttons share the row (icon-only,
+              equal widths) and only spells out "Next" when it stands alone. */}
+          {active && sub === 'idle' && (
             <div className="flex gap-2">
-              <button
-                onClick={onLinePrev}
-                disabled={lineStep <= 0}
-                className={`${SECONDARY_BTN} w-9 shrink-0`}
-                title="Previous move in line"
-                aria-label="Previous move in line"
-              >
-                <span aria-hidden className={BTN_ICON}>‹</span>
-              </button>
-              <button
-                onClick={onLineNext}
-                disabled={lineStep >= lineSans.length - 1}
-                className={`${PRIMARY_BTN} w-9 shrink-0`}
-                title="Next move in line"
-                aria-label="Next move in line"
-              >
-                <span aria-hidden className={BTN_ICON}>›</span>
-              </button>
-              <button onClick={onGotIt} className={`${SECONDARY_BTN} flex-1`}>
-                <span aria-hidden className={BTN_ICON}>✓</span> Got it!
+              {canExplain && (
+                <button onClick={onExplain} className={`${SECONDARY_BTN} flex-1`} title="Explain" aria-label="Explain">
+                  <IconBulb size={22} className="text-white/72" />
+                </button>
+              )}
+              {canBest && (
+                <button onClick={onBest} className={`${SECONDARY_BTN} flex-1`} title="Best move" aria-label="Best move">
+                  <IconStar size={22} className="text-white/72" />
+                </button>
+              )}
+              <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} flex-1`} title="Next" aria-label="Next">
+                <IconArrowRight size={22} />
+                {!canExplain && !canBest && 'Next'}
               </button>
             </div>
-            {lineSans.length > 0 && (
-              <div className="flex flex-wrap gap-1 text-xs font-mono px-1">
-                {lineSans.map((san, i) => (
-                  <span
-                    key={i}
-                    className={
-                      i === lineStep
-                        ? 'px-1.5 py-0.5 rounded bg-cc-green text-white font-semibold'
-                        : 'px-1.5 py-0.5 text-cc-text-dim'
-                    }
-                  >
-                    {san}
-                  </span>
-                ))}
+          )}
+
+          {!active && (
+            <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} w-full`}>
+              <IconArrowRight /> Next
+            </button>
+          )}
+
+          {active && sub === 'best' && (
+            <button onClick={onResume} className={`${PRIMARY_BTN} w-full`}>
+              <IconPlay /> Resume
+            </button>
+          )}
+
+          {active && sub === 'explain' && (
+            <>
+              <div className="flex gap-2">
+                <button
+                  onClick={onLinePrev}
+                  disabled={lineStep <= 0}
+                  className={`${SECONDARY_BTN} w-12 shrink-0`}
+                  title="Previous move in line"
+                  aria-label="Previous move in line"
+                >
+                  <IconChevronLeft className="text-white/72" />
+                </button>
+                <button
+                  onClick={onLineNext}
+                  disabled={lineStep >= lineSans.length - 1}
+                  className={`${PRIMARY_BTN} w-12 shrink-0`}
+                  title="Next move in line"
+                  aria-label="Next move in line"
+                >
+                  <IconChevronRight />
+                </button>
+                <button onClick={onGotIt} className={`${SECONDARY_BTN} flex-1`}>
+                  <IconCheck className="text-white/72" /> Got it!
+                </button>
               </div>
-            )}
-          </>
-        )}
+              {lineSans.length > 0 && (
+                <div className="flex flex-wrap gap-1 text-[13px] font-bold px-1">
+                  {lineSans.map((san, i) => (
+                    <span
+                      key={i}
+                      className={
+                        i === lineStep
+                          ? 'px-1 rounded-[2px] bg-white/14 border-b-[3px] border-white/10 text-white'
+                          : 'px-1 text-white/72'
+                      }
+                    >
+                      {san}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {moveList}
+
+        {retry}
+
+        {graph && <div className="shrink-0 pt-2">{graph}</div>}
       </div>
-
-      {moveList}
-
-      {active && sub === 'idle' && canPractice && (
-        <button
-          onClick={onPractice}
-          className="shrink-0 w-full py-1.5 text-xs text-cc-text-faint hover:text-cc-text-dim underline decoration-dotted underline-offset-2 transition-colors"
-        >
-          Practice from here
-        </button>
-      )}
-
-      {retry}
-
-      {graph && <div className="shrink-0 border-t border-cc-border">{graph}</div>}
     </div>
   )
 }

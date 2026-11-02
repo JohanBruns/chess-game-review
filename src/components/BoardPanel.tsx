@@ -45,7 +45,8 @@ interface BoardPanelProps {
 // same "best move" color as the Best/Excellent square highlight, not severity-coded.
 const BEST_MOVE_ARROW_COLOR = '#9FCF3F'
 
-const MARK_FILE: Record<Exclude<MoveClass, 'Book'>, string> = {
+const MARK_FILE: Record<MoveClass, string> = {
+  Book:       'book_128x.png',
   Brilliant:  'brilliant_128x.png',
   Great:      'great_find_128x.png',
   Best:       'best_128x.png',
@@ -99,8 +100,10 @@ export function BoardPanel({
   }, [piecesBasePath])
 
   const squareStyles: Record<string, React.CSSProperties> = {}
+  // chess.com tints both last-move squares in the move's class color at 50% (book moves in the
+  // tan of the book icon — the same color the move list prints them in).
   if (lastMoveFrom && lastMoveTo && classification) {
-    const color = `rgba(${CLASS_COLOR[classification]}, 0.55)`
+    const color = classification === 'Book' ? 'rgba(213, 164, 125, 0.5)' : `rgba(${CLASS_COLOR[classification]}, 0.5)`
     squareStyles[lastMoveFrom] = { backgroundColor: color }
     squareStyles[lastMoveTo] = { backgroundColor: color }
   }
@@ -128,10 +131,10 @@ export function BoardPanel({
   }, [bestMoveArrow, extraArrows])
 
   const badge =
-    showBadges && lastMoveTo && classification && classification !== 'Book'
+    showBadges && lastMoveTo && classification
       ? {
           ...badgeScreenPosition(lastMoveTo, orientation),
-          src: `/marks/${MARK_FILE[classification as Exclude<MoveClass, 'Book'>]}`,
+          src: `/marks/${MARK_FILE[classification]}`,
         }
       : null
 
