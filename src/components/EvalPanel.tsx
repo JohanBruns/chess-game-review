@@ -52,7 +52,7 @@ export function EvalPanel({
         <button
           onClick={onAnalyzeGame}
           disabled={analyzeDisabled}
-          className="flex-1 px-3 py-2 rounded bg-cc-green hover:bg-cc-green-hover disabled:opacity-40 disabled:cursor-not-allowed text-sm font-medium transition-colors"
+          className="cc-btn-primary flex-1 h-12 rounded-[10px] text-[17px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Analyze Game
         </button>

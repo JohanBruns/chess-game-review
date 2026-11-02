@@ -2,22 +2,19 @@ import { useState } from 'react'
 import type { GameSummary, PhaseGrade } from '../lib/analysis/summary'
 import type { MoveClass } from '../lib/analysis/classify'
 import { CLASS_ICON, CLASS_DISPLAY_ORDER } from '../lib/analysis/classIcons'
-import { classColor } from '../lib/analysis/classColors'
+import { classTextColor } from '../lib/analysis/classColors'
 import { summaryHeadline } from '../lib/analysis/review'
 import type { EvalResult } from '../lib/engine/useEngine'
 import type { MoveAnalysis } from '../lib/analysis/classify'
+import { usePlayerAvatar } from '../hooks/usePlayerAvatar'
 import { EvalGraph } from './EvalGraph'
+import { SidebarHeader } from './SidebarHeader'
+import { CoachSpeech } from './CoachSpeech'
+import { IconChevronDown, IconChevronUp, IconPlus, IconPuzzle, PawnAvatar } from './icons'
 
 // Accuracy threshold for the confetti celebration burst — matches chess.com's "excellent game"
 // bar (see summaryHeadline's own >=90 check for the coach headline).
 const CELEBRATION_ACCURACY = 90
-
-// chess.com's summary table prints the label AND both counts in the classification color
-// (Screenshot: Brilliant teal, Great blue, Best/Excellent/Good green, …). Book's CLASS_COLOR
-// is the yellow last-move square tint, not the tan of the book icon / chess.com's Book row
-// text — override it for this table only.
-const BOOK_TABLE_COLOR = 'rgb(168, 138, 101)'
-const tableColor = (cls: MoveClass) => (cls === 'Book' ? BOOK_TABLE_COLOR : classColor(cls))
 
 const PHASE_ROWS: { key: 'opening' | 'middlegame' | 'endgame'; label: string }[] = [
   { key: 'opening', label: 'Opening' },
@@ -28,8 +25,6 @@ const PHASE_ROWS: { key: 'opening' | 'middlegame' | 'endgame'; label: string }[]
 interface SummaryViewProps {
   whiteName: string
   blackName: string
-  whiteElo?: number
-  blackElo?: number
   whiteSummary: GameSummary
   blackSummary: GameSummary
   evalResults: (EvalResult | null)[]
@@ -37,55 +32,50 @@ interface SummaryViewProps {
   currentPly: number
   onSelectPly: (ply: number) => void
   onStartReview: () => void
+  // Header "+" — back to the setup chapter to load another game.
+  onNewGame: () => void
   // Phase 8: number of drillable mistakes in this game, and the handler to start the puzzle flow.
   // The "Puzzles (n)" button is hidden when there are none.
   puzzleCount: number
   onStartPuzzles: () => void
-  // Whose side is being reviewed (settings.reviewAs) — the matching avatar gets a green
-  // highlight ring, chess.com-style. 'both' has no single reviewed side, so neither is ringed.
-  reviewAs: 'white' | 'black' | 'both'
+  // The game's winner (PGN Result header) — chess.com frames the winner's avatar in green.
+  winner: 'white' | 'black' | null
 }
 
-// Every player-comparison row (names, Players/avatars, Accuracy, classification counts, Game
-// Rating, phase grades) shares this exact 4-column template — measured live against chess.com
-// (Screenshot_20/_1/_2): label left (flex), then two 64px value columns (white/black) with a
-// 32px icon column between them. Sharing one template is what keeps every row's values lined up
-// under each other instead of drifting per-row (the plan's "values stick to the outer edges" bug).
+// Every player-comparison row shares one 3-column template, measured live against chess.com at
+// 1440x900 (sidebar 300px, 24px padding → three 81px columns): label left, then the white and
+// black values centered in their own column. The tally rows add a classification glyph centered
+// on the boundary between the two value columns (see TallyRow).
 function GridRow({
   label,
   left,
-  icon,
   right,
   className = '',
 }: {
   label: React.ReactNode
   left: React.ReactNode
-  icon?: React.ReactNode
   right: React.ReactNode
   className?: string
 }) {
   return (
-    <div className={`grid grid-cols-[1fr_64px_32px_64px] items-center gap-1 ${className}`}>
-      <span className="text-cc-text-faint text-xs truncate">{label}</span>
-      <div className="flex justify-center">{left}</div>
-      <div className="flex justify-center">{icon}</div>
-      <div className="flex justify-center">{right}</div>
+    <div className={`grid grid-cols-3 items-center ${className}`}>
+      <span className="text-sm font-semibold leading-5 text-white">{label}</span>
+      <div className="flex justify-center min-w-0">{left}</div>
+      <div className="flex justify-center min-w-0">{right}</div>
     </div>
   )
 }
 
-// Sidebar "chapter 1" — chess.com's post-analysis Game Review summary. Structure verified
-// live (2026-07-08 checkpoint, game 171190174548): header, coach bubble, mini eval graph,
-// player names + accuracy pills (light/dark), collapsible classification count table, Game
-// Rating pills, and Opening/Middlegame/Endgame rows that show only an ICON (reusing the
-// move-classification icon set) — chess.com does not print a phase-grade word anywhere here.
-// This view REPLACES the rest of the sidebar (MoveList/graph/legend live in chapter 2 instead
-// of alongside this card) — see sidebarView in App.tsx.
+// Sidebar "chapter 1" — chess.com's post-analysis Game Review overview. Structure and metrics
+// measured live (2026-11-02, game 186365372722 at 1440x900): header, coach bubble (avatar
+// bottom-aligned with the speech bubble), 80px eval graph, names / avatars / accuracy boxes, a
+// collapsible tally table, Game Rating boxes, and Opening/Middlegame/Endgame rows that show only
+// an ICON (reusing the move-classification icon set). A big gradient "Start Review" button is
+// pinned under the scrolling area. This view REPLACES the rest of the sidebar (MoveList/graph
+// live in chapter 2 instead) — see sidebarView in App.tsx.
 export function SummaryView({
   whiteName,
   blackName,
-  whiteElo,
-  blackElo,
   whiteSummary,
   blackSummary,
   evalResults,
@@ -93,181 +83,171 @@ export function SummaryView({
   currentPly,
   onSelectPly,
   onStartReview,
+  onNewGame,
   puzzleCount,
   onStartPuzzles,
-  reviewAs,
+  winner,
 }: SummaryViewProps) {
   const [tableExpanded, setTableExpanded] = useState(true)
   const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
   const celebrate = bestAccuracy >= CELEBRATION_ACCURACY
 
   return (
-    <div className="relative flex flex-col h-full overflow-y-auto animate-chapter-fade-in">
+    <div className="relative flex flex-col h-full overflow-hidden animate-chapter-fade-in">
       {celebrate && <ConfettiBurst />}
 
-      <div className="shrink-0 flex items-center justify-center gap-1.5 px-2 py-2 border-b border-cc-border/60">
-        <img src="/marks/best_128x.png" alt="" className="w-4 h-4" />
-        <h2 className="text-sm font-semibold">Game Review</h2>
-      </div>
+      <SidebarHeader
+        title="Game Review"
+        icon={<img src="/marks/best_128x.png" alt="" className="w-6 h-6" />}
+        start={{ icon: <IconPlus />, label: 'Load another game', onClick: onNewGame }}
+      />
 
-      <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        <div className="flex items-start gap-2">
-          <div className="w-14 h-14 shrink-0 rounded-lg bg-cc-surface overflow-hidden">
-            <img src="/chess-coach.png" alt="Coach" className="w-full h-full object-cover" />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        <div className="p-6 pb-2">
+          <CoachSpeech align="bottom">{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
+
+          <div className="mt-4">
+            <EvalGraph
+              evalResults={evalResults}
+              currentPly={currentPly}
+              onSelectPly={onSelectPly}
+              moveAnalyses={moveAnalyses}
+            />
           </div>
-          <div className="relative flex-1 bg-white rounded-lg px-3 py-2.5 min-h-14 flex items-center">
-            <span aria-hidden className="absolute -left-1.5 top-4 w-3 h-3 bg-white rotate-45" />
-            <span className="text-[#312e2b] text-[15px] leading-snug">
-              {summaryHeadline(whiteSummary, blackSummary)}
-            </span>
-          </div>
-        </div>
 
-        <EvalGraph
-          evalResults={evalResults}
-          currentPly={currentPly}
-          onSelectPly={onSelectPly}
-          moveAnalyses={moveAnalyses}
-        />
-      </div>
+          <GridRow
+            className="pt-2"
+            label=""
+            left={<span className="text-[13px] font-bold text-white truncate">{whiteName}</span>}
+            right={<span className="text-[13px] font-bold text-white truncate">{blackName}</span>}
+          />
+          <GridRow
+            className="pt-2"
+            label="Players"
+            left={<PlayerAvatar name={whiteName} winner={winner === 'white'} />}
+            right={<PlayerAvatar name={blackName} winner={winner === 'black'} />}
+          />
+          <GridRow
+            className="pt-2"
+            label="Accuracy"
+            left={<ScoreBox value={whiteSummary.accuracy?.toFixed(1)} light />}
+            right={<ScoreBox value={blackSummary.accuracy?.toFixed(1)} light={false} />}
+          />
 
-      <div className="flex flex-col gap-2 px-2 py-2 border-b border-cc-border/60">
-        <GridRow
-          label=""
-          left={
-            <span className="font-semibold text-sm truncate">
-              {whiteName}{whiteElo ? ` (${whiteElo})` : ''}
-            </span>
-          }
-          right={
-            <span className="font-semibold text-sm truncate">
-              {blackName}{blackElo ? ` (${blackElo})` : ''}
-            </span>
-          }
-        />
-        <GridRow
-          label="Players"
-          left={<PlayerAvatar name={whiteName} highlighted={reviewAs === 'white'} />}
-          right={<PlayerAvatar name={blackName} highlighted={reviewAs === 'black'} />}
-        />
+          <div className="my-4 border-t border-white/10" />
 
-        <GridRow
-          label="Accuracy"
-          left={<AccuracyPill accuracy={whiteSummary.accuracy} light />}
-          right={<AccuracyPill accuracy={blackSummary.accuracy} light={false} />}
-        />
-
-        <button
-          onClick={() => setTableExpanded(e => !e)}
-          aria-label={tableExpanded ? 'Hide details' : 'Show details'}
-          className="flex items-center justify-center rounded hover:bg-cc-surface/40 py-1 transition-colors text-cc-text-faint text-xs"
-        >
-          {tableExpanded ? '▲' : '▼'}
-        </button>
-
-        {tableExpanded && (
-          <>
-            <div className="flex flex-col gap-1.5">
+          {tableExpanded && (
+            <div className="flex flex-col">
               {CLASS_DISPLAY_ORDER.map(cls => (
-                <GridRow
+                <TallyRow
                   key={cls}
-                  label={
-                    <span className="text-sm font-semibold" style={{ color: tableColor(cls) }}>
-                      {cls}
-                    </span>
-                  }
-                  left={
-                    <span className="text-[15px] font-bold" style={{ color: tableColor(cls) }}>
-                      {whiteSummary.classificationCounts[cls]}
-                    </span>
-                  }
-                  icon={<img src={CLASS_ICON[cls]} alt={cls} className="w-5 h-5" />}
-                  right={
-                    <span className="text-[15px] font-bold" style={{ color: tableColor(cls) }}>
-                      {blackSummary.classificationCounts[cls]}
-                    </span>
-                  }
+                  cls={cls}
+                  white={whiteSummary.classificationCounts[cls]}
+                  black={blackSummary.classificationCounts[cls]}
                 />
               ))}
             </div>
+          )}
 
+          <div className="flex justify-center pt-2.5">
+            <button
+              onClick={() => setTableExpanded(e => !e)}
+              aria-label={tableExpanded ? 'Hide details' : 'Show details'}
+              className="w-6 h-6 flex items-center justify-center rounded-[5px] text-white/50 hover:text-white transition-colors"
+            >
+              {tableExpanded ? <IconChevronUp size={24} /> : <IconChevronDown size={24} />}
+            </button>
+          </div>
+
+          <div className="my-4 border-t border-white/10" />
+
+          <GridRow
+            label="Game Rating"
+            left={<ScoreBox value={whiteSummary.gameRating?.toString()} light />}
+            right={<ScoreBox value={blackSummary.gameRating?.toString()} light={false} />}
+          />
+
+          {PHASE_ROWS.map(({ key, label }) => (
             <GridRow
-              className="pt-2 border-t border-cc-border/60"
-              label="Game Rating"
-              left={<RatingPill rating={whiteSummary.gameRating} />}
-              right={<RatingPill rating={blackSummary.gameRating} />}
+              key={key}
+              className="h-10"
+              label={label}
+              left={<PhaseIcon grade={whiteSummary.phaseGrades[key]} />}
+              right={<PhaseIcon grade={blackSummary.phaseGrades[key]} />}
             />
+          ))}
 
-            {PHASE_ROWS.map(({ key, label }) => (
-              <GridRow
-                key={key}
-                label={label}
-                left={<PhaseIcon grade={whiteSummary.phaseGrades[key]} />}
-                right={<PhaseIcon grade={blackSummary.phaseGrades[key]} />}
-              />
-            ))}
-          </>
-        )}
+          {puzzleCount > 0 && (
+            <button
+              onClick={onStartPuzzles}
+              className="cc-btn-secondary mt-4 w-full h-12 rounded-[10px] text-[17px] font-semibold flex items-center justify-center gap-2"
+            >
+              <IconPuzzle size={22} className="text-white/72" />
+              Puzzles ({puzzleCount})
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 min-h-4" />
-
-      <div className="shrink-0 p-2 flex flex-col gap-2">
+      <div className="shrink-0 px-6 pt-[5px] pb-6">
         <button
           onClick={onStartReview}
-          className="w-full h-12 rounded-lg bg-cc-green hover:bg-cc-green-hover text-white text-[15px] font-bold transition-colors"
+          className="cc-btn-primary w-full h-16 rounded-[10px] text-[22px] font-extrabold"
         >
           Start Review
         </button>
-        {puzzleCount > 0 && (
-          <button
-            onClick={onStartPuzzles}
-            className="w-full h-12 rounded-lg bg-cc-surface hover:bg-cc-surface-hover text-cc-text text-[15px] font-bold transition-colors"
-          >
-            Puzzles ({puzzleCount})
-          </button>
-        )}
       </div>
     </div>
   )
 }
 
-function PlayerAvatar({ name, highlighted }: { name: string; highlighted: boolean }) {
-  const initial = name.trim().charAt(0).toUpperCase() || '?'
+// chess.com's tally rows print the label in plain white and only the two counts in the
+// classification color (measured 2026-11-02), with the class glyph between the counts.
+function TallyRow({ cls, white, black }: { cls: MoveClass; white: number; black: number }) {
+  const color = classTextColor(cls)
   return (
-    <div
-      className={`w-12 h-12 rounded-lg bg-cc-surface flex items-center justify-center text-cc-text-dim font-bold select-none ${
-        highlighted ? 'ring-2 ring-cc-green' : ''
-      }`}
-    >
-      {initial}
+    <div className="relative h-10 grid grid-cols-3 items-center">
+      <span className="text-sm font-semibold leading-5 text-white">{cls}</span>
+      <span className="text-center text-[17px] font-bold leading-5" style={{ color }}>{white}</span>
+      <span className="text-center text-[17px] font-bold leading-5" style={{ color }}>{black}</span>
+      <img
+        src={CLASS_ICON[cls]}
+        alt=""
+        className="absolute left-2/3 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6"
+      />
     </div>
   )
 }
 
-function AccuracyPill({ accuracy, light }: { accuracy: number | null; light: boolean }) {
+function PlayerAvatar({ name, winner }: { name: string; winner: boolean }) {
+  const avatar = usePlayerAvatar(name)
   return (
-    <span
-      className={`px-2 py-1 rounded font-semibold text-sm ${
-        light ? 'bg-cc-text text-cc-bg' : 'bg-cc-bg-dark text-cc-text border border-cc-border'
-      }`}
+    <div
+      className={`w-16 h-16 rounded-[5px] overflow-hidden ${winner ? 'border-4 border-cc-green' : ''}`}
+      title={name}
     >
-      {accuracy != null ? accuracy.toFixed(1) : '–'}
-    </span>
+      {avatar ? <img src={avatar} alt="" className="w-full h-full object-cover" /> : <PawnAvatar size={64} />}
+    </div>
   )
 }
 
-function RatingPill({ rating }: { rating: number | null }) {
+// Accuracy / Game Rating value: a 64x36 box, white on the white player's side and a faint
+// translucent box on Black's (17px/700, 5px radius — chess.com's review-rating component).
+function ScoreBox({ value, light }: { value: string | undefined; light: boolean }) {
   return (
-    <span className="px-2 py-0.5 rounded bg-cc-surface font-bold text-cc-text min-w-10 text-center">
-      {rating ?? '–'}
+    <span
+      className={`w-16 h-9 rounded-[5px] flex items-center justify-center text-[17px] font-bold ${
+        light ? 'bg-white text-[#312e2b]' : 'bg-white/5 text-white'
+      }`}
+    >
+      {value ?? '–'}
     </span>
   )
 }
 
 function PhaseIcon({ grade }: { grade: PhaseGrade | null | undefined }) {
-  if (!grade) return <span className="text-cc-text-faint">–</span>
-  return <img src={CLASS_ICON[grade]} alt={grade} title={grade} className="w-4 h-4" />
+  if (!grade) return <span className="text-white/50">–</span>
+  return <img src={CLASS_ICON[grade]} alt={grade} title={grade} className="w-6 h-6" />
 }
 
 const CONFETTI_COLORS = ['#81b64c', '#e2903f', '#749bbf', '#e5533d', '#f7c631']

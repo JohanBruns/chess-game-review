@@ -37,6 +37,8 @@ import { PlayoutPanel } from './components/PlayoutPanel'
 import { PuzzlePanel } from './components/PuzzlePanel'
 import { ThemePicker } from './components/ThemePicker'
 import { SettingsMenu } from './components/SettingsMenu'
+import { SidebarHeader } from './components/SidebarHeader'
+import { IconArrowLeft, IconLink, IconTarget } from './components/icons'
 import { useTheme } from './hooks/useTheme'
 import { useSettings } from './hooks/useSettings'
 import { usePlayout } from './hooks/usePlayout'
@@ -83,6 +85,7 @@ function App() {
     moveTimeSeconds,
     clocks,
     timeControl,
+    result: gameResult,
   } = useGame()
 
   const {
@@ -718,16 +721,35 @@ function App() {
   // One computed source for both the coach bubble's badge and the eval bar.
   const reviewEvalBadge = formatEvalBadge(boardView.reviewEval)
 
-  return (
-    <div className="h-screen h-dvh bg-cc-bg text-cc-text flex flex-col overflow-hidden">
-      <GamePicker
-        onLoad={handleLoadInput}
-        error={linkError ?? error}
-        loading={linkLoading}
-        initialUsername={initialUsername}
-        autoFetch={autoFetch}
-      />
+  // chess.com frames the winner's avatar in the summary; the clock of the side to move carries
+  // the clock icon (the other one is faded).
+  const winner: 'white' | 'black' | null =
+    gameResult === '1-0' ? 'white' : gameResult === '0-1' ? 'black' : null
+  const sideToMove: 'white' | 'black' = currentFen.split(' ')[1] === 'b' ? 'black' : 'white'
+  const takeover = playout.active || puzzles.active
+  const hasReview = evalResults.length > 0 && engineError == null
 
+  const playerBar = (side: 'white' | 'black') => (
+    <PlayerBar
+      name={(side === 'white' ? whiteName : blackName) ?? (side === 'white' ? 'White' : 'Black')}
+      elo={side === 'white' ? whiteElo : blackElo}
+      clockSeconds={isLoaded ? remainingClockSeconds(clocks, currentPly, side, timeControl) : null}
+      side={side}
+      active={sideToMove === side}
+      fen={boardView.fen}
+      piecesBasePath={pieceTheme.basePath}
+    />
+  )
+
+  return (
+    // chess.com's page frame, measured at 1440x900: a 16px page padding around [board column]
+    // [sidebar card]. The board column is player bar (40) + 10 + board + 10 + player bar (40),
+    // with the 30px eval bar 10px left of the board and the 32px controls column to its right;
+    // --board is the largest square that fits both the viewport height and the width left over
+    // next to the sidebar (whose width scales from 300px at 1440 wide, like chess.com's).
+    // Phones (< md) stack the board column above a full-width sidebar; the sizes live in
+    // index.css (.page-frame) because they swap at that breakpoint.
+    <div className="page-frame h-screen h-dvh bg-cc-bg text-cc-text overflow-hidden flex flex-col items-center gap-2 p-2 md:flex-row md:items-stretch md:justify-center md:gap-0 md:p-4">
       <ThemePicker
         open={themeOpen}
         onClose={() => setThemeOpen(false)}
@@ -744,25 +766,14 @@ function App() {
         onChange={updateSettings}
       />
 
-      {/* Phones (< md) stack the board above the sidebar; wider screens put them side by side. */}
-      <div className="flex flex-col md:flex-row flex-1 min-h-0">
-        {/* ── Left: Board — width matches board+evalbar+padding exactly (no middle gap).
-            Capped by min() against viewport width so a narrow-but-tall window can't force
-            the board wider than the screen and crush the sidebar (reserves the sidebar's
-            fixed 400px, or 320px on narrow windows where the sidebar itself shrinks — see
-            the sidebar's own min-width below). Sizes live in index.css (.board-column /
-            .board-row) because the phone layout swaps them at a breakpoint. ── */}
-        <div className="board-column shrink-0 flex flex-col p-2 gap-1 md:p-3 md:gap-2">
-          {isLoaded && (
-            <PlayerBar
-              name={(topSide === 'white' ? whiteName : blackName) ?? (topSide === 'white' ? 'White' : 'Black')}
-              elo={topSide === 'white' ? whiteElo : blackElo}
-              clockSeconds={remainingClockSeconds(clocks, currentPly, topSide, timeControl)}
-            />
-          )}
-          <div className="board-row flex flex-row items-stretch">
+      {/* ── Left: board column, with the controls column standing to its right from the top
+          player bar down (chess.com's gear sits level with the top bar) ── */}
+      <div className="shrink-0 flex">
+        <div className="flex flex-col gap-2.5">
+          <div className="ml-10" style={{ width: 'var(--board)' }}>{playerBar(topSide)}</div>
+          <div className="flex" style={{ height: 'var(--board)' }}>
             <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
-            <div className="aspect-square h-full">
+            <div className="ml-2.5 aspect-square h-full">
               <BoardErrorBoundary>
                 <BoardPanel
                   fen={boardView.fen}
@@ -783,34 +794,30 @@ function App() {
               </BoardErrorBoundary>
             </div>
           </div>
-          {isLoaded && (
-            <PlayerBar
-              name={(bottomSide === 'white' ? whiteName : blackName) ?? (bottomSide === 'white' ? 'White' : 'Black')}
-              elo={bottomSide === 'white' ? whiteElo : blackElo}
-              clockSeconds={remainingClockSeconds(clocks, currentPly, bottomSide, timeControl)}
-            />
-          )}
-          <BoardToolbar
-            onFlip={handleFlip}
-            onOpenThemes={() => setThemeOpen(true)}
-            onOpenSettings={() => setSettingsOpen(true)}
-            onCopyLink={handleCopyLink}
-            onExportImage={handleExportImage}
-            linkCopied={linkCopied}
-            isLoaded={isLoaded}
-            takeover={playout.active || puzzles.active}
-          />
+          <div className="ml-10" style={{ width: 'var(--board)' }}>{playerBar(bottomSide)}</div>
         </div>
+        <BoardToolbar
+          onFlip={handleFlip}
+          onOpenThemes={() => setThemeOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onCopyLink={handleCopyLink}
+          onExportImage={handleExportImage}
+          linkCopied={linkCopied}
+          isLoaded={isLoaded}
+          takeover={takeover}
+        />
+      </div>
 
-        {/* ── Right: Sidebar — three mutually-exclusive chapters that replace each other:
-            'setup' (pre-analysis: opening badge, Analyze button, move list for navigation),
-            'summary' (chess.com's post-analysis Game Review card), and 'review' (the guided
-            walkthrough). See sidebarView. Fixed width (chess.com's sidebar is a constant
-            ~400px, never flex-filling the viewport) — shrinks down to 320px before the board
-            column (which reserves at least that much, see its width formula above) gives up
-            any more room. ── */}
-        <div className="w-full flex-1 min-h-0 border-t md:w-[400px] md:min-w-[320px] md:flex-initial md:border-t-0 md:border-l border-cc-border flex flex-col overflow-hidden">
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+      {/* ── Right: sidebar card — chapters that replace each other: 'setup' (game loader,
+          Analyze button, move list), 'summary' (chess.com's Game Review overview), and 'review'
+          (the guided walkthrough), plus the practice/puzzle takeovers. See sidebarView. Each
+          chapter draws its own 48px SidebarHeader; the nav footer closes the card off in every
+          chapter but the summary, which pins its Start Review button there instead. ── */}
+      <div
+        className="flex-1 min-h-0 md:flex-initial md:shrink-0 bg-black/20 rounded-[5px] flex flex-col overflow-hidden"
+        style={{ width: 'var(--sidebar-w)' }}
+      >
+        <div className="flex-1 min-h-0 flex flex-col">
           {playout.active ? (
             <PlayoutPanel
               userColor={playout.userColor}
@@ -837,12 +844,10 @@ function App() {
               onNext={puzzles.next}
               onExit={puzzles.exit}
             />
-          ) : sidebarView === 'summary' && evalResults.length > 0 && engineError == null ? (
+          ) : sidebarView === 'summary' && hasReview ? (
             <SummaryView
               whiteName={whiteName ?? 'White'}
               blackName={blackName ?? 'Black'}
-              whiteElo={whiteElo}
-              blackElo={blackElo}
               whiteSummary={whiteSummary}
               blackSummary={blackSummary}
               evalResults={evalResults}
@@ -850,15 +855,14 @@ function App() {
               currentPly={currentPly}
               onSelectPly={goToPly}
               onStartReview={handleStartReview}
+              onNewGame={() => setSidebarView('setup')}
               puzzleCount={puzzleList.length}
               onStartPuzzles={handleStartPuzzles}
-              reviewAs={settings.reviewAs}
+              winner={winner}
             />
-          ) : sidebarView === 'review' && evalResults.length > 0 && engineError == null ? (
+          ) : sidebarView === 'review' && hasReview ? (
             <ReviewView
               onBack={handleBackToSummary}
-              onPractice={handleStartPractice}
-              canPractice={isReady && currentPly > 0}
               active={reviewActive}
               coachEnabled={settings.coachEnabled}
               headline={reviewHeadlineText}
@@ -904,7 +908,7 @@ function App() {
               }
               retry={
                 retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] ? (
-                  <div className="shrink-0 border-t border-cc-border p-2">
+                  <div className="shrink-0 pt-2">
                     <RetryPanel
                       originalSan={moves[retryMoveIndex].san}
                       originalClassification={moveAnalyses[retryMoveIndex].classification}
@@ -918,8 +922,24 @@ function App() {
             />
           ) : (
             <div className="flex flex-col flex-1 min-h-0 animate-chapter-fade-in">
+              <SidebarHeader
+                title="Analysis"
+                icon={<IconTarget size={22} className="text-cc-green" />}
+                start={
+                  hasReview
+                    ? { icon: <IconArrowLeft />, label: 'Back to Game Review', onClick: () => setSidebarView('summary') }
+                    : undefined
+                }
+              />
+              <GamePicker
+                onLoad={handleLoadInput}
+                error={linkError ?? error}
+                loading={linkLoading}
+                initialUsername={initialUsername}
+                autoFetch={autoFetch}
+              />
               <OpeningBadge opening={openingResult?.opening ?? null} />
-              <div className="shrink-0 px-2 py-2 border-b border-cc-border/60">
+              <div className="shrink-0 px-4 pb-3">
                 <EvalPanel
                   isReady={isReady}
                   isAnalyzing={isAnalyzing}
@@ -927,7 +947,7 @@ function App() {
                   result={result}
                   error={engineError}
                   isGameLoaded={isLoaded}
-                  hasAnalysis={evalResults.length > 0 && engineError == null}
+                  hasAnalysis={hasReview}
                   onAnalyzeGame={handleAnalyzeGame}
                   engineLines={currentEngineLines}
                   onHoverEngineLine={settings.showEngineLines ? setHoveredLineSan : undefined}
@@ -945,11 +965,11 @@ function App() {
             </div>
           )}
         </div>
-          {/* Sidebar footer — chess.com's five-button move-navigation row (first/prev/play/
-              next/last), shared across every chapter (setup/summary/review/playout/puzzle;
-              `takeover` disables it during the latter two, same as the buttons it replaced
-              under the board). Sits outside the scrollable chapter area so it never scrolls
-              out of view. ── */}
+        {/* Sidebar footer — chess.com's five-button move-navigation row (first/prev/play/
+            next/last), with a tertiary row of ghost buttons in the review chapter. `takeover`
+            disables it during practice/puzzles. Sits outside the scrollable chapter area so it
+            never scrolls out of view; the summary chapter has its Start Review button here. */}
+        {!(sidebarView === 'summary' && hasReview && !takeover) && (
           <NavControls
             onFirst={goToFirst}
             onPrev={goToPrev}
@@ -960,9 +980,27 @@ function App() {
             isLoaded={isLoaded}
             autoplay={settings.autoplay}
             onToggleAutoplay={handleToggleAutoplay}
-            takeover={playout.active || puzzles.active}
-          />
-        </div>
+            takeover={takeover}
+          >
+            {sidebarView === 'review' && hasReview && !takeover && (
+              <>
+                <button
+                  onClick={handleStartPractice}
+                  disabled={!isReady || currentPly === 0}
+                  className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <IconTarget className="text-white/50" /> Practice
+                </button>
+                <button
+                  onClick={handleCopyLink}
+                  className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold transition-colors"
+                >
+                  <IconLink className="text-white/50" /> {linkCopied ? 'Copied!' : 'Share'}
+                </button>
+              </>
+            )}
+          </NavControls>
+        )}
       </div>
     </div>
   )

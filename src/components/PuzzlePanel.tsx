@@ -1,3 +1,5 @@
+import { SidebarHeader } from './SidebarHeader'
+import { IconArrowLeft, IconPuzzle } from './icons'
 import type { MoveClass } from '../lib/analysis/classify'
 import type { PuzzleAttempt } from '../hooks/usePuzzles'
 
@@ -18,10 +20,8 @@ interface PuzzlePanelProps {
   onExit: () => void
 }
 
-const PRIMARY_BTN =
-  'px-3 py-1.5 rounded bg-cc-green text-white text-xs font-semibold hover:bg-cc-green-hover transition-colors'
-const SECONDARY_BTN =
-  'px-3 py-1.5 rounded bg-cc-surface text-cc-text-dim text-xs font-medium hover:bg-cc-surface-hover transition-colors'
+const PRIMARY_BTN = 'cc-btn-primary h-10 px-4 rounded-[5px] text-sm font-semibold'
+const SECONDARY_BTN = 'cc-btn-secondary h-10 px-4 rounded-[5px] text-sm font-semibold'
 
 // Sidebar panel for "Puzzles from your mistakes" (Phase 8) — a sequential drill over the
 // extractPuzzles candidates. Board interaction (drag = attempt) lives in usePuzzles / App; this
@@ -45,21 +45,11 @@ export function PuzzlePanel({
 
   return (
     <div className="flex flex-col h-full overflow-hidden animate-chapter-fade-in">
-      <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
-        <button
-          onClick={onExit}
-          aria-label="Exit puzzles"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-cc-surface/60 transition-colors text-cc-text-dim"
-        >
-          ←
-        </button>
-        <h2 className="text-sm font-semibold">Puzzles</h2>
-        {!finished && (
-          <span className="ml-auto text-cc-text-faint text-xs tabular-nums">
-            {index + 1} / {total}
-          </span>
-        )}
-      </div>
+      <SidebarHeader
+        title={finished ? 'Puzzles' : `Puzzles · ${index + 1} / ${total}`}
+        icon={<IconPuzzle size={22} className="text-cc-green" />}
+        start={{ icon: <IconArrowLeft />, label: 'Exit puzzles', onClick: onExit }}
+      />
 
       {finished ? (
         <div className="flex flex-col items-center justify-center flex-1 gap-2 px-4 text-center">
@@ -77,7 +67,7 @@ export function PuzzlePanel({
         </div>
       ) : (
         <>
-          <div className="flex flex-col gap-3 px-3 py-4">
+          <div className="flex flex-col gap-3 p-4">
             <p className="text-cc-text text-sm font-medium">
               {sideToMove === 'w' ? 'White' : 'Black'} to move — find the best move.
             </p>
@@ -114,7 +104,7 @@ export function PuzzlePanel({
 
           <div className="flex-1" />
 
-          <div className="shrink-0 flex flex-wrap gap-2 p-2 border-t border-cc-border/60">
+          <div className="shrink-0 flex flex-wrap gap-2 px-4 pb-2">
             {attempt !== null && !attempt.correct && !revealed && (
               <>
                 <button onClick={onTryAgain} className={SECONDARY_BTN}>Try again</button>

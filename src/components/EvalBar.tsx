@@ -7,13 +7,13 @@ function evalToCp(r: EvalResult): number {
   return 0
 }
 
+// chess.com prints the bar's score unsigned ("0.3", "M2") — which side leads is already told by
+// which end of the bar it sits on.
 function formatLabel(r: EvalResult): string {
-  if (r.mate !== null) return r.mate > 0 ? `+M${r.mate}` : `-M${-r.mate}`
+  if (r.mate !== null) return `M${Math.abs(r.mate)}`
   if (r.cp !== null) {
-    if (r.cp >= 10000) return '+M'
-    if (r.cp <= -10000) return '-M'
-    const p = r.cp / 100
-    return p > 0 ? `+${p.toFixed(1)}` : p.toFixed(1)
+    if (Math.abs(r.cp) >= 10000) return 'M'
+    return Math.abs(r.cp / 100).toFixed(1)
   }
   return '0.0'
 }
@@ -32,8 +32,8 @@ export function EvalBar({
   const label = evalResult ? formatLabel(evalResult) : null
 
   const whiteAtBottom = orientation === 'white'
-  const whiteBar = <div className="bg-cc-text w-full transition-all duration-300" style={{ height: `${pct}%` }} />
-  const darkBar = <div className="bg-cc-bg-dark w-full transition-all duration-300" style={{ height: `${100 - pct}%` }} />
+  const whiteBar = <div className="bg-white w-full transition-all duration-300" style={{ height: `${pct}%` }} />
+  const darkBar = <div className="bg-[#403d39] w-full transition-all duration-300" style={{ height: `${100 - pct}%` }} />
 
   const whiteLeads = pct >= 50
   // Label sits on the leading side's outer edge; that edge is the bottom when the leading side is
@@ -41,7 +41,8 @@ export function EvalBar({
   const labelAtBottom = whiteLeads === whiteAtBottom
 
   return (
-    <div className="relative flex flex-col w-[22px] self-stretch overflow-hidden rounded-[3px] select-none">
+    // 30px wide, 2px radius, #403d39 / white fills — chess.com's measured eval bar (1440x900).
+    <div className="relative flex flex-col w-[30px] self-stretch overflow-hidden rounded-[2px] select-none">
       {whiteAtBottom ? (
         <>
           {darkBar}
@@ -55,11 +56,11 @@ export function EvalBar({
       )}
       {label && (
         <span
-          className="absolute left-1/2 -translate-x-1/2 text-[10px] font-mono font-bold tabular-nums pointer-events-none"
+          className="absolute inset-x-0 text-center text-[10px] font-semibold tabular-nums pointer-events-none"
           style={{
-            top: labelAtBottom ? undefined : '2px',
-            bottom: labelAtBottom ? '2px' : undefined,
-            color: whiteLeads ? '#262421' : '#e9e9e8',
+            top: labelAtBottom ? undefined : '5px',
+            bottom: labelAtBottom ? '5px' : undefined,
+            color: whiteLeads ? '#403d39' : '#fff',
           }}
         >
           {label}
