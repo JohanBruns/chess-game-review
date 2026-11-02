@@ -53,10 +53,19 @@ export function MoveList({
   showMoveTimes = true,
   onRetry,
 }: MoveListProps) {
+  const listRef = useRef<HTMLDivElement | null>(null)
   const selectedRef = useRef<HTMLButtonElement | null>(null)
 
+  // Keep the selected move visible by scrolling the list itself — not scrollIntoView, which
+  // would also scroll the page on phones, where the list grows with the page instead.
   useEffect(() => {
-    selectedRef.current?.scrollIntoView({ block: 'nearest' })
+    const list = listRef.current
+    const selected = selectedRef.current
+    if (!list || !selected) return
+    const l = list.getBoundingClientRect()
+    const s = selected.getBoundingClientRect()
+    if (s.top < l.top) list.scrollTop -= l.top - s.top
+    else if (s.bottom > l.bottom) list.scrollTop += s.bottom - l.bottom
   }, [currentPly])
 
   if (moves.length === 0) {
@@ -80,7 +89,7 @@ export function MoveList({
   // padding, the move number in the first 40px, White's move from +40px and Black's from +140px,
   // and every second row lifted by a faint 2% white tint.
   return (
-    <div className="flex-1 min-h-[120px] overflow-y-auto">
+    <div ref={listRef} className="flex-1 min-h-[120px] overflow-y-auto">
       {rows.map(({ moveNumber, whitePly, blackPly }) => (
         <div
           key={moveNumber}

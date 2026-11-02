@@ -47,7 +47,8 @@ function capturedFor(fen: string, side: 'white' | 'black') {
 
 // Opponent-above / self-below strip framing the board, measured against chess.com's Game Review
 // (1440x900): 40px tall, 40px avatar, bold 14px name + dimmed rating on the first line, captured
-// pieces on the second, and a 135x40 clock box (white side light, black side dark) on the right.
+// pieces on the second, and a 135x40 clock box (white side light, black side dark) on the right
+// (106px wide on phones).
 export function PlayerBar({ name, elo, clockSeconds, side, active, fen, piecesBasePath }: PlayerBarProps) {
   const avatar = usePlayerAvatar(name)
   const { captured, lead } = capturedFor(fen, side)
@@ -78,7 +79,7 @@ export function PlayerBar({ name, elo, clockSeconds, side, active, fen, piecesBa
       </div>
       {clockSeconds != null && (
         <div
-          className={`shrink-0 w-[135px] h-10 rounded-[3px] flex items-center justify-end ${
+          className={`shrink-0 w-[106px] md:w-[135px] h-10 rounded-[3px] flex items-center justify-end ${
             side === 'white' ? 'bg-white text-[#262421]' : 'bg-[#262421] text-white'
           } ${active ? '' : 'opacity-50'}`}
         >

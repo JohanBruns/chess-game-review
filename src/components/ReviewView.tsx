@@ -64,6 +64,98 @@ interface ReviewViewProps {
   retry?: ReactNode
 }
 
+type ReviewCoachProps = Pick<
+  ReviewViewProps,
+  | 'active'
+  | 'headline'
+  | 'headlineParts'
+  | 'commentary'
+  | 'activeHighlight'
+  | 'onHoverHighlight'
+  | 'onPinHighlight'
+  | 'evalBadge'
+  | 'coachClass'
+  | 'sub'
+> & { size?: number }
+
+// The coach with chess.com's move-feedback box: a first row with the class icon, the class name
+// and a light eval pill, then the explanation below (15px/500). Rendered inside the sidebar on
+// desktop and above the board on phones (96px coach there, like chess.com's mobile page).
+export function ReviewCoach({
+  active,
+  headline,
+  headlineParts,
+  commentary,
+  activeHighlight,
+  onHoverHighlight,
+  onPinHighlight,
+  evalBadge,
+  coachClass,
+  sub,
+  size,
+}: ReviewCoachProps) {
+  return (
+    <CoachSpeech align="top" size={size}>
+      {active ? (
+        // Reserved height so short and long comments don't make the layout jump: 90px in the
+        // desktop sidebar, 73px (a 97px bubble) above the phone board.
+        <div className="flex flex-col min-h-[73px] md:min-h-[90px]">
+          <div className="h-[30px] flex items-start gap-1.5">
+            {sub === 'explain' ? (
+              <IconBulb size={24} className="shrink-0 mt-0.5 text-[#f7c631]" />
+            ) : (
+              coachClass && <img src={CLASS_ICON[coachClass]} alt="" className="w-6 h-6 shrink-0 mt-0.5" />
+            )}
+            <span className="flex-1 min-w-0 font-semibold pt-[3px] truncate">
+              {sub === 'explain' ? 'Explain' : coachClass}
+            </span>
+            {/* Light pill while White is better, dark while Black is (chess.com's
+                score-text positive/negative). */}
+            {evalBadge && (
+              <span
+                className={`shrink-0 rounded-[3px] px-[5px] py-px font-bold ${
+                  evalBadge.startsWith('-') ? 'bg-[#312e2b] text-white' : 'bg-[#e7e6e5]'
+                }`}
+              >
+                {evalBadge}
+              </span>
+            )}
+          </div>
+          <span>
+            {sub !== 'explain' && headlineParts && coachClass ? (
+              <>
+                <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
+                  {headlineParts.san}
+                </span>{' '}
+                {headlineParts.middle}{' '}
+                <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
+                  {headlineParts.classWord}
+                </span>
+                .
+              </>
+            ) : (
+              headline
+            )}
+            {sub === 'idle' && commentary && commentary.length > 0 && (
+              <>
+                {' '}
+                <CoachBubble
+                  tokens={commentary}
+                  activeHighlight={activeHighlight}
+                  onHover={onHoverHighlight}
+                  onPin={onPinHighlight}
+                />
+              </>
+            )}
+          </span>
+        </div>
+      ) : (
+        <span className="text-[#312e2b]/60">Step through your moves with Next.</span>
+      )}
+    </CoachSpeech>
+  )
+}
+
 // chess.com's flow buttons under the coach bubble: 40px tall, 5px radius, 14px/600 label with a
 // 20px icon — green gradient for the main action, the grey gradient skin for the others.
 const PRIMARY_BTN =
@@ -115,79 +207,33 @@ export function ReviewView({
         start={{ icon: <IconArrowLeft />, label: 'Back to summary', onClick: onBack }}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col px-4 pt-4">
+      <div className="flex-1 min-h-0 flex flex-col p-6 md:px-4 md:pt-4 md:pb-0">
         <div className="shrink-0 flex flex-col gap-2">
+          {/* Phones show the coach above the board instead (App's top strip). */}
           {coachEnabled && (
             // chess.com reserves a fixed 156px for the coach so the buttons below never jump
             // between short and long comments.
-            <div className="min-h-[156px]">
-              <CoachSpeech align="top">
-                {active ? (
-                  // chess.com's move-feedback box: a first row with the class icon, the class name
-                  // and a light eval pill, then the explanation below (15px/500).
-                  <div className="flex flex-col min-h-[90px]">
-                    <div className="h-[30px] flex items-start gap-1.5">
-                      {sub === 'explain' ? (
-                        <IconBulb size={24} className="shrink-0 mt-0.5 text-[#f7c631]" />
-                      ) : (
-                        coachClass && (
-                          <img src={CLASS_ICON[coachClass]} alt="" className="w-6 h-6 shrink-0 mt-0.5" />
-                        )
-                      )}
-                      <span className="flex-1 min-w-0 font-semibold pt-[3px] truncate">
-                        {sub === 'explain' ? 'Explain' : coachClass}
-                      </span>
-                      {/* Light pill while White is better, dark while Black is (chess.com's
-                          score-text positive/negative). */}
-                      {evalBadge && (
-                        <span
-                          className={`shrink-0 rounded-[3px] px-[5px] py-px font-bold ${
-                            evalBadge.startsWith('-') ? 'bg-[#312e2b] text-white' : 'bg-[#e7e6e5]'
-                          }`}
-                        >
-                          {evalBadge}
-                        </span>
-                      )}
-                    </div>
-                    <span>
-                      {sub !== 'explain' && headlineParts && coachClass ? (
-                        <>
-                          <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
-                            {headlineParts.san}
-                          </span>{' '}
-                          {headlineParts.middle}{' '}
-                          <span className="font-semibold" style={{ color: classTextColor(coachClass) }}>
-                            {headlineParts.classWord}
-                          </span>
-                          .
-                        </>
-                      ) : (
-                        headline
-                      )}
-                      {sub === 'idle' && commentary && commentary.length > 0 && (
-                        <>
-                          {' '}
-                          <CoachBubble
-                            tokens={commentary}
-                            activeHighlight={activeHighlight}
-                            onHover={onHoverHighlight}
-                            onPin={onPinHighlight}
-                          />
-                        </>
-                      )}
-                    </span>
-                  </div>
-                ) : (
-                  <span className="text-[#312e2b]/60">Step through your moves with Next.</span>
-                )}
-              </CoachSpeech>
+            <div className="hidden md:block min-h-[156px]">
+              <ReviewCoach
+                active={active}
+                headline={headline}
+                headlineParts={headlineParts}
+                commentary={commentary}
+                activeHighlight={activeHighlight}
+                onHoverHighlight={onHoverHighlight}
+                onPinHighlight={onPinHighlight}
+                evalBadge={evalBadge}
+                coachClass={coachClass}
+                sub={sub}
+              />
             </div>
           )}
 
           {/* chess.com drops the labels once several flow buttons share the row (icon-only,
-              equal widths) and only spells out "Next" when it stands alone. */}
+              equal widths) and only spells out "Next" when it stands alone. On phones these
+              buttons live in the fixed footer instead (PhoneFooter). */}
           {active && sub === 'idle' && (
-            <div className="flex gap-2">
+            <div className="hidden md:flex gap-2">
               {canExplain && (
                 <button onClick={onExplain} className={`${SECONDARY_BTN} flex-1`} title="Explain" aria-label="Explain">
                   <IconBulb size={22} className="text-white/72" />
@@ -206,20 +252,20 @@ export function ReviewView({
           )}
 
           {!active && (
-            <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} w-full`}>
+            <button onClick={onNext} disabled={!canNext} className={`${PRIMARY_BTN} w-full max-md:hidden`}>
               <IconArrowRight /> Next
             </button>
           )}
 
           {active && sub === 'best' && (
-            <button onClick={onResume} className={`${PRIMARY_BTN} w-full`}>
+            <button onClick={onResume} className={`${PRIMARY_BTN} w-full max-md:hidden`}>
               <IconPlay /> Resume
             </button>
           )}
 
           {active && sub === 'explain' && (
             <>
-              <div className="flex gap-2">
+              <div className="hidden md:flex gap-2">
                 <button
                   onClick={onLinePrev}
                   disabled={lineStep <= 0}
@@ -243,7 +289,7 @@ export function ReviewView({
                 </button>
               </div>
               {lineSans.length > 0 && (
-                <div className="flex flex-wrap gap-1 text-[13px] font-bold px-1">
+                <div className="flex flex-wrap gap-1 text-[13px] font-bold px-1 max-md:mb-3">
                   {lineSans.map((san, i) => (
                     <span
                       key={i}
