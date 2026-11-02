@@ -41,8 +41,9 @@ export function EvalBar({
   const labelAtBottom = whiteLeads === whiteAtBottom
 
   return (
-    // 30px wide, 2px radius, #403d39 / white fills — chess.com's measured eval bar (1440x900).
-    <div className="relative flex flex-col w-[30px] self-stretch overflow-hidden rounded-[2px] select-none">
+    // 30px wide (20px on phones), 2px radius, #403d39 / white fills — chess.com's measured eval
+    // bar (1440x900 and 375x812).
+    <div className="relative flex flex-col shrink-0 w-5 md:w-[30px] self-stretch overflow-hidden rounded-[2px] select-none">
       {whiteAtBottom ? (
         <>
           {darkBar}
