@@ -1,7 +1,8 @@
-// Small dezent icon strip under the board — flip/theme/settings/share/export. Split out of the
-// old NavControls (which used to bundle these with the move-navigation buttons); those now live
-// in the sidebar footer instead. Text glyphs stand in for icons here (kept simple, no SVG set
-// for these five) but styled transparent/muted rather than as filled emoji buttons.
+import { IconCamera, IconCheck, IconFlip, IconGear, IconLink, IconPalette } from './icons'
+
+// chess.com's 32px board-controls column, standing to the right of the board with the settings
+// gear at the top — here also holding flip/theme/share/export. Split out of the old NavControls
+// (whose move-navigation buttons now live in the sidebar footer instead).
 interface BoardToolbarProps {
   onFlip: () => void
   onOpenThemes: () => void
@@ -17,7 +18,7 @@ interface BoardToolbarProps {
 }
 
 const BTN =
-  'w-7 h-7 flex items-center justify-center rounded text-cc-text-faint hover:text-cc-text hover:bg-cc-surface/60 disabled:opacity-30 disabled:cursor-not-allowed transition-colors text-sm'
+  'w-8 h-8 flex items-center justify-center rounded-[3px] text-white/50 hover:text-white disabled:opacity-30 disabled:hover:text-white/50 disabled:cursor-not-allowed transition-colors'
 
 export function BoardToolbar({
   onFlip,
@@ -30,26 +31,33 @@ export function BoardToolbar({
   takeover = false,
 }: BoardToolbarProps) {
   return (
-    <div className="flex justify-center gap-1">
-      <button className={BTN} onClick={onFlip} disabled={!isLoaded} title="Flip Board (F)">
-        ⇅
+    <div className="w-8 shrink-0 flex flex-col items-center gap-1">
+      <button className={BTN} onClick={onOpenSettings} title="Settings" aria-label="Settings">
+        <IconGear size={22} />
       </button>
-      <button className={BTN} onClick={onOpenThemes} title="Board &amp; Pieces">
-        🎨
+      <button className={BTN} onClick={onFlip} disabled={!isLoaded} title="Flip Board (F)" aria-label="Flip Board">
+        <IconFlip />
       </button>
-      <button className={BTN} onClick={onOpenSettings} title="Settings">
-        ⚙️
+      <button className={BTN} onClick={onOpenThemes} title="Board &amp; Pieces" aria-label="Board and Pieces">
+        <IconPalette />
       </button>
       <button
         className={BTN}
         onClick={onCopyLink}
         disabled={!isLoaded || takeover}
         title={linkCopied ? 'Copied!' : 'Copy analysis link'}
+        aria-label="Copy analysis link"
       >
-        {linkCopied ? '✓' : '🔗'}
+        {linkCopied ? <IconCheck className="text-cc-green" /> : <IconLink />}
       </button>
-      <button className={BTN} onClick={onExportImage} disabled={!isLoaded || takeover} title="Export board image">
-        📷
+      <button
+        className={BTN}
+        onClick={onExportImage}
+        disabled={!isLoaded || takeover}
+        title="Export board image"
+        aria-label="Export board image"
+      >
+        <IconCamera />
       </button>
     </div>
   )

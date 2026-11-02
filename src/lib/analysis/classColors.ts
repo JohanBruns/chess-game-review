@@ -23,3 +23,10 @@ export const CLASS_COLOR: Record<MoveClass, string> = {
 export function classColor(cls: MoveClass, alpha = 1): string {
   return alpha === 1 ? `rgb(${CLASS_COLOR[cls]})` : `rgba(${CLASS_COLOR[cls]}, ${alpha})`
 }
+
+// Text color for a classification label/SAN (move list, tally counts). Identical to classColor
+// except Book: CLASS_COLOR.Book is the yellow last-move square tint, while chess.com prints book
+// moves and the Book count in the tan of the book icon (measured rgb(213, 164, 125)).
+export function classTextColor(cls: MoveClass): string {
+  return cls === 'Book' ? 'rgb(213, 164, 125)' : classColor(cls)
+}
