@@ -111,12 +111,11 @@
   --sidebar-w: clamp(300px, 20.8vw, 450px);
   --board: max(240px, min(calc(100dvh - 132px), calc(100vw - 104px - var(--sidebar-w))));
 }
-/* Phones (below Tailwind's md breakpoint): board column stacked above a full-width sidebar.
-   The board takes the width left after the 8px padding, eval bar + gap (40px) and controls
-   column (32px), capped so board + player bars stay within 55% of the height. */
+/* Phones (below Tailwind's md breakpoint) follow chess.com's mobile page instead (375x812):
+   a scrolling page with the board spanning the full width (sized by its own aspect ratio, so
+   --board is unused there) above a full-width sidebar. */
 @media (max-width: 767.98px) {
   .page-frame {
     --sidebar-w: 100%;
-    --board: max(160px, min(calc(100vw - 88px), calc(55dvh - 100px)));
   }
 }

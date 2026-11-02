@@ -20,6 +20,7 @@ import {
   formatEvalBadge,
   buildLineSteps,
   buildBestPreview,
+  summaryHeadline,
 } from './lib/analysis/review'
 import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
@@ -29,7 +30,7 @@ import { extractPuzzles } from './lib/analysis/puzzles'
 import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
-import { ReviewView } from './components/ReviewView'
+import { ReviewCoach, ReviewView } from './components/ReviewView'
 import { BoardErrorBoundary } from './components/BoardErrorBoundary'
 import { SummaryView } from './components/SummaryView'
 import { RetryPanel } from './components/RetryPanel'
@@ -38,7 +39,22 @@ import { PuzzlePanel } from './components/PuzzlePanel'
 import { ThemePicker } from './components/ThemePicker'
 import { SettingsMenu } from './components/SettingsMenu'
 import { SidebarHeader } from './components/SidebarHeader'
-import { IconArrowLeft, IconLink, IconTarget } from './components/icons'
+import { CoachSpeech } from './components/CoachSpeech'
+import { PhoneFooter, type FooterAction } from './components/PhoneFooter'
+import {
+  IconArrowLeft,
+  IconArrowRight,
+  IconBulb,
+  IconCamera,
+  IconCheck,
+  IconFlip,
+  IconGear,
+  IconLink,
+  IconPalette,
+  IconPlay,
+  IconStar,
+  IconTarget,
+} from './components/icons'
 import { useTheme } from './hooks/useTheme'
 import { useSettings } from './hooks/useSettings'
 import { usePlayout } from './hooks/usePlayout'
@@ -729,6 +745,66 @@ function App() {
   const takeover = playout.active || puzzles.active
   const hasReview = evalResults.length > 0 && engineError == null
 
+  // The guided-review coach, shared by ReviewView (desktop sidebar) and the phone top strip.
+  const reviewCoachProps = {
+    active: reviewActive,
+    headline: reviewHeadlineText,
+    headlineParts,
+    commentary: reviewSub === 'idle' ? commentary : null,
+    activeHighlight,
+    onHoverHighlight: setHoveredHighlight,
+    onPinHighlight: handlePinHighlight,
+    evalBadge: reviewEvalBadge,
+    coachClass,
+    sub: reviewSub,
+  }
+
+  // Phones (PhoneFooter): the gear menu collects the desktop controls column's actions, the green
+  // middle button is the current chapter's main step, and the arrows step the main line — or the
+  // engine line while it is being explained, like the arrow keys.
+  const inSummary = sidebarView === 'summary' && hasReview && !takeover
+  const inReview = sidebarView === 'review' && hasReview && !takeover
+  const explaining = inReview && reviewSub === 'explain'
+  const phoneMenu: FooterAction[] = [
+    { icon: <IconGear size={20} />, label: 'Settings', onClick: () => setSettingsOpen(true) },
+    { icon: <IconFlip />, label: 'Flip Board', onClick: handleFlip, disabled: !isLoaded },
+    { icon: <IconPalette />, label: 'Board & Pieces', onClick: () => setThemeOpen(true) },
+    {
+      icon: linkCopied ? <IconCheck className="text-cc-green" /> : <IconLink />,
+      label: linkCopied ? 'Copied!' : 'Copy analysis link',
+      onClick: handleCopyLink,
+      disabled: !isLoaded || takeover,
+    },
+    { icon: <IconCamera />, label: 'Export board image', onClick: handleExportImage, disabled: !isLoaded || takeover },
+    ...(inReview
+      ? [{ icon: <IconTarget />, label: 'Practice from here', onClick: handleStartPractice, disabled: !isReady || currentPly === 0 }]
+      : []),
+  ]
+  const phoneExtras: FooterAction[] =
+    inReview && reviewActive && reviewSub === 'idle'
+      ? [
+          ...(canExplain ? [{ icon: <IconBulb size={22} />, label: 'Explain', onClick: handleExplain }] : []),
+          ...(canBest ? [{ icon: <IconStar size={22} />, label: 'Best move', onClick: handleBest }] : []),
+        ]
+      : []
+  const phonePrimary: FooterAction | null = inSummary
+    ? { icon: <IconStar size={20} />, label: 'Start Review', onClick: handleStartReview }
+    : !inReview
+      ? null
+      : reviewActive && reviewSub === 'best'
+        ? { icon: <IconPlay size={20} />, label: 'Resume', onClick: handleResume }
+        : reviewActive && reviewSub === 'explain'
+          ? { icon: <IconCheck size={20} />, label: 'Got it!', onClick: handleGotIt }
+          : { icon: <IconArrowRight size={20} />, label: 'Next', onClick: goToNext, disabled: !canGoNext }
+  // chess.com's phone page puts the coach above the board (80px in the overview, 96px move by
+  // move); the desktop sidebar keeps its own copy, hidden on phones.
+  const phoneCoach =
+    !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'summary' ? (
+      <CoachSpeech align="bottom" size={80}>{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
+    ) : sidebarView === 'review' ? (
+      <ReviewCoach {...reviewCoachProps} size={96} />
+    ) : null
+
   const playerBar = (side: 'white' | 'black') => (
     <PlayerBar
       name={(side === 'white' ? whiteName : blackName) ?? (side === 'white' ? 'White' : 'Black')}
@@ -747,9 +823,10 @@ function App() {
     // with the 30px eval bar 10px left of the board and the 32px controls column to its right;
     // --board is the largest square that fits both the viewport height and the width left over
     // next to the sidebar (whose width scales from 300px at 1440 wide, like chess.com's).
-    // Phones (< md) stack the board column above a full-width sidebar; the sizes live in
-    // index.css (.page-frame) because they swap at that breakpoint.
-    <div className="page-frame h-screen h-dvh bg-cc-bg text-cc-text overflow-hidden flex flex-col items-center gap-2 p-2 md:flex-row md:items-stretch md:justify-center md:gap-0 md:p-4">
+    // Phones (< md) follow chess.com's mobile page (375x812) instead: a scrolling page with the
+    // coach on top, the board spanning the full width, the sidebar below it and a footer bar
+    // fixed to the bottom of the screen (PhoneFooter).
+    <div className="page-frame min-h-screen min-h-dvh pt-2 pb-[calc(49px+env(safe-area-inset-bottom))] bg-cc-bg text-cc-text flex flex-col md:h-screen md:h-dvh md:min-h-0 md:overflow-hidden md:flex-row md:justify-center md:p-4">
       <ThemePicker
         open={themeOpen}
         onClose={() => setThemeOpen(false)}
@@ -766,14 +843,22 @@ function App() {
         onChange={updateSettings}
       />
 
+      {phoneCoach && (
+        <div className="md:hidden px-3 pb-2 min-h-[104px]">
+          {phoneCoach}
+        </div>
+      )}
+
       {/* ── Left: board column, with the controls column standing to its right from the top
-          player bar down (chess.com's gear sits level with the top bar) ── */}
+          player bar down (chess.com's gear sits level with the top bar). On phones the player
+          bars get 16px gutters, the 20px eval bar sits 1px from the edge and the board takes
+          the rest of the width; the controls move into PhoneFooter's menu. ── */}
       <div className="shrink-0 flex">
-        <div className="flex flex-col gap-2.5">
-          <div className="ml-10" style={{ width: 'var(--board)' }}>{playerBar(topSide)}</div>
-          <div className="flex" style={{ height: 'var(--board)' }}>
+        <div className="flex-1 min-w-0 flex flex-col gap-2.5 md:flex-initial">
+          <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(topSide)}</div>
+          <div className="flex px-px md:px-0 md:h-[var(--board)]">
             <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
-            <div className="ml-2.5 aspect-square h-full">
+            <div className="flex-1 min-w-0 ml-[9px] aspect-square md:flex-initial md:ml-2.5 md:h-full">
               <BoardErrorBoundary>
                 <BoardPanel
                   fen={boardView.fen}
@@ -794,18 +879,20 @@ function App() {
               </BoardErrorBoundary>
             </div>
           </div>
-          <div className="ml-10" style={{ width: 'var(--board)' }}>{playerBar(bottomSide)}</div>
+          <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(bottomSide)}</div>
         </div>
-        <BoardToolbar
-          onFlip={handleFlip}
-          onOpenThemes={() => setThemeOpen(true)}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onCopyLink={handleCopyLink}
-          onExportImage={handleExportImage}
-          linkCopied={linkCopied}
-          isLoaded={isLoaded}
-          takeover={takeover}
-        />
+        <div className="hidden md:flex">
+          <BoardToolbar
+            onFlip={handleFlip}
+            onOpenThemes={() => setThemeOpen(true)}
+            onOpenSettings={() => setSettingsOpen(true)}
+            onCopyLink={handleCopyLink}
+            onExportImage={handleExportImage}
+            linkCopied={linkCopied}
+            isLoaded={isLoaded}
+            takeover={takeover}
+          />
+        </div>
       </div>
 
       {/* ── Right: sidebar card — chapters that replace each other: 'setup' (game loader,
@@ -814,10 +901,10 @@ function App() {
           chapter draws its own 48px SidebarHeader; the nav footer closes the card off in every
           chapter but the summary, which pins its Start Review button there instead. ── */}
       <div
-        className="flex-1 min-h-0 md:flex-initial md:shrink-0 bg-black/20 rounded-[5px] flex flex-col overflow-hidden"
+        className="flex-auto mt-4 bg-black/20 flex flex-col md:flex-initial md:shrink-0 md:min-h-0 md:mt-0 md:rounded-[5px] md:overflow-hidden"
         style={{ width: 'var(--sidebar-w)' }}
       >
-        <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-auto flex flex-col md:flex-1 md:min-h-0">
           {playout.active ? (
             <PlayoutPanel
               userColor={playout.userColor}
@@ -863,17 +950,8 @@ function App() {
           ) : sidebarView === 'review' && hasReview ? (
             <ReviewView
               onBack={handleBackToSummary}
-              active={reviewActive}
+              {...reviewCoachProps}
               coachEnabled={settings.coachEnabled}
-              headline={reviewHeadlineText}
-              headlineParts={headlineParts}
-              commentary={reviewSub === 'idle' ? commentary : null}
-              activeHighlight={activeHighlight}
-              onHoverHighlight={setHoveredHighlight}
-              onPinHighlight={handlePinHighlight}
-              evalBadge={reviewEvalBadge}
-              coachClass={coachClass}
-              sub={reviewSub}
               canBest={canBest}
               canExplain={canExplain}
               canNext={canGoNext}
@@ -969,39 +1047,51 @@ function App() {
             next/last), with a tertiary row of ghost buttons in the review chapter. `takeover`
             disables it during practice/puzzles. Sits outside the scrollable chapter area so it
             never scrolls out of view; the summary chapter has its Start Review button here. */}
-        {!(sidebarView === 'summary' && hasReview && !takeover) && (
-          <NavControls
-            onFirst={goToFirst}
-            onPrev={goToPrev}
-            onNext={goToNext}
-            onLast={goToLast}
-            canGoPrev={canGoPrev}
-            canGoNext={canGoNext}
-            isLoaded={isLoaded}
-            autoplay={settings.autoplay}
-            onToggleAutoplay={handleToggleAutoplay}
-            takeover={takeover}
-          >
-            {sidebarView === 'review' && hasReview && !takeover && (
-              <>
-                <button
-                  onClick={handleStartPractice}
-                  disabled={!isReady || currentPly === 0}
-                  className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <IconTarget className="text-white/50" /> Practice
-                </button>
-                <button
-                  onClick={handleCopyLink}
-                  className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold transition-colors"
-                >
-                  <IconLink className="text-white/50" /> {linkCopied ? 'Copied!' : 'Share'}
-                </button>
-              </>
-            )}
-          </NavControls>
+        {!inSummary && (
+          <div className="hidden md:block">
+            <NavControls
+              onFirst={goToFirst}
+              onPrev={goToPrev}
+              onNext={goToNext}
+              onLast={goToLast}
+              canGoPrev={canGoPrev}
+              canGoNext={canGoNext}
+              isLoaded={isLoaded}
+              autoplay={settings.autoplay}
+              onToggleAutoplay={handleToggleAutoplay}
+              takeover={takeover}
+            >
+              {inReview && (
+                <>
+                  <button
+                    onClick={handleStartPractice}
+                    disabled={!isReady || currentPly === 0}
+                    className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <IconTarget className="text-white/50" /> Practice
+                  </button>
+                  <button
+                    onClick={handleCopyLink}
+                    className="cc-btn-ghost h-10 px-4 rounded-[5px] flex items-center gap-2 text-sm font-semibold transition-colors"
+                  >
+                    <IconLink className="text-white/50" /> {linkCopied ? 'Copied!' : 'Share'}
+                  </button>
+                </>
+              )}
+            </NavControls>
+          </div>
         )}
       </div>
+
+      <PhoneFooter
+        menu={phoneMenu}
+        extras={phoneExtras}
+        primary={phonePrimary}
+        onPrev={explaining ? handleLinePrev : goToPrev}
+        onNext={explaining ? handleLineNext : goToNext}
+        canPrev={explaining ? explainStep > 0 : isLoaded && canGoPrev && !takeover}
+        canNext={explaining ? explainStep < lineSteps.length - 1 : isLoaded && canGoNext && !takeover}
+      />
     </div>
   )
 }
