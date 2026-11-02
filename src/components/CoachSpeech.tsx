@@ -1,24 +1,34 @@
 // The coach avatar with a white speech bubble to its right — chess.com's bot-speech component,
 // measured at 1440x900: 64px avatar, bubble 10px radius / 12px 16px padding / 15px 500-weight
 // text, and a small tail pointing at the coach. The overview chapter bottom-aligns avatar and
-// bubble; the move-by-move chapter top-aligns them.
+// bubble; the move-by-move chapter top-aligns them. On phones (375x812) chess.com moves the coach
+// above the board and enlarges the avatar: 80px in the overview, 96px move by move.
 export function CoachSpeech({
   align,
+  size = 64,
   children,
 }: {
   align: 'top' | 'bottom'
+  size?: number
   children: React.ReactNode
 }) {
   return (
     <div className={`flex ${align === 'bottom' ? 'items-end' : 'items-start'}`}>
-      <img src="/chess-coach.png" alt="Coach" className="w-16 h-16 shrink-0 rounded-[2px] object-cover" />
+      <img
+        src="/chess-coach.png"
+        alt="Coach"
+        className="shrink-0 rounded-[2px] object-cover"
+        style={{ width: size, height: size }}
+      />
       <div className="relative flex-1 min-w-0 ml-[14px]">
         <svg
           aria-hidden
           width="15"
           height="22"
           viewBox="0 0 15 22"
-          className={`absolute -left-[14px] text-white ${align === 'bottom' ? 'bottom-4' : 'top-[26px]'}`}
+          className={`absolute -left-[14px] text-white ${align === 'bottom' ? 'bottom-4' : ''}`}
+          // Top-aligned tail: 26px down next to the 64px coach, 36px next to the 96px one.
+          style={align === 'top' ? { top: size >= 96 ? 36 : 26 } : undefined}
         >
           <path fill="currentColor" d="M15 0v22L1.5 12.5c-.9-.7-.9-2 0-2.6L15 0Z" />
         </svg>

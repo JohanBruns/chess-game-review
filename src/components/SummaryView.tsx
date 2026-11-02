@@ -104,9 +104,12 @@ export function SummaryView({
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-6 pb-2">
-          <CoachSpeech align="bottom">{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
+          {/* Phones show the coach above the board instead (App's top strip). */}
+          <div className="hidden md:block mb-4">
+            <CoachSpeech align="bottom">{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
+          </div>
 
-          <div className="mt-4">
+          <div>
             <EvalGraph
               evalResults={evalResults}
               currentPly={currentPly}
