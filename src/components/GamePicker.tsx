@@ -22,6 +22,8 @@ interface GamePickerProps {
   // selection) — lets the caller orient the board with the reviewed player at the bottom.
   onLoad: (pgn: string, side?: 'white' | 'black') => void
   error: string | null
+  // A chess.com game link is being resolved to a PGN (see App's handleLoadInput).
+  loading?: boolean
   initialUsername?: string | null
   autoFetch?: boolean
 }
@@ -71,7 +73,7 @@ async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
     .slice(0, 20)
 }
 
-export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePickerProps) {
+export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch }: GamePickerProps) {
   const [username, setUsername] = useState<string>(
     () => readStorage(USERNAME_KEY) ?? '',
   )
@@ -176,7 +178,11 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
           PGN
         </button>
       </div>
-      {displayError && <span className="text-cc-red text-xs">{displayError}</span>}
+      {loading ? (
+        <span className="text-white/72 text-xs">Loading game from chess.com…</span>
+      ) : displayError && (
+        <span className="text-cc-red text-xs">{displayError}</span>
+      )}
 
       {/* ── Game dropdown ── */}
       {showDropdown && games.length > 0 && (

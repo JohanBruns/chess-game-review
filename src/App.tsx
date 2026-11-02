@@ -45,6 +45,7 @@ import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
+import { parseSharedGame, fetchSharedGamePgn } from './lib/chesscom'
 import { deriveBoardView } from './lib/boardView'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
@@ -607,6 +608,31 @@ function App() {
     return () => clearTimeout(id)
   }, [settings.autoplay, sidebarView, reviewSub, canGoNext, goToNext, currentPly, playout.active, puzzles.active])
 
+  // chess.com game links — the chess.com app's "Share" text (?share=… from the iOS Shortcut,
+  // see docs/iphone.md) or a link pasted into the manual field — resolve to a PGN
+  // asynchronously; anything that isn't a link goes straight to handleLoadPgn. The request
+  // counter drops a slow lookup's result once a newer load has started.
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const linkRequestRef = useRef(0)
+  const handleLoadInput = useCallback((text: string, reviewingSide?: 'white' | 'black') => {
+    const request = ++linkRequestRef.current
+    setLinkError(null)
+    const shared = parseSharedGame(text)
+    if (!shared) {
+      setLinkLoading(false)
+      handleLoadPgn(text, reviewingSide)
+      return
+    }
+    setLinkLoading(true)
+    fetchSharedGamePgn(shared, readStorage(USERNAME_KEY)).then(sharedPgn => {
+      if (request !== linkRequestRef.current) return
+      setLinkLoading(false)
+      if (sharedPgn) handleLoadPgn(sharedPgn)
+      else setLinkError('Could not load this chess.com game.')
+    })
+  }, [handleLoadPgn])
+
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
   const urlParamsHandledRef = useRef(false)
@@ -614,11 +640,15 @@ function App() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pgn = params.get('pgn')
+    const share = params.get('share')
     const username = params.get('username')
 
     if (!urlParamsHandledRef.current && pgn) {
       urlParamsHandledRef.current = true
       handleLoadPgn(pgn)
+    } else if (!urlParamsHandledRef.current && share) {
+      urlParamsHandledRef.current = true
+      handleLoadInput(share)
     } else if (!urlParamsHandledRef.current && username) {
       urlParamsHandledRef.current = true
       setInitialUsername(username)
@@ -717,13 +747,9 @@ function App() {
     // with the 30px eval bar 10px left of the board and the 32px controls column to its right;
     // --board is the largest square that fits both the viewport height and the width left over
     // next to the sidebar (whose width scales from 300px at 1440 wide, like chess.com's).
-    <div
-      className="h-screen bg-cc-bg text-cc-text overflow-hidden flex justify-center p-4"
-      style={{
-        '--sidebar-w': 'clamp(300px, 20.8vw, 450px)',
-        '--board': 'max(240px, min(calc(100vh - 132px), calc(100vw - 104px - var(--sidebar-w))))',
-      } as React.CSSProperties}
-    >
+    // Phones (< md) stack the board column above a full-width sidebar; the sizes live in
+    // index.css (.page-frame) because they swap at that breakpoint.
+    <div className="page-frame h-screen h-dvh bg-cc-bg text-cc-text overflow-hidden flex flex-col items-center gap-2 p-2 md:flex-row md:items-stretch md:justify-center md:gap-0 md:p-4">
       <ThemePicker
         open={themeOpen}
         onClose={() => setThemeOpen(false)}
@@ -788,7 +814,7 @@ function App() {
           chapter draws its own 48px SidebarHeader; the nav footer closes the card off in every
           chapter but the summary, which pins its Start Review button there instead. ── */}
       <div
-        className="shrink-0 bg-black/20 rounded-[5px] flex flex-col overflow-hidden"
+        className="flex-1 min-h-0 md:flex-initial md:shrink-0 bg-black/20 rounded-[5px] flex flex-col overflow-hidden"
         style={{ width: 'var(--sidebar-w)' }}
       >
         <div className="flex-1 min-h-0 flex flex-col">
@@ -906,8 +932,9 @@ function App() {
                 }
               />
               <GamePicker
-                onLoad={handleLoadPgn}
-                error={error}
+                onLoad={handleLoadInput}
+                error={linkError ?? error}
+                loading={linkLoading}
                 initialUsername={initialUsername}
                 autoFetch={autoFetch}
               />
