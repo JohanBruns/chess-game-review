@@ -145,45 +145,42 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
 
   const displayError = fetchError ?? error
 
+  // Lives at the top of the sidebar's setup chapter (chess.com has no top bar — the page is just
+  // board + sidebar), so the controls stack vertically in the sidebar's width.
   return (
-    <div ref={containerRef} className="relative shrink-0">
-      {/* ── Top bar ── */}
-      <div className="flex gap-2 items-center px-3 py-2 border-b border-cc-border bg-cc-panel">
-        <span className="text-cc-text-dim text-xs shrink-0">User:</span>
-        <input
-          type="text"
-          className="w-36 bg-cc-bg-dark text-cc-text text-xs px-2 py-1.5 rounded border border-cc-border focus:outline-none focus:border-cc-green"
-          placeholder="chess.com username"
-          value={username}
-          onChange={e => handleUsernameChange(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') handleFetch() }}
-          spellCheck={false}
-        />
+    <div ref={containerRef} className="relative shrink-0 flex flex-col gap-2 p-4 pb-3">
+      <input
+        type="text"
+        className="h-10 w-full bg-black/20 text-white text-sm px-3 rounded-[5px] border border-white/10 placeholder:text-white/40 focus:outline-none focus:border-cc-green"
+        placeholder="chess.com username"
+        value={username}
+        onChange={e => handleUsernameChange(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handleFetch() }}
+        spellCheck={false}
+      />
+      <div className="flex gap-2">
         <button
-          className="flex items-center gap-1 px-3 py-1.5 bg-cc-surface hover:bg-cc-surface-hover text-cc-text rounded font-medium text-xs disabled:opacity-40 whitespace-nowrap transition-colors"
+          className="cc-btn-secondary flex-1 h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
           disabled={!username.trim() || isLoading}
           onClick={handleFetch}
         >
-          {isLoading ? '…' : 'Recent Games ▾'}
+          {isLoading ? 'Loading…' : 'Recent Games ▾'}
         </button>
         <button
-          className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-colors ${
-            showManual
-              ? 'bg-cc-surface-hover text-white'
-              : 'bg-cc-surface text-cc-text-dim hover:bg-cc-surface-hover'
+          className={`cc-btn-secondary h-10 px-4 rounded-[5px] text-sm font-semibold whitespace-nowrap ${
+            showManual ? 'text-white' : ''
           }`}
+          aria-pressed={showManual}
           onClick={() => setShowManual(v => !v)}
         >
-          ✎ Manual
+          PGN
         </button>
-        {displayError && (
-          <span className="text-cc-red text-[11px] truncate ml-1">{displayError}</span>
-        )}
       </div>
+      {displayError && <span className="text-cc-red text-xs">{displayError}</span>}
 
       {/* ── Game dropdown ── */}
       {showDropdown && games.length > 0 && (
-        <div className="absolute top-full left-0 right-0 z-50 bg-cc-panel border-x border-b border-cc-border shadow-xl max-h-72 overflow-y-auto">
+        <div className="absolute top-[108px] left-4 right-4 z-50 bg-[#262421] rounded-[5px] border border-white/10 shadow-xl max-h-80 overflow-y-auto">
           {games.map(game => {
             const isWhite = game.white.username.toLowerCase() === username.toLowerCase()
             const opponent = isWhite ? game.black : game.white
@@ -195,7 +192,7 @@ export function GamePicker({ onLoad, error, initialUsername, autoFetch }: GamePi
             return (
               <button
                 key={game.url}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-cc-surface transition-colors text-xs border-b border-cc-border/50 last:border-0"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/7 transition-colors text-xs border-b border-white/5 last:border-0"
                 onClick={() => handleSelectGame(game)}
               >
                 <span

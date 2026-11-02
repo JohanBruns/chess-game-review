@@ -1,3 +1,6 @@
+import { SidebarHeader } from './SidebarHeader'
+import { IconArrowLeft } from './icons'
+
 interface PlayoutPanelProps {
   userColor: 'w' | 'b'
   isUserTurn: boolean
@@ -30,26 +33,20 @@ export function PlayoutPanel({
 
   return (
     <div className="flex flex-col h-full overflow-hidden animate-chapter-fade-in">
-      <div className="shrink-0 flex items-center gap-2 px-2 py-2 border-b border-cc-border/60">
-        <button
-          onClick={onExit}
-          aria-label="Exit practice"
-          className="w-7 h-7 flex items-center justify-center rounded hover:bg-cc-surface/60 transition-colors text-cc-text-dim"
-        >
-          ←
-        </button>
-        <h2 className="text-sm font-semibold">Practice</h2>
-      </div>
+      <SidebarHeader
+        title="Practice"
+        start={{ icon: <IconArrowLeft />, label: 'Exit practice', onClick: onExit }}
+      />
 
-      <div className="flex flex-col gap-3 px-3 py-4">
-        <p className="text-cc-text-dim text-xs leading-relaxed">
+      <div className="flex flex-col gap-3 p-4">
+        <p className="text-white/72 text-[13px] leading-relaxed">
           You are playing{' '}
           <span className="font-semibold text-cc-text">{userColor === 'w' ? 'White' : 'Black'}</span>{' '}
           against the engine from this position. Play it out to test your ideas.
         </p>
 
-        <div className="bg-cc-surface rounded px-3 py-2 flex items-center justify-between gap-2">
-          <span className={`text-xs font-medium ${gameOver ? 'text-cc-green' : 'text-cc-text'}`}>
+        <div className="bg-white/5 rounded-[5px] px-3 py-2.5 flex items-center justify-between gap-2">
+          <span className={`text-sm font-semibold ${gameOver ? 'text-cc-green' : 'text-white'}`}>
             {status}
           </span>
           <span className="text-cc-text-faint text-[10px] tabular-nums shrink-0">
@@ -60,10 +57,10 @@ export function PlayoutPanel({
 
       <div className="flex-1" />
 
-      <div className="shrink-0 p-2">
+      <div className="shrink-0 px-4 pb-2">
         <button
           onClick={onExit}
-          className="w-full px-3 py-2 rounded bg-cc-surface hover:bg-cc-surface-hover text-cc-text-dim text-sm font-medium transition-colors"
+          className="cc-btn-secondary w-full h-10 rounded-[5px] text-sm font-semibold"
         >
           Exit Practice
         </button>

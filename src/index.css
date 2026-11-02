@@ -25,6 +25,52 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* chess.com's thin, translucent scrollbars (the sidebar's scroll areas keep almost their full
+   width instead of losing ~15px to a classic scrollbar). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+/* chess.com's Game Review button skins, measured live (2026-11-02, DevTools computed styles on
+   game 186365372722): a top-to-bottom gradient plus a stack of inset highlights/shadows that
+   give the buttons their slightly embossed look. Shared by Start Review / Next / nav footer. */
+@layer components {
+  .cc-btn-primary {
+    color: #fff;
+    background-image: linear-gradient(#81b64c, #5d9948);
+    box-shadow:
+      inset 0 1px 0 rgba(178, 224, 104, 0.4),
+      inset 0 -1px 0 #45753c,
+      inset 0 2px 4px rgba(178, 224, 104, 0.5),
+      inset 0 -2px 4px rgba(69, 117, 60, 0.5),
+      0 1px 2px rgba(0, 0, 0, 0.14),
+      0 2px 4px rgba(0, 0, 0, 0.1);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+  }
+  .cc-btn-primary:hover:not(:disabled) {
+    background-image: linear-gradient(#95c95f, #6aa752);
+  }
+  .cc-btn-secondary {
+    color: rgba(255, 255, 255, 0.85);
+    background-image: linear-gradient(rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.08),
+      0 1px 2px rgba(0, 0, 0, 0.14);
+  }
+  .cc-btn-secondary:hover:not(:disabled) {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.1));
+    color: #fff;
+  }
+  .cc-btn-ghost {
+    color: rgba(255, 255, 255, 0.72);
+  }
+  .cc-btn-ghost:hover:not(:disabled) {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.07);
+  }
+}
+
 /* Classification badge pop-in (BoardPanel) — a quick scale+fade so a landed badge (best move
    star, blunder mark, retry correct/incorrect) reads as an event instead of just appearing. */
 @keyframes badge-pop-in {

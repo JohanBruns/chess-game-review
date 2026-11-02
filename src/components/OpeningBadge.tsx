@@ -7,8 +7,8 @@ interface OpeningBadgeProps {
 export function OpeningBadge({ opening }: OpeningBadgeProps) {
   if (!opening) return null
   return (
-    <div className="px-4 py-1 text-sm text-cc-text-dim bg-cc-panel border-b border-cc-border">
-      <span className="text-cc-text-faint mr-1">{opening.eco}</span>
+    <div className="shrink-0 px-4 pb-3 text-[13px] text-white/72 truncate">
+      <span className="text-white/50 mr-1">{opening.eco}</span>
       {opening.name}
     </div>
   )
