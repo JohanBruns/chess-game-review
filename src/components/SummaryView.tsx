@@ -34,7 +34,8 @@ interface SummaryViewProps {
   onStartReview: () => void
   // Header "+" — back to the setup chapter to load another game.
   onNewGame: () => void
-  // Phase 8: number of drillable mistakes in this game, and the handler to start the puzzle flow.
+  // Phase 8: number of drillable mistakes of the user's own side, and the handler to start the
+  // puzzle flow.
   // The "Puzzles (n)" button is hidden when there are none.
   puzzleCount: number
   onStartPuzzles: () => void
@@ -183,6 +184,7 @@ export function SummaryView({
           {puzzleCount > 0 && (
             <button
               onClick={onStartPuzzles}
+              title="Puzzles built from your own mistakes in this game"
               className="cc-btn-secondary mt-4 w-full h-12 rounded-[10px] text-[17px] font-semibold flex items-center justify-center gap-2"
             >
               <IconPuzzle size={22} className="text-white/72" />
