@@ -888,6 +888,8 @@ function App() {
             onOpenSettings={() => setSettingsOpen(true)}
             onCopyLink={handleCopyLink}
             onExportImage={handleExportImage}
+            soundEnabled={settings.soundEnabled}
+            onToggleSound={() => updateSettings({ soundEnabled: !settings.soundEnabled })}
             linkCopied={linkCopied}
             isLoaded={isLoaded}
             takeover={takeover}
