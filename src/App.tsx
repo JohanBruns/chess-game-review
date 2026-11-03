@@ -141,13 +141,6 @@ function App() {
     [moveAnalyses],
   )
 
-  // Phase 8: puzzles drilled from this game's Mistake/Miss/Blunder plies that have a unique best
-  // reply. Drives the "Puzzles (n)" button in the summary and the puzzle session.
-  const puzzleList = useMemo(
-    () => (moveAnalyses ? extractPuzzles(moves, fens, evalResults, moveAnalyses) : []),
-    [moveAnalyses, moves, fens, evalResults],
-  )
-
   // Persisted app settings (gear menu) + the menu's open state.
   const { settings, updateSettings } = useSettings()
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -217,17 +210,36 @@ function App() {
   // after mount, before this game loaded, is still picked up. No known username, or no header
   // match → orientation is left untouched (falls through to the reviewAs default above /
   // GamePicker's reviewingSide).
+  // detectedSide is the color the user played in the loaded game, when known — from the same
+  // username match, or GamePicker's reviewingSide (handleLoadPgn). Unlike `orientation` it isn't
+  // touched by Flip Board, so the puzzles (your own mistakes) don't swap sides on a flip.
+  const [detectedSide, setDetectedSide] = useState<'white' | 'black' | null>(null)
   const [prevPgn, setPrevPgn] = useState(pgn)
   if (prevPgn !== pgn) {
     setPrevPgn(pgn)
     const params = new URLSearchParams(window.location.search)
     const knownUsername = (params.get('username') ?? readStorage(USERNAME_KEY))
       ?.trim().toLowerCase() || null
+    let side: 'white' | 'black' | null = null
     if (knownUsername) {
-      if (whiteName?.trim().toLowerCase() === knownUsername) setOrientation('white')
-      else if (blackName?.trim().toLowerCase() === knownUsername) setOrientation('black')
+      if (whiteName?.trim().toLowerCase() === knownUsername) side = 'white'
+      else if (blackName?.trim().toLowerCase() === knownUsername) side = 'black'
     }
+    setDetectedSide(side)
+    if (side) setOrientation(side)
   }
+
+  // The side whose mistakes become puzzles: the detected player first, then an explicit
+  // "Review as" setting, and only as a last resort the side at the bottom of the board.
+  const mySide: 'white' | 'black' =
+    detectedSide ?? (settings.reviewAs !== 'both' ? settings.reviewAs : orientation)
+
+  // Phase 8: puzzles drilled from MY Mistake/Miss/Blunder plies (never the opponent's) that have a
+  // unique best reply. Drives the "Puzzles (n)" button in the summary and the puzzle session.
+  const puzzleList = useMemo(
+    () => (moveAnalyses ? extractPuzzles(moves, fens, evalResults, moveAnalyses, { side: mySide }) : []),
+    [moveAnalyses, moves, fens, evalResults, mySide],
+  )
 
   // Board & piece appearance (persisted in localStorage) + the picker modal's open state.
   const { boardTheme, pieceTheme, setBoardId, setPieceId } = useTheme()
@@ -548,7 +560,10 @@ function App() {
     clearAnalysis()
     loadPgn(newPgn)
     setSidebarView('setup')
-    if (reviewingSide) setOrientation(reviewingSide)
+    if (reviewingSide) {
+      setOrientation(reviewingSide)
+      setDetectedSide(reviewingSide)
+    }
   }, [clearAnalysis, loadPgn])
 
   // Share/Export (Phase 7). "Copied!" is a brief self-clearing confirmation, same idea as the
@@ -601,8 +616,10 @@ function App() {
     setRetryMoveIndex(null)
     setTrialFen(null)
     setAttemptResult(null)
+    // Your mistakes, so solve them from your side of the board.
+    setOrientation(mySide)
     puzzles.start(puzzleList)
-  }, [puzzles, puzzleList])
+  }, [puzzles, puzzleList, mySide])
 
   // Best-move preview for a revealed puzzle solution (position after bestSan + its arrow).
   const currentPuzzle = puzzles.current
@@ -925,6 +942,8 @@ function App() {
               finished={puzzles.finished}
               sideToMove={puzzles.current ? (puzzles.current.fenBefore.split(' ')[1] as 'w' | 'b') : null}
               classification={puzzles.current?.classification ?? null}
+              playedSan={puzzles.current?.playedSan ?? null}
+              moveNumber={puzzles.current ? Math.floor(puzzles.current.moveIndex / 2) + 1 : null}
               attempt={puzzles.attempt}
               revealed={puzzles.revealed}
               bestSan={puzzles.current?.bestSan ?? null}

@@ -11,6 +11,9 @@ interface PuzzlePanelProps {
   // Side to move in the current puzzle (whose best move the solver must find).
   sideToMove: 'w' | 'b' | null
   classification: MoveClass | null
+  // What you actually played in the game (the mistake being drilled) and its full-move number.
+  playedSan: string | null
+  moveNumber: number | null
   attempt: PuzzleAttempt | null
   revealed: boolean
   bestSan: string | null
@@ -24,7 +27,7 @@ const PRIMARY_BTN = 'cc-btn-primary h-10 px-4 rounded-[5px] text-sm font-semibol
 const SECONDARY_BTN = 'cc-btn-secondary h-10 px-4 rounded-[5px] text-sm font-semibold'
 
 // Sidebar panel for "Puzzles from your mistakes" (Phase 8) — a sequential drill over the
-// extractPuzzles candidates. Board interaction (drag = attempt) lives in usePuzzles / App; this
+// extractPuzzles candidates, which App restricts to the user's own side (never the opponent's). Board interaction (drag = attempt) lives in usePuzzles / App; this
 // shows the prompt, per-attempt feedback, and the flow controls (Try again / Show solution / Next).
 export function PuzzlePanel({
   index,
@@ -33,6 +36,8 @@ export function PuzzlePanel({
   finished,
   sideToMove,
   classification,
+  playedSan,
+  moveNumber,
   attempt,
   revealed,
   bestSan,
@@ -58,8 +63,8 @@ export function PuzzlePanel({
           </div>
           <p className="text-cc-text-dim text-xs">
             {solvedCount === total
-              ? 'Perfect — you solved every puzzle!'
-              : 'Puzzles complete. Review the ones you missed anytime.'}
+              ? 'Perfect — you fixed every one of your mistakes!'
+              : 'All your mistakes reviewed. Try the ones you missed again anytime.'}
           </p>
           <button onClick={onExit} className={`${PRIMARY_BTN} mt-2`}>
             Back to review
@@ -69,12 +74,21 @@ export function PuzzlePanel({
         <>
           <div className="flex flex-col gap-3 p-4">
             <p className="text-cc-text text-sm font-medium">
-              {sideToMove === 'w' ? 'White' : 'Black'} to move — find the best move.
+              You're {sideToMove === 'w' ? 'White' : 'Black'} — find the better move.
             </p>
-            {classification && (
+            {playedSan && (
               <p className="text-cc-text-faint text-xs">
-                In the game this was a{' '}
-                <span className="font-semibold text-cc-text-dim">{classification}</span>.
+                In the game you played{' '}
+                <span className="font-mono font-semibold text-cc-text-dim">
+                  {moveNumber != null && `${moveNumber}${sideToMove === 'w' ? '.' : '...'}`}
+                  {playedSan}
+                </span>
+                {classification && (
+                  <>
+                    {' '}— a <span className="font-semibold text-cc-text-dim">{classification}</span>
+                  </>
+                )}
+                .
               </p>
             )}
 
