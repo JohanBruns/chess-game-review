@@ -1,4 +1,4 @@
-import { IconCamera, IconCheck, IconFlip, IconGear, IconLink, IconPalette } from './icons'
+import { IconCamera, IconCheck, IconFlip, IconGear, IconLink, IconPalette, IconSound, IconSoundOff } from './icons'
 
 // chess.com's 32px board-controls column, standing to the right of the board with the settings
 // gear at the top — here also holding flip/theme/share/export. Split out of the old NavControls
@@ -9,6 +9,9 @@ interface BoardToolbarProps {
   onOpenSettings: () => void
   onCopyLink: () => void
   onExportImage: () => void
+  // Move sounds on/off (settings.soundEnabled) — one click here instead of the settings modal.
+  soundEnabled: boolean
+  onToggleSound: () => void
   linkCopied: boolean
   isLoaded: boolean
   // Phase 8: share/export act on the underlying game position, not a practice/puzzle board —
@@ -26,6 +29,8 @@ export function BoardToolbar({
   onOpenSettings,
   onCopyLink,
   onExportImage,
+  soundEnabled,
+  onToggleSound,
   linkCopied,
   isLoaded,
   takeover = false,
@@ -58,6 +63,15 @@ export function BoardToolbar({
         aria-label="Export board image"
       >
         <IconCamera />
+      </button>
+      <button
+        className={BTN}
+        onClick={onToggleSound}
+        title={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+        aria-label={soundEnabled ? 'Mute sounds' : 'Unmute sounds'}
+        aria-pressed={!soundEnabled}
+      >
+        {soundEnabled ? <IconSound /> : <IconSoundOff />}
       </button>
     </div>
   )
