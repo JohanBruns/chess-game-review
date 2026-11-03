@@ -128,8 +128,8 @@ export function detectThemes(
 // After the move (opponent to move), the mover's most valuable piece the opponent can win
 // material on via the full capture sequence (SEE). The arrow points from the cheapest attacker.
 // On a capture, the piece just taken is immediate compensation for the capturing piece's own
-// square (same netting as sacrificeSquares in classify.ts) — otherwise every ordinary trade
-// like Bxc6 dxc6 would read as "it leaves the bishop on c6 hanging".
+// square — otherwise every ordinary trade like Bxc6 dxc6 would read as "it leaves the bishop
+// on c6 hanging".
 function biggestHangingPiece(move: Move): TacticalTheme | null {
   if (!move.after || !move.color) return null
   try {

@@ -1,6 +1,6 @@
 import { Chess, type Move, type Square } from 'chess.js'
 import type { EvalResult } from '../engine/useEngine'
-import { seeGain, PIECE_VAL } from './see'
+import { PIECE_VAL } from './see'
 
 export type MoveClass =
   | 'Book'
@@ -149,97 +149,101 @@ function nonPawnMaterial(fen: string): number {
   return sum
 }
 
-// A move is a sacrifice when it leaves material en prise without equal compensation,
-// measured by real Static Exchange Evaluation instead of an attacked/defended flag.
-// After the move (opponent to move) every own non-king square is checked for what the
-// opponent could net there via the full capture sequence (seeGain). Two refinements:
-//   - For the moved piece's own square on a capture, the captured piece's value is
-//     immediate compensation and is subtracted (QxR that can be recaptured is a
-//     4-point sac; QxR with no recapture is just a win, not a sacrifice).
-//   - A piece that was already SEE-hanging before the move was lost anyway — giving it up
-//     is not a fresh sacrifice, UNLESS this move gives up LESS than it was already losing
-//     (e.g. grabbing a pawn on the way down), which is a genuine, smaller sacrifice.
-// `seeThreshold` is the minimum net material given up (2 = exchange-scale, 3 = a
-// full piece) — rating-scaled by the caller via RatingThresholds.sacrificeSeeMin.
-export function sacrificeSquares(move: Move, seeThreshold = 3): Square[] {
-  if (!move.piece || !move.color || !move.after) return []
-  const squares: Square[] = []
+// chess.com's notion of an en-prise piece (verified against live Game Reviews, 2026-11): the
+// opponent attacks it with a CHEAPER piece, or attacks it more often than it is defended.
+// Deliberately not SEE: a recapture does not "un-sacrifice" a piece — 15.Bxh6 gxh6 16.Qg6+ …
+// Qxh6 still gives a bishop for two pawns, which SEE (net 1 after the pawn on h6) waved off.
+// The king only counts as an attacker of an undefended piece. `legalOnly` (the opponent is to
+// move in `chess`) drops captures the rules forbid: 29...Bg3+ uncovers a check from the h8-rook,
+// so fxg3 is illegal and the bishop is not en prise at all.
+function isHanging(chess: Chess, square: Square, legalOnly: boolean): boolean {
+  const piece = chess.get(square)
+  if (!piece) return false
+  const opp = piece.color === 'w' ? 'b' : 'w'
+  const defenders = chess.attackers(square, piece.color)
+  const attackers = chess.attackers(square, opp)
+    .filter(from => defenders.length === 0 || chess.get(from)?.type !== 'k')
+    .filter(from => !legalOnly || canCapture(chess, from, square))
+  if (attackers.length === 0) return false
+  const value = PIECE_VAL[piece.type] ?? 0
+  if (attackers.some(from => (PIECE_VAL[chess.get(from)?.type ?? 'k'] ?? 0) < value)) return true
+  return attackers.length > defenders.length
+}
+
+function canCapture(chess: Chess, from: Square, to: Square): boolean {
+  try {
+    chess.move({ from, to, promotion: 'q' })
+    chess.undo()
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The square of the piece this move offers — chess.com's "sacrifice" for Brilliant — or [] when
+// it offers none. Only the moved piece counts: every verified Brilliant offers it, while
+// abandoning another piece's defence (38...Qg5+, 15...Nxd5) never was one. It must be left en
+// prise (isHanging), and is not a sacrifice when
+//   - it just captured something at least as valuable (a trade), or
+//   - the move takes the heat off another own piece worth at least as much: 19...Rxe6 removes
+//     the knight forking the d8-rook, giving back the exchange rather than sacrificing a rook.
+// Whether the opponent actually takes is irrelevant: 23.Nf6+ forks king and rook, and chess.com
+// calls it Brilliant although the best reply ...Kf7 declines the knight. A piece that was already
+// attacked before the move still counts (6.Nxf7 in the Fried Liver, the g5-knight was en prise).
+export function sacrificeSquares(move: Move): Square[] {
+  if (!move.color || !move.before || !move.after || move.piece === 'k' || move.piece === 'p') return []
   try {
     const after = new Chess(move.after)
-    const capturedVal = move.captured ? (PIECE_VAL[move.captured] ?? 0) : 0
-    for (const row of after.board()) {
+    const value = PIECE_VAL[move.piece] ?? 0
+    if (move.captured && (PIECE_VAL[move.captured] ?? 0) >= value) return []
+    if (!isHanging(after, move.to, true)) return []
+    const before = new Chess(move.before)
+    for (const row of before.board()) {
       for (const sq of row) {
-        if (!sq || sq.color !== move.color || sq.type === 'k') continue
-        const gain = seeGain(move.after, sq.square)
-        const netSac = sq.square === move.to ? gain - capturedVal : gain
-        if (netSac < seeThreshold) continue
-        // The piece now on move.to sat on move.from before the move; everything
-        // else is on its original square. (Castling maps the rook imprecisely —
-        // its before-square was empty, harmlessly counting it as not-hanging.)
-        const beforeSquare = sq.square === move.to ? move.from : sq.square
-        // Skip only a piece that was already losing >= threshold AND that this move does not
-        // improve on (netSac >= what it was already losing). A piece hanging for its full value
-        // that instead grabs material on the way down (netSac < hangingValue) is still a real,
-        // if cheaper, sacrifice — e.g. 6.Nxf7 in the Fried Liver: Ng5 was en prise to ...Qxg5
-        // for 3, but Nxf7 gives it up for only 2 net while winning a pawn and the attack.
-        const hangingValue = hangingBeforeValue(move, beforeSquare)
-        if (hangingValue >= seeThreshold && netSac >= hangingValue) continue
-        squares.push(sq.square)
+        if (!sq || sq.color !== move.color || sq.square === move.from || sq.type === 'k' || sq.type === 'p') continue
+        if ((PIECE_VAL[sq.type] ?? 0) < value) continue
+        if (isHanging(before, sq.square, false) && !isHanging(after, sq.square, true)) return []
       }
     }
+    return [move.to]
   } catch {
     return []
   }
-  return squares
 }
 
-export function isSacrifice(move: Move, seeThreshold = 3): boolean {
-  return sacrificeSquares(move, seeThreshold).length > 0
+export function isSacrifice(move: Move): boolean {
+  return sacrificeSquares(move).length > 0
 }
 
-// PV-confirmation of a sacrifice: from the position AFTER the move (fenAfterMove), does the
-// opponent's engine-best reply actually CAPTURE on one of the sacrificed squares? A real
-// sacrifice offers material the opponent grabs; a false SEE positive (e.g. a queen that only
-// looks hanging because of a tactic) is one the engine's best reply simply declines. Returns
-// undefined when it cannot be decided (no reply SAN), so the caller treats it as "not disproven".
-export function replyCapturesSacSquare(
-  fenAfterMove: string,
-  replySan: string | null,
-  sacSquares: Square[],
-): boolean | undefined {
-  if (!replySan || sacSquares.length === 0) return undefined
-  try {
-    const chess = new Chess(fenAfterMove)
-    const m = chess.move(replySan)
-    return m.captured != null && sacSquares.includes(m.to as Square)
-  } catch {
-    return undefined
+// Material balance (pawn units, kings excluded) from `color`'s point of view.
+function materialBalance(fen: string, color: 'w' | 'b'): number {
+  let sum = 0
+  for (const ch of fen.split(' ')[0]) {
+    const value = PIECE_VAL[ch.toLowerCase()]
+    if (value == null) continue
+    sum += (ch === ch.toLowerCase() ? 'b' : 'w') === color ? value : -value
   }
+  return sum
 }
 
-// How much material (pawn units) was this own piece already SEE-losing on `square` in the
-// position BEFORE the move? Measured by flipping the side to move in move.before (legal
-// whenever the mover was not in check: with the mover to move, the opponent's king cannot be
-// in check either) and running SEE. 0 = not hanging. If the mover WAS in check, fall back to
-// a coarse attacked-and-undefended test yielding the piece's full value (or 0).
-function hangingBeforeValue(move: Move, square: Square): number {
-  if (!move.before) return 0
+// Does the "sacrifice" pay for itself at once? Follows `replyPv` (the engine line in the position
+// after the move) through the opponent's capture, the mover's answer and the opponent's next
+// move: when the mover is not behind in material by then, it was a trade or a desperado —
+// 39...Rxc2+ 40.Kxc2 Bxa1 41.Kb3 wins the rook straight back, and chess.com does not call it
+// Brilliant. Stopping after the mover's answer would be too early: 10...Bxh2+ 11.Kxh2 Bxf3
+// 12.gxf3 is a bishop down again (the queen falls only later). A reply that declines the offer
+// leaves the sacrifice standing.
+export function sacrificeRegained(move: Move, replyPv: string | null, sacSquares: Square[]): boolean {
+  if (!replyPv || sacSquares.length === 0 || !move.color || !move.before || !move.after) return false
   try {
-    const before = new Chess(move.before)
-    if (!before.isCheck()) {
-      const parts = move.before.split(' ')
-      parts[1] = parts[1] === 'w' ? 'b' : 'w'
-      parts[3] = '-' // en-passant target is meaningless for the flipped side
-      return seeGain(parts.join(' '), square)
-    }
-    const opp = move.color === 'w' ? 'b' : 'w'
-    const piece = before.get(square)
-    if (!piece || piece.color !== move.color) return 0
-    return before.isAttacked(square, opp) && !before.isAttacked(square, move.color)
-      ? (PIECE_VAL[piece.type] ?? 0)
-      : 0
+    const chess = new Chess(move.after)
+    const [reply, ...rest] = replyPv.split(' ')
+    const taken = chess.move(reply)
+    if (!taken.captured || !sacSquares.includes(taken.to as Square)) return false
+    for (const san of rest.slice(0, 2)) chess.move(san)
+    return materialBalance(chess.fen(), move.color) >= materialBalance(move.before, move.color)
   } catch {
-    return 0
+    return false
   }
 }
 
@@ -289,12 +293,11 @@ interface RatingThresholds {
   brilliantLossMax: number       // Brilliant gate, normally `loss <= 2`
   greatOnlyMoveGapMin: number    // Great "only good move" branch, normally gap >= 30 win%
   greatNearBestLossMax: number   // Great swing branches' isNearBest, normally `loss <= 1.5`
-  sacrificeSeeMin: number        // min net material (pawn units) for isSacrifice: 2 = exchange-scale, 3 = full piece
 }
 
-const NEUTRAL_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 2, greatOnlyMoveGapMin: 30, greatNearBestLossMax: 1.5, sacrificeSeeMin: 3 }
-const LENIENT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 3, greatOnlyMoveGapMin: 25, greatNearBestLossMax: 2.5, sacrificeSeeMin: 2 }
-const STRICT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 1, greatOnlyMoveGapMin: 35, greatNearBestLossMax: 1.0, sacrificeSeeMin: 3 }
+const NEUTRAL_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 2, greatOnlyMoveGapMin: 30, greatNearBestLossMax: 1.5 }
+const LENIENT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 3, greatOnlyMoveGapMin: 25, greatNearBestLossMax: 2.5 }
+const STRICT_RATING_THRESHOLDS: RatingThresholds = { brilliantLossMax: 1, greatOnlyMoveGapMin: 35, greatNearBestLossMax: 1.0 }
 
 function ratingThresholds(rating?: number): RatingThresholds {
   if (rating == null) return NEUTRAL_RATING_THRESHOLDS
@@ -315,6 +318,11 @@ const REFUTATION_GAP_MIN = 15
 // starting a forced mate, where the only alternative roughly halves the evaluation).
 const REFUTATION_ONLY_MOVE_GAP = 50
 
+// No Brilliant when the second-best line still wins by this much (centipawns, mover's view):
+// a sacrifice nobody needed. Mate-scored lines don't count — chess.com still awards 26.Rxf5
+// with several mates on the board.
+const BRILLIANT_WINNING_ANYWAY_CP = 700
+
 // Optional params enable Brilliant/Great detection when full context is available.
 // Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
 export function classifyMove(
@@ -328,32 +336,30 @@ export function classifyMove(
   winPctAfterRaw?: number,
   playerRating?: number,
   suppressBrilliant = false,
-  sacrificeConfirmed?: boolean,
+  sacrificeRegained = false,
   opponentBlundered = false,
   isTrivialRecapture = false,
 ): MoveClass {
   const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
   const rt = ratingThresholds(playerRating)
 
-  // Brilliant: sacrifice (SEE-based) + nearly best + the sacrifice is REAL
-  // + you are NOT lost afterward (winPct >= 50 = at least equal)
+  // Brilliant (chess.com rules, checked against live Game Reviews 2026-11): a piece sacrifice
+  // (sacrificeSquares) + nearly best + you are NOT lost afterward (winPct >= 50)
+  // + the sacrifice is not won straight back (sacrificeRegained, from the engine line)
+  // + not a promotion (chess.com never marks one, even when the new queen is given up)
+  // + the second-best line is not already winning comfortably (BRILLIANT_WINNING_ANYWAY_CP)
   // + no MORE valuable own piece hangs free at the same time (that would be a
   //   blunder that happens to also give up material, not a brilliancy).
-  // "The sacrifice is real" is decided by PV-confirmation: the opponent's engine-best reply
-  // actually captures the offered material (sacrificeConfirmed). A false SEE positive — a
-  // piece that only looks hanging because taking it runs into a tactic — is one the engine
-  // declines, so sacrificeConfirmed === false vetoes it. undefined (can't tell, e.g. the
-  // move gives mate so there is no reply) does NOT veto. This replaced the old
-  // second-best-cp heuristic, which both over-fired (declined "sacs") and under-fired
-  // (blocked genuine sacs merely because the position was already somewhat winning).
-  // Cheap numeric gates run first so the SEE board scan only touches candidates.
+  // Cheap numeric gates run first so the board scans only touch candidates.
   if (
     !suppressBrilliant &&
     move != null && winPctBefore != null && winPctAfter != null &&
     loss <= rt.brilliantLossMax &&
     winPctAfter >= 50 &&
-    sacrificeConfirmed !== false &&
-    isSacrifice(move, rt.sacrificeSeeMin) &&
+    !sacrificeRegained &&
+    !move.promotion &&
+    !(secondBestCp != null && secondBestCp >= BRILLIANT_WINNING_ANYWAY_CP && secondBestCp < 10000) &&
+    isSacrifice(move) &&
     !hasCostlierHangingPiece(move)
   ) return 'Brilliant'
 
@@ -506,13 +512,15 @@ export function buildMoveAnalyses(
     const winPctPrior = cpPrior != null ? winPct(cpPrior) : undefined
     const playerRating = isWhite ? whiteRating : blackRating
 
-    // PV-confirmation of a sacrifice: does the opponent's engine-best reply (evalAfter) actually
-    // capture the offered material? Undefined when there's nothing to sacrifice or no reply SAN.
-    const afterFen = moves[i].after
-    const sacSquares = sacrificeSquares(moves[i], ratingThresholds(playerRating).sacrificeSeeMin)
-    const sacrificeConfirmed = afterFen && sacSquares.length > 0
-      ? replyCapturesSacSquare(afterFen, evalAfter.bestMoveSan, sacSquares)
-      : undefined
+    // Does the engine line after the move (evalAfter.pv, opponent first) win the offered
+    // material straight back? Then it was a trade, not a sacrifice.
+    const sacSquares = sacrificeSquares(moves[i])
+    const sacrificeIsRegained = sacrificeRegained(moves[i], evalAfter.pv, sacSquares)
+
+    // Playing anything but a mate while one was on the board is a Miss for chess.com (27.Qxf7+
+    // instead of 27.Qd8#), never a Brilliant — even though win% barely moves at +12.
+    const missedMate = evalToCp(evalBefore) * (isWhite ? 1 : -1) >= 10000 &&
+      evalToCp(evalAfter) * (isWhite ? 1 : -1) < 10000
 
     // Did the opponent just blunder? Drives the Great "refutation" branch. Reads the previous
     // ply's already-computed class (Book/Forced/skipped plies leave it undefined = no blunder).
@@ -534,8 +542,8 @@ export function buildMoveAnalyses(
       winPctPrior,
       winPctAfterRaw,
       playerRating,
-      classByPly.get(i - 2) === 'Brilliant',
-      sacrificeConfirmed,
+      classByPly.get(i - 2) === 'Brilliant' || missedMate,
+      sacrificeIsRegained,
       opponentBlundered,
       isTrivialRecapture,
     )
