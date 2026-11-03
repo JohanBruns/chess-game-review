@@ -20,14 +20,32 @@ const DEPTH = 15
 const PARALLEL_ENGINES = 4
 const OUT_DIR = new URL('../src/lib/analysis/__fixtures__/parity/', import.meta.url)
 
-// Reference games with verdicts checked against a live chess.com Game Review (2026-07). The
-// verdicts themselves are asserted in parity.test.ts; this list only says where to fetch.
+// Reference games with verdicts checked against a live chess.com Game Review (2026-07, and the
+// Brilliant set 2026-11). The verdicts themselves are asserted in parity.test.ts; this list only
+// says where to fetch.
 const GAMES: { id: string; player: string; month: string }[] = [
   { id: '171190174548', player: 'jojo2go', month: '2026/07' },
   { id: '147779282758', player: 'jojo2go', month: '2026/01' },
   { id: '170984117356', player: 'jojo2go', month: '2026/07' },
   { id: '170666529854', player: 'jojo2go', month: '2026/06' },
   { id: '170988770322', player: 'jojo2go', month: '2026/07' },
+  // chess.com Brilliant
+  { id: '173412280300', player: 'jojo2go', month: '2026/08' },
+  { id: '172856746274', player: 'jojo2go', month: '2026/08' },
+  { id: '172187507640', player: 'jojo2go', month: '2026/07' },
+  { id: '171688809516', player: 'jojo2go', month: '2026/07' },
+  { id: '184149603540', player: 'jojo2go', month: '2026/09' },
+  { id: '184266701180', player: 'jojo2go', month: '2026/09' },
+  { id: '172657036964', player: 'jojo2go', month: '2026/08' },
+  // no Brilliant on chess.com, but tempting sacrifice look-alikes
+  { id: '171655051226', player: 'jojo2go', month: '2026/07' },
+  { id: '171330597782', player: 'jojo2go', month: '2026/07' },
+  { id: '184611401806', player: 'jojo2go', month: '2026/09' },
+  { id: '183964542178', player: 'jojo2go', month: '2026/09' },
+  { id: '173756714744', player: 'jojo2go', month: '2026/08' },
+  { id: '172536947728', player: 'jojo2go', month: '2026/08' },
+  { id: '173675004502', player: 'jojo2go', month: '2026/08' },
+  { id: '174288505864', player: 'jojo2go', month: '2026/09' },
 ]
 
 export interface ParityFixture {
