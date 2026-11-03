@@ -28,20 +28,24 @@ export const PUZZLE_GAP_MIN = 100
 // position has a clearly-best reply (best vs. second-best gap >= gapMinCp). Returned in game order;
 // each puzzle drills the position BEFORE the mistake. Pure — no engine calls at solve time, since
 // the solution (bestSan) is already known from the batch analysis.
+// `side` restricts the puzzles to one player's own mistakes (moveIndex parity: even = White,
+// matching classify.ts's playerAccuracy split) — "learn from YOUR errors", not the opponent's.
 export function extractPuzzles(
   moves: { san: string }[],
   fens: string[],
   evalResults: (EvalResult | null)[],
   moveAnalyses: MoveAnalysis[],
-  options?: { gapMinCp?: number; classes?: ReadonlySet<MoveClass> },
+  options?: { gapMinCp?: number; classes?: ReadonlySet<MoveClass>; side?: 'white' | 'black' },
 ): Puzzle[] {
   const gapMinCp = options?.gapMinCp ?? PUZZLE_GAP_MIN
   const classes = options?.classes ?? PUZZLE_CLASSES
+  const side = options?.side
   const puzzles: Puzzle[] = []
 
   for (const analysis of moveAnalyses) {
     const i = analysis.moveIndex
     if (!classes.has(analysis.classification)) continue
+    if (side && (i % 2 === 0) !== (side === 'white')) continue
 
     // Eval of the position BEFORE the move (fens[i]) carries that position's best/second-best.
     const ev = evalResults[i]
