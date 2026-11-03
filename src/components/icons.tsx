@@ -70,6 +70,24 @@ export function IconCamera(p: IconProps) {
   )
 }
 
+export function IconSound(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4V9Z" />
+      <path {...STROKE} d="M16.5 9a4 4 0 0 1 0 6M19 6.5a7.5 7.5 0 0 1 0 11" />
+    </Svg>
+  )
+}
+
+export function IconSoundOff(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path fill="currentColor" d="M4 9h4l5-4v14l-5-4H4V9Z" />
+      <path {...STROKE} d="m16 9.5 5 5M21 9.5l-5 5" />
+    </Svg>
+  )
+}
+
 export function IconCheck(p: IconProps) {
   return (
     <Svg {...p}>
