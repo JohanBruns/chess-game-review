@@ -12,6 +12,9 @@ interface GamePickerProps {
   loading?: boolean
   initialUsername?: string | null
   autoFetch?: boolean
+  // The main action, drawn above the loading controls. Gets the "newest game" load, whose result
+  // says whether a game was loaded.
+  renderPrimary: (lastGame: { load: () => Promise<boolean>; available: boolean }) => React.ReactNode
 }
 
 const TIME_ICON: Record<string, string> = {
@@ -46,7 +49,7 @@ function formatDateTime(ts: number): string {
 // navigator.clipboard is undefined outside secure contexts (e.g. the dev server over the LAN).
 const canReadClipboard = typeof navigator !== 'undefined' && typeof navigator.clipboard?.readText === 'function'
 
-export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch }: GamePickerProps) {
+export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch, renderPrimary }: GamePickerProps) {
   const [username, setUsername] = useState<string>(
     () => readStorage(USERNAME_KEY) ?? '',
   )
@@ -118,7 +121,7 @@ export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch 
       const [latest] = await fetchRecentGames(username.trim())
       if (!latest) {
         setFetchError('No games found.')
-        return
+        return false
       }
       handleSelectGame(latest)
       // The archive can lag behind a game that just ended, so this may be the one before it —
@@ -128,8 +131,10 @@ export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch 
       setLastGameNote(
         `Loaded vs. ${opponent.username}, ${formatDateTime(latest.end_time)}. Just finished a game? chess.com can take a few minutes to list it.`,
       )
+      return true
     } catch {
       setFetchError('Failed to load games.')
+      return false
     } finally {
       setIsLoading(false)
     }
@@ -174,39 +179,22 @@ export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch 
   const busy = isLoading || !!loading
 
   // Lives at the top of the sidebar's setup chapter (chess.com has no top bar — the page is just
-  // board + sidebar), so the controls stack vertically in the sidebar's width.
+  // board + sidebar), so the controls stack vertically in the sidebar's width. The username comes
+  // last: it's typed once and then saved.
   return (
     <div ref={containerRef} className="relative shrink-0 flex flex-col gap-2 p-4 pb-3">
-      <input
-        type="text"
-        className="h-10 w-full bg-black/20 text-white text-sm px-3 rounded-[5px] border border-white/10 placeholder:text-white/40 focus:outline-none focus:border-cc-green"
-        placeholder="chess.com username"
-        value={username}
-        onChange={e => handleUsernameChange(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') handleFetch() }}
-        spellCheck={false}
-      />
-      {/* ── One-tap loading: the Home Screen app can't receive shared links (docs/iphone.md) ── */}
-      <div className="flex gap-2">
-        <button
-          className="cc-btn-primary flex-1 h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
-          disabled={!username.trim() || busy}
-          onClick={handleLastGame}
-        >
-          Last game
-        </button>
-        {canReadClipboard && (
-          <button
-            className="cc-btn-primary flex-1 h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
-            disabled={busy}
-            onClick={handlePaste}
-          >
-            Paste link
-          </button>
-        )}
-      </div>
+      {renderPrimary({ load: handleLastGame, available: !!username.trim() && !busy })}
       <div className="relative">
         <div className="flex gap-2">
+          {canReadClipboard && (
+            <button
+              className="cc-btn-secondary flex-1 h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
+              disabled={busy}
+              onClick={handlePaste}
+            >
+              Paste link
+            </button>
+          )}
           <button
             className="cc-btn-secondary flex-1 h-10 rounded-[5px] text-sm font-semibold disabled:opacity-40 whitespace-nowrap"
             disabled={!username.trim() || busy}
@@ -266,6 +254,16 @@ export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch 
           </div>
         )}
       </div>
+      <input
+        type="text"
+        className="h-10 w-full bg-black/20 text-white text-sm px-3 rounded-[5px] border border-white/10 placeholder:text-white/40 focus:outline-none focus:border-cc-green"
+        placeholder="chess.com username"
+        aria-label="chess.com username"
+        value={username}
+        onChange={e => handleUsernameChange(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') handleFetch() }}
+        spellCheck={false}
+      />
       {loading ? (
         <span className="text-white/72 text-xs">Loading game from chess.com…</span>
       ) : displayError ? (

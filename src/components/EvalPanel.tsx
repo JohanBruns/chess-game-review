@@ -13,6 +13,10 @@ interface EvalPanelProps {
   // Analyze button greyed out after its one allowed click (resets on loading a new game).
   hasAnalysis: boolean
   onAnalyzeGame: () => void
+  // With nothing left to analyze, the button loads and analyzes the newest game instead, so one
+  // tap is enough right after opening the app.
+  canAnalyzeLastGame: boolean
+  onAnalyzeLastGame: () => void
   // Candidate moves for the current position (settings.showEngineLines) — empty when the
   // setting is off or no analysis is available yet for this ply.
   engineLines?: EngineLine[]
@@ -41,20 +45,23 @@ export function EvalPanel({
   isGameLoaded,
   hasAnalysis,
   onAnalyzeGame,
+  canAnalyzeLastGame,
+  onAnalyzeLastGame,
   engineLines = [],
   onHoverEngineLine,
 }: EvalPanelProps) {
-  const analyzeDisabled = !isReady || !isGameLoaded || isAnalyzing || hasAnalysis
+  const hasGameToAnalyze = isGameLoaded && !hasAnalysis
+  const analyzeDisabled = isAnalyzing || (hasGameToAnalyze ? !isReady : !canAnalyzeLastGame)
 
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
         <button
-          onClick={onAnalyzeGame}
+          onClick={hasGameToAnalyze ? onAnalyzeGame : onAnalyzeLastGame}
           disabled={analyzeDisabled}
           className="cc-btn-primary flex-1 h-12 rounded-[10px] text-[17px] font-bold disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Analyze Game
+          {hasGameToAnalyze || isAnalyzing ? 'Analyze Game' : 'Analyze last game'}
         </button>
       </div>
 
