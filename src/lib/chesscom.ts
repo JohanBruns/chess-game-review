@@ -17,10 +17,20 @@ const GAME_LINK_RE = /chess\.com\/(?:[a-z]{2}\/)?(?:analysis\/)?game\/(?:(live|d
 // "<user> <gegen|vs.|contre|…> <user> - https://…": usernames are 3–25 of [A-Za-z0-9_-].
 const PLAYERS_RE = /([\w-]{3,25})\s+\S+\s+([\w-]{3,25})\s+-\s+https?:\/\//
 
+function looksLikePgn(trimmed: string): boolean {
+  return /^\[\w+\s+"/.test(trimmed) || /\b1\.\s*[a-hNBRQKO]/.test(trimmed)
+}
+
+// Whether clipboard text is worth loading: a shared game or a PGN. Clipboards hold anything, so
+// this lets the caller say "no game here" instead of showing a PGN parse error for a random text.
+export function containsGame(text: string): boolean {
+  return parseSharedGame(text) !== null || looksLikePgn(text.trim())
+}
+
 export function parseSharedGame(text: string): SharedGame | null {
   const trimmed = text.trim()
   // A chess.com PGN carries its own game link in a [Link "…"] header — that's a PGN, not a link.
-  if (/^\[\w+\s+"/.test(trimmed) || /\b1\.\s*[a-hNBRQKO]/.test(trimmed)) return null
+  if (looksLikePgn(trimmed)) return null
   if (/^\d{6,}$/.test(trimmed)) return { id: trimmed, type: null, usernames: [] }
   const link = trimmed.match(GAME_LINK_RE)
   if (!link) return null
@@ -136,6 +146,48 @@ async function fetchViaArchive(id: string, username: string): Promise<string | n
     }
   }
   return null
+}
+
+export interface ChessComPlayer {
+  username: string
+  result: string
+  rating: number
+}
+
+export interface ChessComGame {
+  url: string
+  pgn: string
+  time_class: string
+  white: ChessComPlayer
+  black: ChessComPlayer
+  end_time: number
+}
+
+// A player's latest games, newest first, from this month's and last month's official archives.
+// A game can take a few minutes to show up here after it ends.
+export async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
+  const now = new Date()
+  const months = [
+    { year: now.getFullYear(), month: now.getMonth() + 1 },
+    now.getMonth() === 0
+      ? { year: now.getFullYear() - 1, month: 12 }
+      : { year: now.getFullYear(), month: now.getMonth() },
+  ]
+  const results = await Promise.allSettled(
+    months.map(({ year, month }) =>
+      fetch(
+        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/${year}/${String(month).padStart(2, '0')}`,
+      )
+        .then(r => (r.ok ? r.json() : { games: [] }))
+        .then(j => (j.games ?? []) as ChessComGame[]),
+    ),
+  )
+  return results
+    .filter((r): r is PromiseFulfilledResult<ChessComGame[]> => r.status === 'fulfilled')
+    .flatMap(r => r.value)
+    .filter(g => typeof g.pgn === 'string' && g.pgn.length > 10)
+    .sort((a, b) => b.end_time - a.end_time)
+    .slice(0, 20)
 }
 
 // Resolves a shared game to a PGN: callback proxy first (instant, needs no username), then the
