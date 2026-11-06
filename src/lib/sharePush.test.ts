@@ -88,6 +88,49 @@ describe('GET /api/share-push', () => {
     expect(send).not.toHaveBeenCalled()
   })
 
+  it('ignores characters added to a token on its way into the Shortcut', async () => {
+    const send = stubPush()
+    const token = encodeShareToken(parts())
+    expect(token).toMatch(/^[A-Za-z0-9]+$/)
+    const everyTen = (added: string) => token.replace(/(.{10})/g, `$1${added}`)
+    for (const damaged of [everyTen('-'), everyTen('­'), everyTen('‐'), everyTen(' '), everyTen('\n')]) {
+      expect((await call({ token: damaged, share: SHARE_TEXT })).status).toBe(200)
+    }
+    expect(send).toHaveBeenCalledTimes(5)
+    expect(send.mock.calls[4][0]).toEqual(send.mock.calls[0][0])
+  })
+
+  it('still reads a token whose own characters include - and _', async () => {
+    const send = stubPush()
+    const token = encodeShareToken(parts('https://abc.notify.windows.com/w/?token=x~y>z??'))
+    expect(token).toMatch(/[-_]/)
+    expect((await call({ token, share: SHARE_TEXT })).status).toBe(200)
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('says how a token is damaged, without echoing any of it', async () => {
+    const send = stubPush()
+    const token = encodeShareToken(parts())
+    const shared = encodeURIComponent(SHARE_TEXT)
+
+    const inserted = await call({ token: `${token.slice(0, 40)}${shared}${token.slice(40)}`, share: '' })
+    const body = await inserted.text()
+    expect(inserted.status).toBe(400)
+    expect(JSON.parse(body)).toMatchObject({ error: 'invalid token', problem: 'unreadable' })
+    expect(JSON.parse(body).received.otherCharacters).toBeGreaterThan(0)
+    expect(JSON.parse(body).received.kinds).toContain('U+0025')
+    expect(body).not.toContain(token.slice(0, 40))
+
+    const cut = await (await call({ token: token.slice(0, 100), share: SHARE_TEXT })).json()
+    expect(cut).toMatchObject({ problem: 'unreadable', received: { length: 100, otherCharacters: 0, kinds: [] } })
+
+    const missingKey = await (await call({ token: encodeShareToken({ ...parts(), auth: 'short' }), share: SHARE_TEXT })).json()
+    expect(missingKey.problem).toBe('keys')
+    const wrongHost = await (await call({ token: encodeShareToken(parts('https://evil.example/x')), share: SHARE_TEXT })).json()
+    expect(wrongHost.problem).toBe('endpoint')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('sends a test notification without a game', async () => {
     const send = stubPush()
     expect((await call({ token: encodeShareToken(parts()), test: '1' })).status).toBe(200)
