@@ -531,11 +531,14 @@ function App() {
   // per loaded game (keyed on the fens array identity, which only changes on a new load). Waits
   // for the engine to be ready; a game that already has (or is getting) an analysis is skipped,
   // and a later depth change doesn't re-trigger. Cached positions make a revisit instant.
+  // "Analyze last game" asks for the same whatever the setting says, via analyzeNextLoadRef.
   const autoAnalyzedFensRef = useRef<string[] | null>(null)
+  const analyzeNextLoadRef = useRef(false)
   useEffect(() => {
-    if (!settings.autoAnalyze || !isReady || fens.length === 0) return
+    if (!(settings.autoAnalyze || analyzeNextLoadRef.current) || !isReady || fens.length === 0) return
     if (autoAnalyzedFensRef.current === fens) return
     autoAnalyzedFensRef.current = fens
+    analyzeNextLoadRef.current = false
     if (isAnalyzing || evalResults.length > 0) return
     analyzeGame(fens, settings.depth)
   }, [settings.autoAnalyze, settings.depth, isReady, fens, isAnalyzing, evalResults.length, analyzeGame])
@@ -814,13 +817,14 @@ function App() {
         : reviewActive && reviewSub === 'explain'
           ? { icon: <IconCheck size={20} />, label: 'Got it!', onClick: handleGotIt }
           : { icon: <IconArrowRight size={20} />, label: 'Next', onClick: goToNext, disabled: !canGoNext }
-  // chess.com's phone page puts the coach above the board (80px in the overview, 96px move by
-  // move); the desktop sidebar keeps its own copy, hidden on phones.
+  // Like chess.com's phone page, the coach sits above the board; the desktop sidebar keeps its own
+  // copy, hidden on phones. Smaller than chess.com's (80px and 96px), to leave room for the board
+  // and the accuracy on one screen.
   const phoneCoach =
     !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'summary' ? (
-      <CoachSpeech align="bottom" size={80}>{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
+      <CoachSpeech align="bottom" size={48}>{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
     ) : sidebarView === 'review' ? (
-      <ReviewCoach {...reviewCoachProps} size={96} />
+      <ReviewCoach {...reviewCoachProps} size={64} />
     ) : null
 
   const playerBar = (side: 'white' | 'black') => (
@@ -862,7 +866,7 @@ function App() {
       />
 
       {phoneCoach && (
-        <div className="md:hidden px-3 pb-2 min-h-[104px]">
+        <div className={`md:hidden px-3 pb-2 ${sidebarView === 'review' ? 'min-h-[72px]' : ''}`}>
           {phoneCoach}
         </div>
       )}
@@ -921,7 +925,7 @@ function App() {
           chapter draws its own 48px SidebarHeader; the nav footer closes the card off in every
           chapter but the summary, which pins its Start Review button there instead. ── */}
       <div
-        className="flex-auto mt-4 bg-black/20 flex flex-col md:flex-initial md:shrink-0 md:min-h-0 md:mt-0 md:rounded-[5px] md:overflow-hidden"
+        className="flex-auto mt-2 bg-black/20 flex flex-col md:flex-initial md:shrink-0 md:min-h-0 md:mt-0 md:rounded-[5px] md:overflow-hidden"
         style={{ width: 'var(--sidebar-w)' }}
       >
         <div className="flex-auto flex flex-col md:flex-1 md:min-h-0">
@@ -1035,22 +1039,27 @@ function App() {
                 loading={linkLoading}
                 initialUsername={initialUsername}
                 autoFetch={autoFetch}
+                renderPrimary={lastGame => (
+                  <EvalPanel
+                    isReady={isReady}
+                    isAnalyzing={isAnalyzing}
+                    analysisProgress={analysisProgress}
+                    result={result}
+                    error={engineError}
+                    isGameLoaded={isLoaded}
+                    hasAnalysis={hasReview}
+                    onAnalyzeGame={handleAnalyzeGame}
+                    canAnalyzeLastGame={lastGame.available}
+                    onAnalyzeLastGame={() => {
+                      analyzeNextLoadRef.current = true
+                      lastGame.load().then(loaded => { if (!loaded) analyzeNextLoadRef.current = false })
+                    }}
+                    engineLines={currentEngineLines}
+                    onHoverEngineLine={settings.showEngineLines ? setHoveredLineSan : undefined}
+                  />
+                )}
               />
               <OpeningBadge opening={openingResult?.opening ?? null} />
-              <div className="shrink-0 px-4 pb-3">
-                <EvalPanel
-                  isReady={isReady}
-                  isAnalyzing={isAnalyzing}
-                  analysisProgress={analysisProgress}
-                  result={result}
-                  error={engineError}
-                  isGameLoaded={isLoaded}
-                  hasAnalysis={hasReview}
-                  onAnalyzeGame={handleAnalyzeGame}
-                  engineLines={currentEngineLines}
-                  onHoverEngineLine={settings.showEngineLines ? setHoveredLineSan : undefined}
-                />
-              </div>
               <MoveList
                 moves={moves}
                 currentPly={currentPly}

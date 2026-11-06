@@ -31,7 +31,7 @@ There's also an even simpler option without an extension at all: a so-called **b
 
 ## On iPhone
 
-No extension needed: add the app to the Home Screen and load games with one tap via **Last game** or **Paste link**. An iOS Shortcut also puts **Analyze game** into the chess.com app's share sheet: it sends the game as a notification, and one tap opens it in the app. On phones the board sits above the analysis. Setup: [`docs/iphone.md`](docs/iphone.md).
+No extension needed: add the app to the Home Screen and analyze your newest game with one tap via **Analyze last game**, or load another with **Paste link**. An iOS Shortcut also puts **Analyze game** into the chess.com app's share sheet: it sends the game as a notification, and one tap opens it in the app. On phones the board sits above the analysis. Setup: [`docs/iphone.md`](docs/iphone.md).
 
 ---
 

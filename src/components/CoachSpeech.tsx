@@ -1,8 +1,7 @@
 // The coach avatar with a white speech bubble to its right — chess.com's bot-speech component,
 // measured at 1440x900: 64px avatar, bubble 10px radius / 12px 16px padding / 15px 500-weight
 // text, and a small tail pointing at the coach. The overview chapter bottom-aligns avatar and
-// bubble; the move-by-move chapter top-aligns them. On phones (375x812) chess.com moves the coach
-// above the board and enlarges the avatar: 80px in the overview, 96px move by move.
+// bubble; the move-by-move chapter top-aligns them. App sets a smaller size for its phone strip.
 export function CoachSpeech({
   align,
   size = 64,
