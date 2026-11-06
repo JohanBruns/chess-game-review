@@ -29,8 +29,11 @@ const TTL_SECONDS = 15 * 60
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url)
-  const token = decodeToken(url.searchParams.get('token') ?? '')
-  if (!token) return json({ error: 'invalid token' }, 400)
+  const rawToken = url.searchParams.get('token') ?? ''
+  const token = readToken(rawToken)
+  if (typeof token === 'string') {
+    return json({ error: 'invalid token', problem: token, received: describeToken(rawToken) }, 400)
+  }
 
   const isTest = url.searchParams.get('test') === '1'
   const text = (url.searchParams.get('share') ?? '').trim()
@@ -73,18 +76,45 @@ function testPayload() {
   return { title: 'Game Review', body: 'Notifications work.' }
 }
 
-function decodeToken(raw: string): ShareToken | null {
+type TokenProblem = 'unreadable' | 'endpoint' | 'keys'
+
+// The token reaches the Shortcut by hand, so characters can get added on the way. Base64 of plain
+// JSON only contains - or _ if the JSON has a ?, > or ~, which a push endpoint rarely does, so a
+// second try with letters and digits alone is safe: anything else was added.
+function readToken(raw: string): ShareToken | TokenProblem {
+  const token = decodeToken(raw)
+  return typeof token === 'string' ? decodeToken(raw.replace(/[^A-Za-z0-9]/g, '')) : token
+}
+
+function decodeToken(raw: string): ShareToken | TokenProblem {
+  let t: Partial<ShareToken> | null
   try {
-    const t = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as Partial<ShareToken>
-    const endpoint = new URL(t.endpoint ?? '')
-    if (endpoint.protocol !== 'https:' || !PUSH_HOST_RE.test(endpoint.hostname)) return null
-    // Sizes of a P-256 key and auth secret in base64url.
-    if (!isKey(t.p256dh, 87) || !isKey(t.auth, 22) || !isKey(t.vapidPublicKey, 87) || !isKey(t.vapidPrivateKey, 43)) {
-      return null
-    }
-    return t as ShareToken
+    t = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8'))
   } catch {
-    return null
+    return 'unreadable'
+  }
+  if (!t || !isPushEndpoint(t.endpoint)) return 'endpoint'
+  // Sizes of a P-256 key and auth secret in base64url.
+  if (!isKey(t.p256dh, 87) || !isKey(t.auth, 22) || !isKey(t.vapidPublicKey, 87) || !isKey(t.vapidPrivateKey, 43)) {
+    return 'keys'
+  }
+  return t as ShareToken
+}
+
+// For the error response, shown in the Shortcut: says how a token was damaged. The token holds a
+// private key, so this only reports its length and the characters that can't be part of it.
+function describeToken(raw: string) {
+  const others = raw.replace(/[A-Za-z0-9]/g, '')
+  const kinds = [...new Set(others)].map(c => `U+${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`)
+  return { length: raw.length, otherCharacters: others.length, kinds: kinds.slice(0, 10) }
+}
+
+function isPushEndpoint(value: unknown): boolean {
+  try {
+    const endpoint = new URL(String(value))
+    return endpoint.protocol === 'https:' && PUSH_HOST_RE.test(endpoint.hostname)
+  } catch {
+    return false
   }
 }
 
