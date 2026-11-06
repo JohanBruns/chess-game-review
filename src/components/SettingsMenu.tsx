@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { ReviewSettings } from '../lib/settings'
+import { SharePushSetup } from './SharePushSetup'
 
 interface SettingsMenuProps {
   open: boolean
@@ -99,6 +100,8 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
               </select>
             </div>
           </section>
+
+          <SharePushSetup />
         </div>
       </div>
     </div>

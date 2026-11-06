@@ -62,6 +62,7 @@ import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
 import { parseSharedGame, fetchSharedGamePgn } from './lib/chesscom'
+import { takePendingShare } from './lib/sharePush'
 import { deriveBoardView } from './lib/boardView'
 
 // Coach tactical-theme highlight colors (Phase 4) — orange, distinct from the green best-move
@@ -672,6 +673,23 @@ function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally runs once on mount
+
+  // A game sent from the chess.com share sheet (docs/iphone.md): public/sw.js parked it when the
+  // push came in. Check whenever the app comes to the front, and when the service worker says so
+  // for the case where it's already there.
+  useEffect(() => {
+    function loadPendingShare() {
+      if (document.visibilityState !== 'visible') return
+      takePendingShare().then(text => { if (text) handleLoadInput(text) })
+    }
+    loadPendingShare()
+    document.addEventListener('visibilitychange', loadPendingShare)
+    navigator.serviceWorker?.addEventListener('message', loadPendingShare)
+    return () => {
+      document.removeEventListener('visibilitychange', loadPendingShare)
+      navigator.serviceWorker?.removeEventListener('message', loadPendingShare)
+    }
+  }, [handleLoadInput])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
