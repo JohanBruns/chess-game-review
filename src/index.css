@@ -25,6 +25,13 @@
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
+/* The page's own color, not the browser's white. iOS shows it around the app, including behind the
+   status bar of the Home Screen app. */
+html,
+body {
+  background-color: var(--color-cc-bg);
+}
+
 /* chess.com's thin, translucent scrollbars (the sidebar's scroll areas keep almost their full
    width instead of losing ~15px to a classic scrollbar). */
 * {

@@ -103,7 +103,7 @@ export function SummaryView({
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="p-6 pb-2">
+        <div className="p-4 pb-2 md:p-6 md:pb-2">
           {/* Phones show the coach above the board instead (App's top strip). */}
           <div className="hidden md:block mb-4">
             <CoachSpeech align="bottom">{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
@@ -124,8 +124,9 @@ export function SummaryView({
             left={<span className="text-[13px] font-bold text-white truncate">{whiteName}</span>}
             right={<span className="text-[13px] font-bold text-white truncate">{blackName}</span>}
           />
+          {/* Not on phones: the names above already say it, and the accuracy should fit on screen. */}
           <GridRow
-            className="pt-2"
+            className="pt-2 max-md:hidden"
             label="Players"
             left={<PlayerAvatar name={whiteName} winner={winner === 'white'} />}
             right={<PlayerAvatar name={blackName} winner={winner === 'black'} />}
