@@ -16,7 +16,7 @@ export function CoachSpeech({
       <img
         src="/chess-coach.png"
         alt="Coach"
-        className="shrink-0 rounded-[2px] object-cover"
+        className="shrink-0 rounded-[2px] object-cover short:!w-12 short:!h-12"
         style={{ width: size, height: size }}
       />
       <div className="relative flex-1 min-w-0 ml-[14px]">

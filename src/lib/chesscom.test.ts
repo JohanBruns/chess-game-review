@@ -7,10 +7,25 @@ import {
   buildPgnFromCallbackGame,
   fetchSharedGamePgn,
   fetchRecentGames,
+  chessComGameId,
 } from './chesscom'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('chessComGameId', () => {
+  it('reads the game id off the Link header', () => {
+    expect(chessComGameId('[Event "Live Chess"]\n[Link "https://www.chess.com/game/live/186365372722"]\n\n1. d4 d5 *'))
+      .toBe('186365372722')
+    expect(chessComGameId('[Link "https://www.chess.com/game/daily/987654321"]\n\n1. e4 *')).toBe('987654321')
+  })
+
+  it('is null without a chess.com game link', () => {
+    expect(chessComGameId('[Event "Casual"]\n\n1. e4 e5 *')).toBeNull()
+    expect(chessComGameId('[Link "https://lichess.org/abcdef"]\n\n1. e4 *')).toBeNull()
+    expect(chessComGameId(null)).toBeNull()
+  })
 })
 
 describe('parseSharedGame', () => {

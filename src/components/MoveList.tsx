@@ -1,30 +1,10 @@
 import { useEffect, useRef } from 'react'
 import type { Move } from 'chess.js'
-import type { MoveAnalysis, MoveClass } from '../lib/analysis/classify'
+import type { MoveAnalysis } from '../lib/analysis/classify'
 import { CLASS_ICON } from '../lib/analysis/classIcons'
 import { classTextColor } from '../lib/analysis/classColors'
 import { formatMoveTime } from '../lib/analysis/clocks'
-
-// Which classifications chess.com surfaces in the move list — an inline icon AND a colored SAN.
-// Verified against a live Game Review move list (Board&Game/review/Screenshot_3, game
-// 171300157032): Best moves DO get a green star + green text; the routine Excellent/Good band
-// gets neither (default light text, no icon), and Forced is our own class with no equivalent.
-// This corrects the earlier plan note (which claimed Best carried no icon).
-const MARKED_CLASSES = new Set<MoveClass>([
-  'Book', 'Brilliant', 'Great', 'Best', 'Inaccuracy', 'Mistake', 'Miss', 'Blunder',
-])
-
-// Piece letter → filled Unicode figurine, drawn in place of the SAN's leading letter (Nf3 → ♞f3)
-// like chess.com. Pawn moves and castling have no leading piece letter and render unchanged. The
-// glyph inherits the surrounding text color, so a colored move tints its figurine to match.
-const FIGURINE: Record<string, string> = {
-  K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞',
-}
-
-function splitSan(san: string): { figurine: string | null; text: string } {
-  const figurine = FIGURINE[san[0]]
-  return figurine ? { figurine, text: san.slice(1) } : { figurine: null, text: san }
-}
+import { MARKED_CLASSES, splitSan } from '../lib/analysis/moveDisplay'
 
 interface MoveListProps {
   moves: Move[]
@@ -89,7 +69,7 @@ export function MoveList({
   // padding, the move number in the first 40px, White's move from +40px and Black's from +140px,
   // and every second row lifted by a faint 2% white tint.
   return (
-    <div ref={listRef} className="flex-1 min-h-[120px] overflow-y-auto">
+    <div ref={listRef} className="flex-1 min-h-[120px] short:min-h-[60px] overflow-y-auto">
       {rows.map(({ moveNumber, whitePly, blackPly }) => (
         <div
           key={moveNumber}
@@ -179,17 +159,19 @@ function MoveButton({ san, ply, currentPly, onClick, selectedRef, analysis, isKe
           {formatMoveTime(timeSeconds)}
         </span>
       )}
+      {/* Hover-revealed with a mouse; always shown (and a little larger) on touch screens, which
+          have no hover to reveal it with. */}
       {isKeyMoment && (
         onRetry ? (
           <button
             onClick={() => onRetry(ply - 1)}
             title="Try this move yourself"
-            className="text-[11px] text-cc-red/70 hover:text-cc-red opacity-0 group-hover:opacity-100 transition-opacity"
+            className="px-1 -mx-0.5 text-[11px] text-cc-red/70 hover:text-cc-red opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:text-[13px] transition-opacity"
           >
             ⚡
           </button>
         ) : (
-          <span className="text-[11px] text-cc-red/70 opacity-0 group-hover:opacity-100 transition-opacity">⚡</span>
+          <span className="text-[11px] text-cc-red/70 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity">⚡</span>
         )
       )}
     </span>
