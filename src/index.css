@@ -103,6 +103,17 @@ body {
   animation: chapter-fade-in 150ms ease-out;
 }
 
+/* "Great!" / "Brilliant!" pill over the target square (BoardPanel): pops in, holds, fades. */
+@keyframes label-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  12%  { opacity: 1; transform: scale(1); }
+  75%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.animate-label-pop {
+  animation: label-pop 1600ms ease-out forwards;
+}
+
 /* Phone bottom sheets (settings, board & pieces) slide up from the footer. */
 @keyframes sheet-up {
   from { transform: translateY(24px); opacity: 0; }
