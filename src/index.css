@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* `short:` = the side-by-side (md+) layout on a screen too flat for it, above all a phone held
+   sideways (844x390). The md layout is kept there (a full-width phone board would be far taller
+   than the screen) but packed tighter, so the board, the coach and the step buttons all fit. */
+@custom-variant short (@media (width >= 48rem) and (height < 32rem));
+
 @theme {
   --color-cc-bg: #302e2b;
   --color-cc-bg-dark: #1e1c1a;
@@ -23,6 +28,13 @@
   /* chess.com uses the platform's UI font throughout — headings, numbers, and body text alike —
      leaning on bold weights instead of a second webfont for visual hierarchy. */
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* The page's own color, not the browser's white. iOS shows it around the app, including behind the
+   status bar of the Home Screen app. */
+html,
+body {
+  background-color: var(--color-cc-bg);
 }
 
 /* chess.com's thin, translucent scrollbars (the sidebar's scroll areas keep almost their full
@@ -91,6 +103,26 @@
   animation: chapter-fade-in 150ms ease-out;
 }
 
+/* "Great!" / "Brilliant!" pill over the target square (BoardPanel): pops in, holds, fades. */
+@keyframes label-pop {
+  0%   { opacity: 0; transform: scale(0.6); }
+  12%  { opacity: 1; transform: scale(1); }
+  75%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+.animate-label-pop {
+  animation: label-pop 1600ms ease-out forwards;
+}
+
+/* Phone bottom sheets (settings, board & pieces) slide up from the footer. */
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.animate-sheet-up {
+  animation: sheet-up 180ms ease-out;
+}
+
 /* Accuracy-celebration confetti burst (SummaryView, accuracy >= 90) — small CSS-only piece,
    no canvas/animation dependency. Each piece's fall distance/rotation/delay is randomized
    inline per-element; this keyframe just defines the fall+spin+fade arc. */
@@ -117,5 +149,14 @@
 @media (max-width: 767.98px) {
   .page-frame {
     --sidebar-w: 100%;
+  }
+}
+/* Flat screens (the `short:` variant above): 8px page padding instead of 16, so the height
+   left for the board is 100dvh - 16 - 2x40 player bars - 2x10 gaps = 100dvh - 116px, and the
+   width beside it 16 + 30 + 10 + 32 = 88px plus the sidebar, which gets a bit more of the screen. */
+@media (min-width: 48rem) and (max-height: 31.99rem) {
+  .page-frame {
+    --sidebar-w: clamp(280px, 40vw, 360px);
+    --board: max(200px, min(calc(100dvh - 116px), calc(100vw - 88px - var(--sidebar-w))));
   }
 }

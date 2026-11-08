@@ -1,9 +1,31 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { Chess } from 'chess.js'
-import { parseSharedGame, decodeTcn, buildPgnFromCallbackGame, fetchSharedGamePgn } from './chesscom'
+import {
+  parseSharedGame,
+  containsGame,
+  decodeTcn,
+  buildPgnFromCallbackGame,
+  fetchSharedGamePgn,
+  fetchRecentGames,
+  chessComGameId,
+} from './chesscom'
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('chessComGameId', () => {
+  it('reads the game id off the Link header', () => {
+    expect(chessComGameId('[Event "Live Chess"]\n[Link "https://www.chess.com/game/live/186365372722"]\n\n1. d4 d5 *'))
+      .toBe('186365372722')
+    expect(chessComGameId('[Link "https://www.chess.com/game/daily/987654321"]\n\n1. e4 *')).toBe('987654321')
+  })
+
+  it('is null without a chess.com game link', () => {
+    expect(chessComGameId('[Event "Casual"]\n\n1. e4 e5 *')).toBeNull()
+    expect(chessComGameId('[Link "https://lichess.org/abcdef"]\n\n1. e4 *')).toBeNull()
+    expect(chessComGameId(null)).toBeNull()
+  })
 })
 
 describe('parseSharedGame', () => {
@@ -28,6 +50,49 @@ describe('parseSharedGame', () => {
     expect(parseSharedGame('https://lichess.org/abcdef')).toBeNull()
     expect(parseSharedGame('[Event "Live Chess"]\n[Link "https://www.chess.com/game/live/123456789"]\n\n1. e4 *'))
       .toBeNull()
+  })
+})
+
+describe('containsGame', () => {
+  it('accepts share text, links, bare ids and PGNs', () => {
+    expect(containsGame('Schauen Sie sich dieses #Schachspiel an: a1b gegen c2d - https://www.chess.com/game/185820408402')).toBe(true)
+    expect(containsGame('  https://www.chess.com/game/live/123456789\n')).toBe(true)
+    expect(containsGame('185820408402')).toBe(true)
+    expect(containsGame('[Event "Live Chess"]\n\n1. e4 e5 *')).toBe(true)
+    expect(containsGame('1. e4 e5 2. Nf3')).toBe(true)
+  })
+
+  it('rejects whatever else a clipboard can hold', () => {
+    expect(containsGame('')).toBe(false)
+    expect(containsGame('Einkaufsliste: Milch, Eier')).toBe(false)
+    expect(containsGame('https://lichess.org/abcdef')).toBe(false)
+    expect(containsGame('12345')).toBe(false)
+  })
+})
+
+describe('fetchRecentGames', () => {
+  const game = (end_time: number, pgn = '[Event "x"]\n\n1. e4 e5 *') => ({ end_time, pgn })
+
+  it('merges both months newest first and drops games without a PGN', async () => {
+    const answers = [
+      { games: [game(100), game(300), game(400, '')] },
+      { games: [game(200)] },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(answers.shift()))))
+    expect((await fetchRecentGames('alice')).map(g => g.end_time)).toEqual([300, 200, 100])
+  })
+
+  it('still returns the other month when one request fails', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ games: [game(100)] })))
+    vi.stubGlobal('fetch', fetchMock)
+    expect((await fetchRecentGames('alice')).map(g => g.end_time)).toEqual([100])
+  })
+
+  it('returns nothing for an unknown player', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })))
+    expect(await fetchRecentGames('nobody')).toEqual([])
   })
 })
 

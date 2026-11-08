@@ -9,6 +9,9 @@ export interface ReviewSettings {
   // Start the whole-game analysis as soon as a game is loaded (chess.com behavior) instead of
   // waiting for the Analyze button.
   autoAnalyze: boolean
+  // Load the newest chess.com game of the saved username when the app opens (and offer one that
+  // shows up later) — lib/newestGame.ts.
+  openNewestGame: boolean
   reviewAs: 'white' | 'black' | 'both'
   depth: 12 | 15 | 18
 }
@@ -22,6 +25,7 @@ export const DEFAULT_SETTINGS: ReviewSettings = {
   soundEnabled: true,
   autoplay: false,
   autoAnalyze: true,
+  openNewestGame: true,
   reviewAs: 'both',
   depth: 15,
 }
@@ -35,6 +39,7 @@ const BOOLEAN_KEYS = [
   'soundEnabled',
   'autoplay',
   'autoAnalyze',
+  'openNewestGame',
 ] as const satisfies readonly (keyof ReviewSettings)[]
 
 // Merges a possibly-partial/possibly-corrupt parsed object (e.g. from localStorage, hand-edited
