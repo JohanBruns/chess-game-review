@@ -18,6 +18,27 @@ function formatLabel(r: EvalResult): string {
   return '0.0'
 }
 
+// The phone review's bar across the top, after the chess.com app: White's share fills from the
+// left, with the signed score ("+2.42") inside whichever part has room for it.
+export function EvalBarHorizontal({ evalResult, label }: { evalResult: EvalResult | null; label: string }) {
+  const pct = evalResult ? winPct(evalToCp(evalResult)) : 50
+  const labelInWhite = pct >= 25
+  return (
+    <div className="relative h-6 rounded-[3px] overflow-hidden bg-[#403d39] select-none">
+      <div className="absolute inset-y-0 left-0 bg-white transition-all duration-300" style={{ width: `${pct}%` }} />
+      {label && (
+        <span
+          className={`absolute inset-y-0 flex items-center text-[13px] font-bold tabular-nums ${
+            labelInWhite ? 'left-2 text-[#312e2b]' : 'right-2 text-white'
+          }`}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // chess.com's eval bar tracks the board: White's (light) portion sits at the bottom in the
 // normal view but flips to the top when the board is viewed from Black's side. The eval number
 // rides the outer edge of whichever side is leading, always contrasting with that side's fill.

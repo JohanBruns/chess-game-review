@@ -2,6 +2,9 @@ interface HeaderAction {
   icon: React.ReactNode
   label: string
   onClick: () => void
+  // Extra classes for the button — e.g. 'md:invisible' for a phone-only action that keeps its
+  // slot on desktop so the title stays centered.
+  className?: string
 }
 
 interface SidebarHeaderProps {
@@ -9,7 +12,12 @@ interface SidebarHeaderProps {
   // Small feature icon left of the title (chess.com shows the Game Review star here).
   icon?: React.ReactNode
   start?: HeaderAction
-  end?: HeaderAction
+  // Either an action button or any node (the phone menu brings its own button and dropdown).
+  end?: HeaderAction | React.ReactNode
+}
+
+function isAction(value: unknown): value is HeaderAction {
+  return typeof value === 'object' && value !== null && 'onClick' in value && 'label' in value
 }
 
 const ICON_BTN =
@@ -22,7 +30,7 @@ export function SidebarHeader({ title, icon, start, end }: SidebarHeaderProps) {
   return (
     <div className="shrink-0 h-12 short:h-10 flex items-center bg-black/14 rounded-t-[5px]">
       {start ? (
-        <button className={ICON_BTN} onClick={start.onClick} title={start.label} aria-label={start.label}>
+        <button className={`${ICON_BTN} ${start.className ?? ''}`} onClick={start.onClick} title={start.label} aria-label={start.label}>
           {start.icon}
         </button>
       ) : (
@@ -32,10 +40,12 @@ export function SidebarHeader({ title, icon, start, end }: SidebarHeaderProps) {
         {icon}
         <h2 className="text-[17px] font-semibold leading-5 text-white/85 truncate">{title}</h2>
       </div>
-      {end ? (
-        <button className={ICON_BTN} onClick={end.onClick} title={end.label} aria-label={end.label}>
+      {isAction(end) ? (
+        <button className={`${ICON_BTN} ${end.className ?? ''}`} onClick={end.onClick} title={end.label} aria-label={end.label}>
           {end.icon}
         </button>
+      ) : end ? (
+        <div className="w-11 shrink-0 flex justify-center">{end}</div>
       ) : (
         <span className="w-11 shrink-0" />
       )}
