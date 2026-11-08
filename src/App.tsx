@@ -9,7 +9,7 @@ import { BoardToolbar } from './components/BoardToolbar'
 import { MoveList } from './components/MoveList'
 import { MoveStrip } from './components/MoveStrip'
 import { EvalPanel } from './components/EvalPanel'
-import { EvalGraph } from './components/EvalGraph'
+import { LazyEvalGraph } from './components/LazyEvalGraph'
 import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
 import { remainingClockSeconds } from './lib/analysis/clocks'
 import type { MoveClass } from './lib/analysis/classify'
@@ -29,7 +29,6 @@ import { buildCommentary } from './lib/analysis/commentary'
 import { explainLine } from './lib/analysis/explain'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { extractPuzzles } from './lib/analysis/puzzles'
-import { detectOpening } from './lib/analysis/openings'
 import { OpeningBadge } from './components/OpeningBadge'
 import { EvalBar } from './components/EvalBar'
 import { ReviewCoach, ReviewView } from './components/ReviewView'
@@ -143,16 +142,28 @@ function App() {
   const playout = usePlayout(requestPlayMove)
   const puzzles = usePuzzles()
 
+  // The opening book (~500 KB of JSON) and the eval graph's chart library load after the first
+  // paint instead of with it. Both are requested right at start; the book comes in long before
+  // any analysis is done, and the review waits for it (hasReview below), so Book moves are never
+  // shown as anything else in between.
+  const [openings, setOpenings] = useState<typeof import('./lib/analysis/openings') | null>(null)
+  useEffect(() => {
+    let current = true
+    import('./lib/analysis/openings').then(mod => { if (current) setOpenings(mod) })
+    // Fetched now, while a game is still being loaded, so the summary never waits for it.
+    void import('./components/EvalGraph')
+    return () => { current = false }
+  }, [])
   const openingResult = useMemo(
-    () => (fens.length > 0 ? detectOpening(fens) : null),
-    [fens],
+    () => (openings && fens.length > 0 ? openings.detectOpening(fens) : null),
+    [openings, fens],
   )
   const openingPly = openingResult?.fenPly ?? 0
 
   const moveAnalyses = useMemo(() => {
-    if (evalResults.length === 0) return null
+    if (evalResults.length === 0 || !openings) return null
     return buildMoveAnalyses(moves, evalResults, openingPly, whiteElo, blackElo)
-  }, [moves, evalResults, openingPly, whiteElo, blackElo])
+  }, [moves, evalResults, openingPly, whiteElo, blackElo, openings])
 
   const keyMoments = useMemo(
     () => (moveAnalyses ? findKeyMoments(moveAnalyses) : new Set<number>()),
@@ -993,7 +1004,7 @@ function App() {
     gameResult === '1-0' ? 'white' : gameResult === '0-1' ? 'black' : null
   const sideToMove: 'white' | 'black' = currentFen.split(' ')[1] === 'b' ? 'black' : 'white'
   const takeover = playout.active || puzzles.active
-  const hasReview = evalResults.length > 0 && engineError == null
+  const hasReview = evalResults.length > 0 && engineError == null && openings != null
   // For the popstate handler, which outlives renders.
   useEffect(() => {
     hasReviewRef.current = hasReview
@@ -1283,7 +1294,7 @@ function App() {
                 />
               }
               graph={
-                <EvalGraph
+                <LazyEvalGraph
                   evalResults={evalResults}
                   currentPly={currentPly}
                   onSelectPly={goToPly}
