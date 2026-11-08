@@ -95,6 +95,20 @@ describe('extractPuzzles', () => {
     expect(puzzles[1].bestSan).toBe('Qh5')
   })
 
+  it('restricts puzzles to one side’s own mistakes when side is given', () => {
+    const moves = [{ san: 'Qxg4' }, { san: 'Bxh7' }, { san: 'Nf6' }, { san: 'Kd2' }]
+    const evals = [ev(500, 100, 'Rxf7'), ev(-400, -900, 'Qh5'), ev(600, 50, 'Ne5'), ev(-300, 200, 'Rd8')]
+    const analyses = [
+      analysis(0, 'Blunder'), // White
+      analysis(1, 'Mistake'), // Black
+      analysis(2, 'Miss'), // White
+      analysis(3, 'Blunder'), // Black
+    ]
+    expect(extractPuzzles(moves, fens, evals, analyses, { side: 'white' }).map(p => p.moveIndex)).toEqual([0, 2])
+    expect(extractPuzzles(moves, fens, evals, analyses, { side: 'black' }).map(p => p.moveIndex)).toEqual([1, 3])
+    expect(extractPuzzles(moves, fens, evals, analyses).map(p => p.moveIndex)).toEqual([0, 1, 2, 3])
+  })
+
   it('uses the documented default gap threshold', () => {
     expect(PUZZLE_GAP_MIN).toBe(100)
   })
