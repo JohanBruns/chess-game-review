@@ -103,6 +103,15 @@ body {
   animation: chapter-fade-in 150ms ease-out;
 }
 
+/* Phone bottom sheets (settings, board & pieces) slide up from the footer. */
+@keyframes sheet-up {
+  from { transform: translateY(24px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+.animate-sheet-up {
+  animation: sheet-up 180ms ease-out;
+}
+
 /* Accuracy-celebration confetti burst (SummaryView, accuracy >= 90) — small CSS-only piece,
    no canvas/animation dependency. Each piece's fall distance/rotation/delay is randomized
    inline per-element; this keyframe just defines the fall+spin+fade arc. */
