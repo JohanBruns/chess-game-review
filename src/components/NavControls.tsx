@@ -28,7 +28,7 @@ interface NavControlsProps {
 // Measured against chess.com's Game Review footer (1440x900): 48px-tall, 10px-radius buttons
 // with the secondary gradient skin (.cc-btn-secondary in index.css) and 24px icons.
 const BTN =
-  'cc-btn-secondary flex-1 h-12 flex items-center justify-center rounded-[10px] disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
+  'cc-btn-secondary flex-1 h-12 short:h-9 flex items-center justify-center rounded-[10px] disabled:opacity-40 disabled:cursor-not-allowed transition-colors'
 
 export function NavControls({
   onFirst,
@@ -45,7 +45,7 @@ export function NavControls({
 }: NavControlsProps) {
   return (
     <div className="shrink-0 bg-black/14 rounded-b-[5px]">
-      <div className={`flex gap-2 px-2 pt-4 ${children ? '' : 'pb-4'}`}>
+      <div className={`flex gap-2 px-2 pt-4 short:pt-2 ${children ? 'short:pb-2' : 'pb-4 short:pb-2'}`}>
         <button className={BTN} onClick={onFirst} disabled={!isLoaded || !canGoPrev || takeover} title="First Move (Home)">
           <IconFirst size={24} className="text-white/72" />
         </button>
@@ -68,7 +68,7 @@ export function NavControls({
           <IconLast size={24} className="text-white/72" />
         </button>
       </div>
-      {children && <div className="flex justify-center gap-2 p-2">{children}</div>}
+      {children && <div className="flex justify-center gap-2 p-2 short:hidden">{children}</div>}
     </div>
   )
 }

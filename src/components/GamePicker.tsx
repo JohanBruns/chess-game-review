@@ -256,7 +256,7 @@ export function GamePicker({ onLoad, error, loading, initialUsername, autoFetch,
       </div>
       <input
         type="text"
-        className="h-10 w-full bg-black/20 text-white text-sm px-3 rounded-[5px] border border-white/10 placeholder:text-white/40 focus:outline-none focus:border-cc-green"
+        className="h-10 w-full bg-black/20 text-white text-base md:text-sm px-3 rounded-[5px] border border-white/10 placeholder:text-white/40 focus:outline-none focus:border-cc-green"
         placeholder="chess.com username"
         aria-label="chess.com username"
         value={username}
