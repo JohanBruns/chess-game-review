@@ -57,6 +57,11 @@ interface ReviewViewProps {
   onLineNext: () => void
   onGotIt: () => void
   onResume: () => void
+  // The last move has been reviewed: a closing card with what to do next.
+  finished?: boolean
+  puzzleCount?: number
+  onStartPuzzles?: () => void
+  onNextGame?: () => void
 
   // Existing components, instantiated by App with all their props, dropped into the layout.
   moveList: ReactNode
@@ -195,6 +200,10 @@ export function ReviewView({
   onLineNext,
   onGotIt,
   onResume,
+  finished = false,
+  puzzleCount = 0,
+  onStartPuzzles,
+  onNextGame,
   moveList,
   graph,
   retry,
@@ -308,11 +317,55 @@ export function ReviewView({
           )}
         </div>
 
+        {finished && (
+          <ReviewDone
+            puzzleCount={puzzleCount}
+            onStartPuzzles={onStartPuzzles}
+            onSummary={onBack}
+            onNextGame={onNextGame}
+          />
+        )}
+
         {moveList}
 
         {retry}
 
         {graph && <div className="shrink-0 pt-2 short:hidden">{graph}</div>}
+      </div>
+    </div>
+  )
+}
+
+// End of the walkthrough: the review used to just stop at the last move. Points at what's worth
+// doing next — drilling this game's mistakes, the numbers again, or the next game.
+function ReviewDone({
+  puzzleCount,
+  onStartPuzzles,
+  onSummary,
+  onNextGame,
+}: {
+  puzzleCount: number
+  onStartPuzzles?: () => void
+  onSummary: () => void
+  onNextGame?: () => void
+}) {
+  return (
+    <div className="shrink-0 mt-2 mb-1 p-3 rounded-[5px] bg-white/5 flex flex-col gap-2 animate-chapter-fade-in">
+      <p className="text-sm font-semibold text-white/85">That's the whole game. Review complete!</p>
+      <div className="flex flex-wrap gap-2">
+        {puzzleCount > 0 && onStartPuzzles && (
+          <button onClick={onStartPuzzles} className={`${PRIMARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+            Puzzles ({puzzleCount})
+          </button>
+        )}
+        <button onClick={onSummary} className={`${SECONDARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+          Summary
+        </button>
+        {onNextGame && (
+          <button onClick={onNextGame} className={`${SECONDARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+            Next game
+          </button>
+        )}
       </div>
     </div>
   )

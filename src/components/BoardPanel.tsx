@@ -163,6 +163,12 @@ export function BoardPanel({
         }
       : null
 
+  // chess.com spells out the special finds as a short-lived pill over the target square.
+  const label =
+    badge && (classification === 'Brilliant' || classification === 'Great')
+      ? { text: classification === 'Brilliant' ? 'Brilliant!' : 'Great!', below: badge.top < 12 }
+      : null
+
   const resultBadgePos = resultBadge
     ? {
         ...badgeScreenPosition(resultBadge.square, orientation),
@@ -216,6 +222,22 @@ export function BoardPanel({
               transform: 'translate(-50%, -50%)',
             }}
           />
+        </div>
+      )}
+      {badge && label && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <span
+            key={`${label.text}-${lastMoveTo}-${fen}`}
+            className="absolute px-2 py-0.5 rounded-full text-[13px] font-bold text-white whitespace-nowrap shadow-lg animate-label-pop"
+            style={{
+              left: `${Math.min(88, Math.max(12, badge.left))}%`,
+              top: `${badge.top}%`,
+              backgroundColor: `rgb(${CLASS_COLOR[classification!]})`,
+              translate: label.below ? '-50% 60%' : '-50% -160%',
+            }}
+          >
+            {label.text}
+          </span>
         </div>
       )}
       {resultBadgePos && (
