@@ -26,6 +26,7 @@ import {
 import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
 import { buildCommentary } from './lib/analysis/commentary'
+import { explainLine } from './lib/analysis/explain'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { extractPuzzles } from './lib/analysis/puzzles'
 import { detectOpening } from './lib/analysis/openings'
@@ -55,6 +56,7 @@ import {
   IconPalette,
   IconPlay,
   IconRetry,
+  IconShare,
   IconStar,
   IconTarget,
 } from './components/icons'
@@ -87,6 +89,9 @@ const THREAT_ARROW_COLOR = '#e5533d'
 // Engine-lines hover candidate arrow (settings.showEngineLines) — a third, neutral color so it
 // never gets confused with the best-move or threat arrows when several show at once.
 const CANDIDATE_ARROW_COLOR = '#4f9fe8'
+// The reply that punishes a Mistake/Blunder — chess.com draws it in light blue next to the green
+// best-move arrow (checked live 2026-11-08, 28.Kc2? …Qxe1).
+const REFUTATION_ARROW_COLOR = '#5fb0ea'
 // How often "Next" auto-advances while settings.autoplay is on, in the guided Review chapter.
 const AUTOPLAY_INTERVAL_MS = 1500
 
@@ -420,7 +425,15 @@ function App() {
           : null
         : null
 
-  const reviewHeadlineText = reviewSub === 'explain' && bestSan != null ? `Explaining ${bestSan}` : ''
+  // Explain mode says what the engine's line achieves (mate, material won, or how the position
+  // stands) — lib/analysis/explain.ts.
+  const reviewHeadlineText = useMemo(
+    () =>
+      reviewSub === 'explain' && currentPly > 0
+        ? explainLine(fens[currentPly - 1], lineSteps, evalResults[currentPly - 1] ?? null) || `Explaining ${bestSan ?? ''}`
+        : '',
+    [reviewSub, currentPly, fens, lineSteps, evalResults, bestSan],
+  )
 
   // Class icon shown in the guided-review coach bubble: the played move's classification while
   // idle, forced to 'Best' while previewing the best move. (Explain mode ignores it — the
@@ -457,13 +470,18 @@ function App() {
   // resulted after the played move, i.e. the standing threat. Like the theme highlights, only
   // meaningful while the board shows the real current position (reviewSub 'idle') — the
   // best/explain sub-modes preview a different fen and would otherwise get a misaligned arrow.
+  // Without the setting it still shows, in light blue, after a Mistake or Blunder: the reply that
+  // punishes it, like chess.com.
+  const playedClass = analysis?.classification
+  const showRefutation = playedClass === 'Mistake' || playedClass === 'Blunder'
   const threatArrow = useMemo(() => {
-    if (!settings.showThreatArrow || reviewSub !== 'idle' || currentPly === 0) return undefined
+    if (!(settings.showThreatArrow || showRefutation) || reviewSub !== 'idle' || currentPly === 0) return undefined
     const bestSan = evalResults[currentPly]?.bestMoveSan
     if (!bestSan) return undefined
     const arrow = getThreatArrow(currentFen, bestSan)
-    return arrow ? { from: arrow.from, to: arrow.to, color: THREAT_ARROW_COLOR } : undefined
-  }, [settings.showThreatArrow, reviewSub, currentPly, evalResults, currentFen])
+    const color = settings.showThreatArrow ? THREAT_ARROW_COLOR : REFUTATION_ARROW_COLOR
+    return arrow ? { from: arrow.from, to: arrow.to, color } : undefined
+  }, [settings.showThreatArrow, showRefutation, reviewSub, currentPly, evalResults, currentFen])
 
   // EngineLines hover (settings.showEngineLines) — same "only while showing the real position"
   // constraint as threatArrow above.
@@ -583,20 +601,33 @@ function App() {
   // Share/Export (Phase 7). "Copied!" is a brief self-clearing confirmation, same idea as the
   // retry feedback elsewhere — no toast library for one string.
   const [linkCopied, setLinkCopied] = useState(false)
-  const handleCopyLink = useCallback(() => {
-    if (!pgn) return
-    // A chess.com game goes by its id (short, and opens at the current move); anything else
-    // carries its whole PGN.
+  // A link to this game at the current move. A chess.com game goes by its id (short); anything
+  // else carries its whole PGN.
+  const analysisLink = useCallback(() => {
+    if (!pgn) return null
     const gameId = chessComGameId(pgn)
-    const query = gameId
-      ? `game=${gameId}${currentPly > 0 ? `&move=${currentPly}` : ''}`
-      : `pgn=${encodeURIComponent(pgn)}`
-    const url = `${window.location.origin}${window.location.pathname}?${query}`
+    const move = currentPly > 0 ? `&move=${currentPly}` : ''
+    const query = gameId ? `game=${gameId}${move}` : `pgn=${encodeURIComponent(pgn)}${move}`
+    return `${window.location.origin}${window.location.pathname}?${query}`
+  }, [pgn, currentPly])
+  const copyLink = useCallback((url: string) => {
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 1500)
     }).catch(() => {})
-  }, [pgn, currentPly])
+  }, [])
+  const handleCopyLink = useCallback(() => {
+    const url = analysisLink()
+    if (url) copyLink(url)
+  }, [analysisLink, copyLink])
+  // Phones: a Brilliant/Great move gets a share button (chess.com shows one there too). Opens the
+  // system share sheet where there is one, else copies the link.
+  const handleShareMove = useCallback(() => {
+    const url = analysisLink()
+    if (!url) return
+    if (typeof navigator.share === 'function') navigator.share({ url }).catch(() => {})
+    else copyLink(url)
+  }, [analysisLink, copyLink])
 
   const handleExportImage = useCallback(() => {
     exportBoardImage({
@@ -991,6 +1022,8 @@ function App() {
       ? [{ icon: <IconRetry />, label: 'Retry this move', onClick: () => handleRetry(currentPly - 1) }]
       : []),
   ]
+  const reviewFinished = inReview && reviewActive && reviewSub === 'idle' && !canGoNext
+  const shareableMove = playedClass === 'Brilliant' || playedClass === 'Great'
   const phoneExtras: FooterAction[] =
     inReview && reviewActive && reviewSub === 'idle'
       ? [
@@ -998,6 +1031,10 @@ function App() {
           ...(canBest ? [{ icon: <IconStar size={22} />, label: 'Best move', onClick: handleBest }] : []),
         ]
       : []
+  // Only while there's room left of the green button (gear + two more).
+  if (inReview && reviewActive && reviewSub === 'idle' && shareableMove && phoneExtras.length < 2) {
+    phoneExtras.push({ icon: <IconShare size={22} />, label: 'Share this move', onClick: handleShareMove })
+  }
   const phonePrimary: FooterAction | null = inSummary
     ? { icon: <IconStar size={20} />, label: 'Start Review', onClick: handleStartReview }
     : !inReview
@@ -1006,7 +1043,9 @@ function App() {
         ? { icon: <IconPlay size={20} />, label: 'Resume', onClick: handleResume }
         : reviewActive && reviewSub === 'explain'
           ? { icon: <IconCheck size={20} />, label: 'Got it!', onClick: handleGotIt }
-          : { icon: <IconArrowRight size={20} />, label: 'Next', onClick: goToNext, disabled: !canGoNext }
+          : reviewFinished
+            ? { icon: <IconCheck size={20} />, label: 'Finish review', onClick: handleBackToSummary }
+            : { icon: <IconArrowRight size={20} />, label: 'Next', onClick: goToNext, disabled: !canGoNext }
   // Like chess.com's phone page, the coach sits above the board; the desktop sidebar keeps its own
   // copy, hidden on phones. Smaller than chess.com's (80px and 96px), to leave room for the board
   // and the accuracy on one screen.
@@ -1208,6 +1247,10 @@ function App() {
               onLineNext={handleLineNext}
               onGotIt={handleGotIt}
               onResume={handleResume}
+              finished={reviewFinished}
+              puzzleCount={puzzleList.length}
+              onStartPuzzles={handleStartPuzzles}
+              onNextGame={() => openChapter('setup')}
               moveList={
                 <MoveList
                   moves={moves}

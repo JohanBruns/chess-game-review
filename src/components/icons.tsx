@@ -150,6 +150,18 @@ export function IconPlay(p: IconProps) {
   )
 }
 
+// Three connected dots — the common "share" glyph.
+export function IconShare(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <circle cx="17.5" cy="5.5" r="2.5" {...STROKE} />
+      <circle cx="6.5" cy="12" r="2.5" {...STROKE} />
+      <circle cx="17.5" cy="18.5" r="2.5" {...STROKE} />
+      <path {...STROKE} d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9" />
+    </Svg>
+  )
+}
+
 // Counter-clockwise arrow: "try this move again".
 export function IconRetry(p: IconProps) {
   return (
