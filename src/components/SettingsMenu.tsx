@@ -18,9 +18,10 @@ const TOGGLES: { key: keyof ReviewSettings; label: string }[] = [
   { key: 'soundEnabled', label: 'Sound' },
   { key: 'autoplay', label: 'Autoplay (Review)' },
   { key: 'autoAnalyze', label: 'Analyze games automatically' },
+  { key: 'openNewestGame', label: 'Open my newest game on start' },
 ]
 
-// chess.com-style gear settings modal: persisted toggles (via useSettings/localStorage) for the
+// chess.com-style gear settings modal (a bottom sheet on phones, in thumb reach): persisted toggles (via useSettings/localStorage) for the
 // dead-feature wiring this phase turns on (engine lines, threat arrow) plus the review-as/depth
 // selectors. Reuses ThemePicker's overlay-modal shell rather than a small popover — this repo has
 // no existing popover primitive and the toggle count doesn't fit comfortably in one anyway.
@@ -38,17 +39,17 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-sm max-h-[85vh] overflow-y-auto rounded-lg border border-cc-border bg-cc-panel shadow-2xl"
+        className="w-full md:max-w-sm max-h-[85vh] overflow-y-auto rounded-t-xl md:rounded-lg border border-cc-border bg-cc-panel shadow-2xl pb-[env(safe-area-inset-bottom)] md:pb-0 animate-sheet-up md:animate-none"
         onMouseDown={e => e.stopPropagation()}
       >
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-cc-border bg-cc-panel">
           <h2 className="text-sm font-semibold text-cc-text">Settings</h2>
           <button
-            className="px-2 py-1 rounded text-cc-text-dim hover:bg-cc-surface hover:text-cc-text text-sm"
+            className="px-3 py-2 -my-1 md:px-2 md:py-1 md:my-0 rounded text-cc-text-dim hover:bg-cc-surface hover:text-cc-text text-base md:text-sm"
             onClick={onClose}
             title="Close (Esc)"
           >
@@ -61,14 +62,14 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
             {TOGGLES.map(({ key, label }) => (
               <label
                 key={key}
-                className="flex items-center justify-between gap-3 px-1 py-1 rounded hover:bg-cc-surface/60 cursor-pointer"
+                className="flex items-center justify-between gap-3 px-1 py-2.5 md:py-1 rounded hover:bg-cc-surface/60 cursor-pointer"
               >
                 <span className="text-sm text-cc-text">{label}</span>
                 <input
                   type="checkbox"
                   checked={settings[key] as boolean}
                   onChange={e => onChange({ [key]: e.target.checked })}
-                  className="accent-cc-green w-4 h-4"
+                  className="accent-cc-green w-5 h-5 md:w-4 md:h-4"
                 />
               </label>
             ))}

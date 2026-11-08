@@ -4,7 +4,7 @@ iOS doesn't let one app add features to another, so the analysis can't live *ins
 chess.com app. What works instead, with no Mac and no App Store:
 
 1. **Home Screen app** — Game Review added to the Home Screen gets its own icon and opens
-   full-screen like a regular app. One tap on *Analyze last game* analyzes your newest game.
+   full-screen like a regular app. Opening it loads and analyzes your newest game by itself.
 2. **Share → notification → app** — an iOS Shortcut in the chess.com app's share sheet sends the
    game to your phone as a notification. One tap on it opens the Home Screen app with the game.
 
@@ -15,6 +15,11 @@ with *Open as Web App* left on. Then enter your chess.com username once in the a
 
 To load a game:
 
+- **Just open the app** — it loads and analyzes your newest game on its own: when it starts, and
+  when you come back to it after at least a minute away (e.g. after playing a game). A game that
+  chess.com lists only later, while the app is open, is offered in a banner (*New game vs. … —
+  Analyze*); the app keeps looking for five minutes after each opening. Turn it off in
+  **Settings → Open my newest game on start**.
 - **Analyze last game** — loads and analyzes your newest game from chess.com's public archive. Once
   a game is loaded but not analyzed, the button analyzes that game instead. A game you just finished can
   take a few minutes to appear; the line under the buttons names the game that was loaded, so you
