@@ -36,18 +36,18 @@ export function ThemePicker({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div
-        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-lg border border-cc-border bg-cc-panel shadow-2xl"
+        className="w-full md:max-w-3xl max-h-[85vh] overflow-y-auto rounded-t-xl md:rounded-lg border border-cc-border bg-cc-panel shadow-2xl pb-[env(safe-area-inset-bottom)] md:pb-0 animate-sheet-up md:animate-none"
         onMouseDown={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-4 py-3 border-b border-cc-border bg-cc-panel">
           <h2 className="text-sm font-semibold text-cc-text">Board &amp; Pieces</h2>
           <button
-            className="px-2 py-1 rounded text-cc-text-dim hover:bg-cc-surface hover:text-cc-text text-sm"
+            className="px-3 py-2 -my-1 md:px-2 md:py-1 md:my-0 rounded text-cc-text-dim hover:bg-cc-surface hover:text-cc-text text-base md:text-sm"
             onClick={onClose}
             title="Close (Esc)"
           >
