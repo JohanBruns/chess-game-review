@@ -42,6 +42,13 @@ export function parseSharedGame(text: string): SharedGame | null {
   }
 }
 
+// The chess.com game id a PGN came from, read off its [Link "…"] header (chess.com writes one into
+// every PGN it exports). Lets the app put a short ?game=<id> in the address bar instead of a PGN.
+export function chessComGameId(pgn: string | null | undefined): string | null {
+  const link = pgn?.match(/\[Link\s+"([^"]*)"\]/)?.[1]
+  return link ? (link.match(GAME_LINK_RE)?.[2] ?? null) : null
+}
+
 // The subset of https://www.chess.com/callback/{live|daily}/game/{id} this module reads.
 export interface CallbackGame {
   pgn?: string

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Chessboard } from 'react-chessboard'
 import type { Arrow } from 'react-chessboard'
 import type { MoveClass } from '../lib/analysis/classify'
@@ -55,7 +55,7 @@ const MARK_FILE: Record<MoveClass, string> = {
   Inaccuracy: 'inaccuracy_128x.png',
   Mistake:    'mistake_128x.png',
   Blunder:    'blunder_128x.png',
-  Miss:       'miss_128x.png',
+  Miss:       'miss.svg',
   Forced:     'forced_128x.png',
 }
 
@@ -99,6 +99,28 @@ export function BoardPanel({
     )
   }, [piecesBasePath])
 
+  // Tap-to-move for the interactive modes (retry, puzzles, practice): tap one of your pieces,
+  // then the square it should go to — dragging a piece with a finger covers it and the target.
+  // Dropped whenever the position or the interactivity changes (React's adjust-on-change pattern).
+  const [selected, setSelected] = useState<string | null>(null)
+  const [selectionKey, setSelectionKey] = useState(`${fen}|${interactive}`)
+  if (selectionKey !== `${fen}|${interactive}`) {
+    setSelectionKey(`${fen}|${interactive}`)
+    setSelected(null)
+  }
+  const sideToMove = fen.split(' ')[1]
+  const handleSquareClick = ({ piece, square }: { piece: { pieceType: string } | null; square: string }) => {
+    const ownPiece = piece != null && piece.pieceType[0] === sideToMove
+    if (selected === null || square === selected) {
+      setSelected(ownPiece && square !== selected ? square : null)
+    } else if (ownPiece) {
+      setSelected(square)
+    } else {
+      setSelected(null)
+      onPieceDrop?.(selected, square)
+    }
+  }
+
   const squareStyles: Record<string, React.CSSProperties> = {}
   // chess.com tints both last-move squares in the move's class color at 50% (book moves in the
   // tan of the book icon — the same color the move list prints them in).
@@ -112,6 +134,9 @@ export function BoardPanel({
     for (const [sq, color] of Object.entries(extraSquareHighlights)) {
       squareStyles[sq] = { backgroundColor: color }
     }
+  }
+  if (interactive && selected) {
+    squareStyles[selected] = { backgroundColor: 'rgba(255, 255, 51, 0.5)' }
   }
 
   // react-chessboard memoizes internal children off the `arrows` array reference — without
@@ -156,9 +181,12 @@ export function BoardPanel({
             ? ({ piece }) => piece.pieceType[0] === fen.split(' ')[1]  // only the side to move
             : undefined,
           onPieceDrop: interactive && onPieceDrop
-            ? ({ sourceSquare, targetSquare }) =>
-                targetSquare !== null && onPieceDrop(sourceSquare, targetSquare)
+            ? ({ sourceSquare, targetSquare }) => {
+                setSelected(null)
+                return targetSquare !== null && onPieceDrop(sourceSquare, targetSquare)
+              }
             : undefined,
+          onSquareClick: interactive && onPieceDrop ? handleSquareClick : undefined,
           pieces: customPieces,
           boardStyle: {
             backgroundImage: `url(${boardImageUrl})`,

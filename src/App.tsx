@@ -7,6 +7,7 @@ import { PlayerBar } from './components/PlayerBar'
 import { NavControls } from './components/NavControls'
 import { BoardToolbar } from './components/BoardToolbar'
 import { MoveList } from './components/MoveList'
+import { MoveStrip } from './components/MoveStrip'
 import { EvalPanel } from './components/EvalPanel'
 import { EvalGraph } from './components/EvalGraph'
 import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
@@ -52,16 +53,19 @@ import {
   IconLink,
   IconPalette,
   IconPlay,
+  IconRetry,
   IconStar,
   IconTarget,
 } from './components/icons'
 import { useTheme } from './hooks/useTheme'
 import { useSettings } from './hooks/useSettings'
+import { useWakeLock } from './hooks/useWakeLock'
+import { useSwipe } from './hooks/useSwipe'
 import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
-import { parseSharedGame, fetchSharedGamePgn } from './lib/chesscom'
+import { parseSharedGame, fetchSharedGamePgn, chessComGameId } from './lib/chesscom'
 import { takePendingShare } from './lib/sharePush'
 import { deriveBoardView } from './lib/boardView'
 
@@ -177,11 +181,24 @@ function App() {
   // reuses the move-list stack until Phase 3 builds the real guided walkthrough). The chapters
   // replace each other rather than coexisting — see the two-chapter sidebar plan.
   const [sidebarView, setSidebarView] = useState<'setup' | 'summary' | 'review'>('setup')
+  // Phones scroll the whole page, and Start Review sits at the end of the summary — without this
+  // the review opened scrolled down to the move list instead of the coach and board. chess.com
+  // jumps back to the top too. (The desktop page doesn't scroll, so this is a no-op there.)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [sidebarView])
+  // A ?move=N link (see the URL effects further down) opens the guided review at that move once
+  // the analysis is in, instead of the summary.
+  const openReviewAfterAnalysisRef = useRef(false)
   const wasAnalyzingRef = useRef(false)
   useEffect(() => {
-    if (wasAnalyzingRef.current && !isAnalyzing && engineError == null) setSidebarView('summary')
+    if (wasAnalyzingRef.current && !isAnalyzing && engineError == null) {
+      setSidebarView(openReviewAfterAnalysisRef.current ? 'review' : 'summary')
+      openReviewAfterAnalysisRef.current = false
+    }
     wasAnalyzingRef.current = isAnalyzing
   }, [isAnalyzing, engineError])
+  useWakeLock(isAnalyzing)
 
   // Guided review sub-mode: idle (default per-move view), explain (steps through the
   // engine's PV on the board), best (previews the engine's best move on the board).
@@ -560,12 +577,18 @@ function App() {
   const [linkCopied, setLinkCopied] = useState(false)
   const handleCopyLink = useCallback(() => {
     if (!pgn) return
-    const url = `${window.location.origin}${window.location.pathname}?pgn=${encodeURIComponent(pgn)}`
+    // A chess.com game goes by its id (short, and opens at the current move); anything else
+    // carries its whole PGN.
+    const gameId = chessComGameId(pgn)
+    const query = gameId
+      ? `game=${gameId}${currentPly > 0 ? `&move=${currentPly}` : ''}`
+      : `pgn=${encodeURIComponent(pgn)}`
+    const url = `${window.location.origin}${window.location.pathname}?${query}`
     navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 1500)
     }).catch(() => {})
-  }, [pgn])
+  }, [pgn, currentPly])
 
   const handleExportImage = useCallback(() => {
     exportBoardImage({
@@ -581,16 +604,38 @@ function App() {
   // Start Review = chess.com's guided walkthrough. It jumps to the first move (ply 1) so the
   // coach starts commenting from move 1, exactly like chess.com (reference Screenshot_21 opens
   // on "e4 is a book move"), then steps forward one move per "Next".
+  // The chapters the user opens on purpose (the review from the summary, the loader from the
+  // summary's "+") get their own browser history entry, so Back — Android's back button, the
+  // browser's, a swipe — returns to the summary instead of leaving the app. The automatic
+  // setup → summary step after an analysis adds none. The in-app back arrows go back through
+  // that history entry when there is one, so the history never piles up.
+  const openChapter = useCallback((view: 'setup' | 'review') => {
+    window.history.pushState({ ...window.history.state, chapter: view }, '')
+    setSidebarView(view)
+  }, [])
   const handleStartReview = useCallback(() => {
     if (moves.length > 0) goToPly(1)
-    setSidebarView('review')
-  }, [goToPly, moves.length])
+    openChapter('review')
+  }, [goToPly, moves.length, openChapter])
   // Leaving the review chapter drops any best/explain preview so the summary board shows the
   // real position at the current ply, not a frozen engine-line preview.
   const handleBackToSummary = useCallback(() => {
     setReviewSub('idle')
     setExplainStep(0)
-    setSidebarView('summary')
+    const chapter = (window.history.state as { chapter?: string } | null)?.chapter
+    if (chapter === 'review' || chapter === 'setup') window.history.back()
+    else setSidebarView('summary')
+  }, [])
+  const hasReviewRef = useRef(false)
+  useEffect(() => {
+    function handlePopState(e: PopStateEvent) {
+      const chapter = (e.state as { chapter?: string } | null)?.chapter
+      setReviewSub('idle')
+      setExplainStep(0)
+      setSidebarView(!hasReviewRef.current ? 'setup' : chapter === 'review' || chapter === 'setup' ? chapter : 'summary')
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
   }, [])
 
   // Phase 8 entry points. Both clear any in-progress retry so the board is free to be taken over.
@@ -656,16 +701,26 @@ function App() {
   const [initialUsername, setInitialUsername] = useState<string | null>(null)
   const [autoFetch, setAutoFetch] = useState(false)
   const urlParamsHandledRef = useRef(false)
+  // ?move=N from the address bar: the ply to show once the linked game has loaded.
+  const pendingMoveRef = useRef<number | null>(null)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const pgn = params.get('pgn')
+    const game = params.get('game')
     const share = params.get('share')
     const username = params.get('username')
+    const move = Number(params.get('move'))
 
+    if (!urlParamsHandledRef.current && (pgn || game || share) && Number.isInteger(move) && move > 0) {
+      pendingMoveRef.current = move
+    }
     if (!urlParamsHandledRef.current && pgn) {
       urlParamsHandledRef.current = true
       handleLoadPgn(pgn)
+    } else if (!urlParamsHandledRef.current && game) {
+      urlParamsHandledRef.current = true
+      handleLoadInput(game)
     } else if (!urlParamsHandledRef.current && share) {
       urlParamsHandledRef.current = true
       handleLoadInput(share)
@@ -676,6 +731,40 @@ function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // intentionally runs once on mount
+
+  // The linked game is in: show the ?move=N position right away, and open the guided review
+  // there once the analysis is done (like chess.com's …/review?move=N links).
+  useEffect(() => {
+    if (pendingMoveRef.current === null || fens.length === 0) return
+    goToPly(Math.min(pendingMoveRef.current, fens.length - 1))
+    pendingMoveRef.current = null
+    openReviewAfterAnalysisRef.current = true
+  }, [fens, goToPly])
+
+  // Keep the address bar on the game and move being looked at, so a reload, a bookmark or a
+  // copied address opens the same spot: ?game=<chess.com id> when the PGN names its chess.com
+  // game (dropping the one-off ?share= / ?username= it was loaded through), plus ?move=N. A ?pgn=
+  // stays only while it is still the game on the board. replaceState keeps the chapter history.
+  useEffect(() => {
+    if (!isLoaded) return
+    const url = new URL(window.location.href)
+    const params = url.searchParams
+    if (params.has('pgn') && params.get('pgn') !== pgn) params.delete('pgn')
+    const gameId = params.has('pgn') ? null : chessComGameId(pgn)
+    if (gameId) {
+      params.set('game', gameId)
+      for (const key of ['share', 'username', 'autofetch']) params.delete(key)
+    } else {
+      params.delete('game')
+    }
+    if (currentPly > 0) params.set('move', String(currentPly))
+    else params.delete('move')
+    const query = params.toString()
+    const next = `${url.pathname}${query ? `?${query}` : ''}${url.hash}`
+    if (next !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
+      window.history.replaceState(window.history.state, '', next)
+    }
+  }, [isLoaded, pgn, currentPly])
 
   // A game sent from the chess.com share sheet (docs/iphone.md): public/sw.js parked it when the
   // push came in. Check whenever the app comes to the front, and when the service worker says so
@@ -765,6 +854,10 @@ function App() {
   const sideToMove: 'white' | 'black' = currentFen.split(' ')[1] === 'b' ? 'black' : 'white'
   const takeover = playout.active || puzzles.active
   const hasReview = evalResults.length > 0 && engineError == null
+  // For the popstate handler, which outlives renders.
+  useEffect(() => {
+    hasReviewRef.current = hasReview
+  }, [hasReview])
 
   // The guided-review coach, shared by ReviewView (desktop sidebar) and the phone top strip.
   const reviewCoachProps = {
@@ -800,6 +893,11 @@ function App() {
     ...(inReview
       ? [{ icon: <IconTarget />, label: 'Practice from here', onClick: handleStartPractice, disabled: !isReady || currentPly === 0 }]
       : []),
+    // The move list's ⚡ marker sits far below the board on phones, so the current key moment
+    // can be retried from here too.
+    ...(inReview && currentPly > 0 && visibleKeyMoments.has(currentPly - 1) && retryMoveIndex === null
+      ? [{ icon: <IconRetry />, label: 'Retry this move', onClick: () => handleRetry(currentPly - 1) }]
+      : []),
   ]
   const phoneExtras: FooterAction[] =
     inReview && reviewActive && reviewSub === 'idle'
@@ -820,12 +918,33 @@ function App() {
   // Like chess.com's phone page, the coach sits above the board; the desktop sidebar keeps its own
   // copy, hidden on phones. Smaller than chess.com's (80px and 96px), to leave room for the board
   // and the accuracy on one screen.
+  // Retry feedback: in the desktop review sidebar under the move list, and on phones in the strip
+  // above the board — under the move list it would be scrolled far out of view.
+  const retryPanel =
+    retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] ? (
+      <RetryPanel
+        originalSan={moves[retryMoveIndex].san}
+        originalClassification={moveAnalyses[retryMoveIndex].classification}
+        attempt={attemptResult}
+        onRetryAgain={handleRetryAgain}
+        onExit={handleExitRetry}
+      />
+    ) : null
   const phoneCoach =
-    !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'summary' ? (
+    retryPanel && !takeover ? retryPanel
+    : !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'summary' ? (
       <CoachSpeech align="bottom" size={48}>{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
     ) : sidebarView === 'review' ? (
       <ReviewCoach {...reviewCoachProps} size={64} />
     ) : null
+
+  // Swiping across the board steps through the game like the footer arrows (the engine line
+  // while it's being explained). Not while a piece can be moved on the board — that's a drag.
+  const boardSwipe = useSwipe({
+    enabled: isLoaded && !takeover && !boardView.interactive,
+    onSwipeLeft: explaining ? handleLineNext : goToNext,
+    onSwipeRight: explaining ? handleLinePrev : goToPrev,
+  })
 
   const playerBar = (side: 'white' | 'black') => (
     <PlayerBar
@@ -848,7 +967,7 @@ function App() {
     // Phones (< md) follow chess.com's mobile page (375x812) instead: a scrolling page with the
     // coach on top, the board spanning the full width, the sidebar below it and a footer bar
     // fixed to the bottom of the screen (PhoneFooter).
-    <div className="page-frame min-h-screen min-h-dvh pt-2 pb-[calc(49px+env(safe-area-inset-bottom))] bg-cc-bg text-cc-text flex flex-col md:h-screen md:h-dvh md:min-h-0 md:overflow-hidden md:flex-row md:justify-center md:p-4">
+    <div className="page-frame min-h-screen min-h-dvh pt-2 pb-[calc(49px+env(safe-area-inset-bottom))] bg-cc-bg text-cc-text flex flex-col md:h-screen md:h-dvh md:min-h-0 md:overflow-hidden md:flex-row md:justify-center md:p-4 short:p-2">
       <ThemePicker
         open={themeOpen}
         onClose={() => setThemeOpen(false)}
@@ -880,7 +999,10 @@ function App() {
           <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(topSide)}</div>
           <div className="flex px-px md:px-0 md:h-[var(--board)]">
             <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
-            <div className="flex-1 min-w-0 ml-[9px] aspect-square md:flex-initial md:ml-2.5 md:h-full">
+            <div
+              className="flex-1 min-w-0 ml-[9px] aspect-square md:flex-initial md:ml-2.5 md:h-full"
+              {...boardSwipe}
+            >
               <BoardErrorBoundary>
                 <BoardPanel
                   fen={boardView.fen}
@@ -902,6 +1024,12 @@ function App() {
             </div>
           </div>
           <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(bottomSide)}</div>
+          {/* Not in the summary: there the accuracy has to fit on the first screen. */}
+          {isLoaded && !takeover && !inSummary && (
+            <div className="md:hidden -mt-1">
+              <MoveStrip moves={moves} currentPly={currentPly} onSelectPly={goToPly} moveAnalyses={moveAnalyses} />
+            </div>
+          )}
         </div>
         <div className="hidden md:flex">
           <BoardToolbar
@@ -966,7 +1094,7 @@ function App() {
               currentPly={currentPly}
               onSelectPly={goToPly}
               onStartReview={handleStartReview}
-              onNewGame={() => setSidebarView('setup')}
+              onNewGame={() => openChapter('setup')}
               puzzleCount={puzzleList.length}
               onStartPuzzles={handleStartPuzzles}
               winner={winner}
@@ -1008,28 +1136,16 @@ function App() {
                   moveAnalyses={moveAnalyses}
                 />
               }
-              retry={
-                retryMoveIndex !== null && moveAnalyses?.[retryMoveIndex] ? (
-                  <div className="shrink-0 pt-2">
-                    <RetryPanel
-                      originalSan={moves[retryMoveIndex].san}
-                      originalClassification={moveAnalyses[retryMoveIndex].classification}
-                      attempt={attemptResult}
-                      onRetryAgain={handleRetryAgain}
-                      onExit={handleExitRetry}
-                    />
-                  </div>
-                ) : null
-              }
+              retry={retryPanel && <div className="hidden md:block shrink-0 pt-2">{retryPanel}</div>}
             />
           ) : (
-            <div className="flex flex-col flex-1 min-h-0 animate-chapter-fade-in">
+            <div className="flex flex-col flex-1 min-h-0 short:overflow-y-auto animate-chapter-fade-in">
               <SidebarHeader
                 title="Analysis"
                 icon={<IconTarget size={22} className="text-cc-green" />}
                 start={
                   hasReview
-                    ? { icon: <IconArrowLeft />, label: 'Back to Game Review', onClick: () => setSidebarView('summary') }
+                    ? { icon: <IconArrowLeft />, label: 'Back to Game Review', onClick: handleBackToSummary }
                     : undefined
                 }
               />
