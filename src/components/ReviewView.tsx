@@ -57,6 +57,11 @@ interface ReviewViewProps {
   onLineNext: () => void
   onGotIt: () => void
   onResume: () => void
+  // The last move has been reviewed: a closing card with what to do next.
+  finished?: boolean
+  puzzleCount?: number
+  onStartPuzzles?: () => void
+  onNextGame?: () => void
 
   // Existing components, instantiated by App with all their props, dropped into the layout.
   moveList: ReactNode
@@ -99,7 +104,7 @@ export function ReviewCoach({
       {active ? (
         // Reserved height so short and long comments don't make the layout jump: 90px in the
         // desktop sidebar, 73px (a 97px bubble) above the phone board.
-        <div className="flex flex-col min-h-[73px] md:min-h-[90px]">
+        <div className="flex flex-col min-h-[73px] md:min-h-[90px] short:min-h-0">
           <div className="h-[30px] flex items-start gap-1.5">
             {sub === 'explain' ? (
               <IconBulb size={24} className="shrink-0 mt-0.5 text-[#f7c631]" />
@@ -195,6 +200,10 @@ export function ReviewView({
   onLineNext,
   onGotIt,
   onResume,
+  finished = false,
+  puzzleCount = 0,
+  onStartPuzzles,
+  onNextGame,
   moveList,
   graph,
   retry,
@@ -207,13 +216,13 @@ export function ReviewView({
         start={{ icon: <IconArrowLeft />, label: 'Back to summary', onClick: onBack }}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col p-6 md:px-4 md:pt-4 md:pb-0">
+      <div className="flex-1 min-h-0 flex flex-col p-6 md:px-4 md:pt-4 md:pb-0 short:pt-2 short:px-3">
         <div className="shrink-0 flex flex-col gap-2">
           {/* Phones show the coach above the board instead (App's top strip). */}
           {coachEnabled && (
             // chess.com reserves a fixed 156px for the coach so the buttons below never jump
             // between short and long comments.
-            <div className="hidden md:block min-h-[156px]">
+            <div className="hidden md:block min-h-[156px] short:min-h-0">
               <ReviewCoach
                 active={active}
                 headline={headline}
@@ -308,11 +317,55 @@ export function ReviewView({
           )}
         </div>
 
+        {finished && (
+          <ReviewDone
+            puzzleCount={puzzleCount}
+            onStartPuzzles={onStartPuzzles}
+            onSummary={onBack}
+            onNextGame={onNextGame}
+          />
+        )}
+
         {moveList}
 
         {retry}
 
-        {graph && <div className="shrink-0 pt-2">{graph}</div>}
+        {graph && <div className="shrink-0 pt-2 short:hidden">{graph}</div>}
+      </div>
+    </div>
+  )
+}
+
+// End of the walkthrough: the review used to just stop at the last move. Points at what's worth
+// doing next — drilling this game's mistakes, the numbers again, or the next game.
+function ReviewDone({
+  puzzleCount,
+  onStartPuzzles,
+  onSummary,
+  onNextGame,
+}: {
+  puzzleCount: number
+  onStartPuzzles?: () => void
+  onSummary: () => void
+  onNextGame?: () => void
+}) {
+  return (
+    <div className="shrink-0 mt-2 mb-1 p-3 rounded-[5px] bg-white/5 flex flex-col gap-2 animate-chapter-fade-in">
+      <p className="text-sm font-semibold text-white/85">That's the whole game. Review complete!</p>
+      <div className="flex flex-wrap gap-2">
+        {puzzleCount > 0 && onStartPuzzles && (
+          <button onClick={onStartPuzzles} className={`${PRIMARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+            Puzzles ({puzzleCount})
+          </button>
+        )}
+        <button onClick={onSummary} className={`${SECONDARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+          Summary
+        </button>
+        {onNextGame && (
+          <button onClick={onNextGame} className={`${SECONDARY_BTN} flex-1 px-3 whitespace-nowrap`}>
+            Next game
+          </button>
+        )}
       </div>
     </div>
   )

@@ -13,14 +13,14 @@ interface SidebarHeaderProps {
 }
 
 const ICON_BTN =
-  'w-11 h-12 shrink-0 flex items-center justify-center text-white/50 hover:text-white transition-colors'
+  'w-11 h-12 short:h-10 shrink-0 flex items-center justify-center text-white/50 hover:text-white transition-colors'
 
 // chess.com's sidebar header, measured at 1440x900: 48px tall on a rgba(0,0,0,.14) strip, 44px
 // icon buttons at either end and the title (17px/600, 85% white) centered with its 24px feature
 // icon. Every sidebar chapter uses it so the card's top edge never jumps between chapters.
 export function SidebarHeader({ title, icon, start, end }: SidebarHeaderProps) {
   return (
-    <div className="shrink-0 h-12 flex items-center bg-black/14 rounded-t-[5px]">
+    <div className="shrink-0 h-12 short:h-10 flex items-center bg-black/14 rounded-t-[5px]">
       {start ? (
         <button className={ICON_BTN} onClick={start.onClick} title={start.label} aria-label={start.label}>
           {start.icon}

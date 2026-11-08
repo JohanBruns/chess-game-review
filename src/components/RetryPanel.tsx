@@ -26,7 +26,7 @@ export function RetryPanel({
       </div>
 
       {attempt === null && (
-        <div className="text-cc-text-dim text-xs">Drag a piece to make your move.</div>
+        <div className="text-cc-text-dim text-xs">Drag or tap a piece to make your move.</div>
       )}
 
       {attempt !== null && attempt.isCorrect === true && (

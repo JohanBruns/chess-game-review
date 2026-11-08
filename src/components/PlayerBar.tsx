@@ -79,7 +79,7 @@ export function PlayerBar({ name, elo, clockSeconds, side, active, fen, piecesBa
       </div>
       {clockSeconds != null && (
         <div
-          className={`shrink-0 w-[106px] md:w-[135px] h-10 rounded-[3px] flex items-center justify-end ${
+          className={`shrink-0 w-[106px] md:w-[135px] short:w-[106px] h-10 rounded-[3px] flex items-center justify-end ${
             side === 'white' ? 'bg-white text-[#262421]' : 'bg-[#262421] text-white'
           } ${active ? '' : 'opacity-50'}`}
         >

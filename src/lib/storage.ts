@@ -22,3 +22,11 @@ export function writeStorage(key: string, value: string): void {
     // storage unavailable — the value just won't persist across reloads
   }
 }
+
+export function removeStorage(key: string): void {
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    // storage unavailable — nothing was persisted anyway
+  }
+}
