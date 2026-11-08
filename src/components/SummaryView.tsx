@@ -7,7 +7,7 @@ import { summaryHeadline } from '../lib/analysis/review'
 import type { EvalResult } from '../lib/engine/useEngine'
 import type { MoveAnalysis } from '../lib/analysis/classify'
 import { usePlayerAvatar } from '../hooks/usePlayerAvatar'
-import { EvalGraph } from './EvalGraph'
+import { LazyEvalGraph } from './LazyEvalGraph'
 import { SidebarHeader } from './SidebarHeader'
 import { CoachSpeech } from './CoachSpeech'
 import { IconChevronDown, IconChevronUp, IconPlus, IconPuzzle, PawnAvatar } from './icons'
@@ -123,7 +123,7 @@ export function SummaryView({
           </div>
 
           <div>
-            <EvalGraph
+            <LazyEvalGraph
               evalResults={evalResults}
               currentPly={currentPly}
               onSelectPly={onSelectPly}
