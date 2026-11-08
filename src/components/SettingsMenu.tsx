@@ -80,7 +80,7 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
               <select
                 value={settings.reviewAs}
                 onChange={e => onChange({ reviewAs: e.target.value as ReviewSettings['reviewAs'] })}
-                className="bg-cc-surface text-cc-text text-sm rounded px-2 py-1 border border-cc-border"
+                className="bg-cc-surface text-cc-text text-base md:text-sm rounded px-2 py-1 border border-cc-border"
               >
                 <option value="both">Both</option>
                 <option value="white">White</option>
@@ -92,7 +92,7 @@ export function SettingsMenu({ open, onClose, settings, onChange }: SettingsMenu
               <select
                 value={settings.depth}
                 onChange={e => onChange({ depth: Number(e.target.value) as ReviewSettings['depth'] })}
-                className="bg-cc-surface text-cc-text text-sm rounded px-2 py-1 border border-cc-border"
+                className="bg-cc-surface text-cc-text text-base md:text-sm rounded px-2 py-1 border border-cc-border"
               >
                 <option value={12}>Fast</option>
                 <option value={15}>Balanced</option>

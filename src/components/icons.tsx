@@ -150,6 +150,16 @@ export function IconPlay(p: IconProps) {
   )
 }
 
+// Counter-clockwise arrow: "try this move again".
+export function IconRetry(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path {...STROKE} d="M4 12a8 8 0 1 0 2.5-5.8" />
+      <path {...STROKE} d="M4 4.5v4.5h4.5" />
+    </Svg>
+  )
+}
+
 export function IconPause(p: IconProps) {
   return (
     <Svg {...p}>

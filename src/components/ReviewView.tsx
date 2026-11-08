@@ -99,7 +99,7 @@ export function ReviewCoach({
       {active ? (
         // Reserved height so short and long comments don't make the layout jump: 90px in the
         // desktop sidebar, 73px (a 97px bubble) above the phone board.
-        <div className="flex flex-col min-h-[73px] md:min-h-[90px]">
+        <div className="flex flex-col min-h-[73px] md:min-h-[90px] short:min-h-0">
           <div className="h-[30px] flex items-start gap-1.5">
             {sub === 'explain' ? (
               <IconBulb size={24} className="shrink-0 mt-0.5 text-[#f7c631]" />
@@ -207,13 +207,13 @@ export function ReviewView({
         start={{ icon: <IconArrowLeft />, label: 'Back to summary', onClick: onBack }}
       />
 
-      <div className="flex-1 min-h-0 flex flex-col p-6 md:px-4 md:pt-4 md:pb-0">
+      <div className="flex-1 min-h-0 flex flex-col p-6 md:px-4 md:pt-4 md:pb-0 short:pt-2 short:px-3">
         <div className="shrink-0 flex flex-col gap-2">
           {/* Phones show the coach above the board instead (App's top strip). */}
           {coachEnabled && (
             // chess.com reserves a fixed 156px for the coach so the buttons below never jump
             // between short and long comments.
-            <div className="hidden md:block min-h-[156px]">
+            <div className="hidden md:block min-h-[156px] short:min-h-0">
               <ReviewCoach
                 active={active}
                 headline={headline}
@@ -312,7 +312,7 @@ export function ReviewView({
 
         {retry}
 
-        {graph && <div className="shrink-0 pt-2">{graph}</div>}
+        {graph && <div className="shrink-0 pt-2 short:hidden">{graph}</div>}
       </div>
     </div>
   )

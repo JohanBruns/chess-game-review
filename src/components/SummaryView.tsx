@@ -16,7 +16,11 @@ import { IconChevronDown, IconChevronUp, IconPlus, IconPuzzle, PawnAvatar } from
 // bar (see summaryHeadline's own >=90 check for the coach headline).
 const CELEBRATION_ACCURACY = 90
 
-const PHASE_ROWS: { key: 'opening' | 'middlegame' | 'endgame'; label: string }[] = [
+// The tally rows chess.com keeps visible while the table is collapsed (Book, Good, Inaccuracy and
+// a zero Brilliant fold away).
+const COLLAPSED_CLASSES = new Set<MoveClass>(['Great', 'Best', 'Excellent', 'Mistake', 'Miss', 'Blunder'])
+
+const PHASE_ROWS:{ key: 'opening' | 'middlegame' | 'endgame'; label: string }[] = [
   { key: 'opening', label: 'Opening' },
   { key: 'middlegame', label: 'Middlegame' },
   { key: 'endgame', label: 'Endgame' },
@@ -88,7 +92,16 @@ export function SummaryView({
   onStartPuzzles,
   winner,
 }: SummaryViewProps) {
-  const [tableExpanded, setTableExpanded] = useState(true)
+  // Collapsed by default, like chess.com (checked live 2026-11-08): only the rows that tell the
+  // story stay, the rest folds away behind the chevron. Saves a lot of scrolling on phones.
+  const [tableExpanded, setTableExpanded] = useState(false)
+  const visibleClasses = tableExpanded
+    ? CLASS_DISPLAY_ORDER
+    : CLASS_DISPLAY_ORDER.filter(cls =>
+        COLLAPSED_CLASSES.has(cls) ||
+        // A Brilliant is worth showing whenever there is one.
+        (cls === 'Brilliant' && whiteSummary.classificationCounts[cls] + blackSummary.classificationCounts[cls] > 0),
+      )
   const bestAccuracy = Math.max(whiteSummary.accuracy ?? 0, blackSummary.accuracy ?? 0)
   const celebrate = bestAccuracy >= CELEBRATION_ACCURACY
 
@@ -140,18 +153,16 @@ export function SummaryView({
 
           <div className="my-4 border-t border-white/10" />
 
-          {tableExpanded && (
-            <div className="flex flex-col">
-              {CLASS_DISPLAY_ORDER.map(cls => (
-                <TallyRow
-                  key={cls}
-                  cls={cls}
-                  white={whiteSummary.classificationCounts[cls]}
-                  black={blackSummary.classificationCounts[cls]}
-                />
-              ))}
-            </div>
-          )}
+          <div className="flex flex-col">
+            {visibleClasses.map(cls => (
+              <TallyRow
+                key={cls}
+                cls={cls}
+                white={whiteSummary.classificationCounts[cls]}
+                black={blackSummary.classificationCounts[cls]}
+              />
+            ))}
+          </div>
 
           <div className="flex justify-center pt-2.5">
             <button
@@ -193,10 +204,10 @@ export function SummaryView({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pt-[5px] pb-6">
+      <div className="shrink-0 px-6 pt-[5px] pb-6 short:pb-2">
         <button
           onClick={onStartReview}
-          className="cc-btn-primary w-full h-16 rounded-[10px] text-[22px] font-extrabold"
+          className="cc-btn-primary w-full h-16 short:h-11 rounded-[10px] text-[22px] short:text-lg font-extrabold"
         >
           Start Review
         </button>

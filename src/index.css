@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* `short:` = the side-by-side (md+) layout on a screen too flat for it, above all a phone held
+   sideways (844x390). The md layout is kept there (a full-width phone board would be far taller
+   than the screen) but packed tighter, so the board, the coach and the step buttons all fit. */
+@custom-variant short (@media (width >= 48rem) and (height < 32rem));
+
 @theme {
   --color-cc-bg: #302e2b;
   --color-cc-bg-dark: #1e1c1a;
@@ -124,5 +129,14 @@ body {
 @media (max-width: 767.98px) {
   .page-frame {
     --sidebar-w: 100%;
+  }
+}
+/* Flat screens (the `short:` variant above): 8px page padding instead of 16, so the height
+   left for the board is 100dvh - 16 - 2x40 player bars - 2x10 gaps = 100dvh - 116px, and the
+   width beside it 16 + 30 + 10 + 32 = 88px plus the sidebar, which gets a bit more of the screen. */
+@media (min-width: 48rem) and (max-height: 31.99rem) {
+  .page-frame {
+    --sidebar-w: clamp(280px, 40vw, 360px);
+    --board: max(200px, min(calc(100dvh - 116px), calc(100vw - 88px - var(--sidebar-w))));
   }
 }
