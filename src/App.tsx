@@ -21,7 +21,6 @@ import {
   formatEvalBadge,
   buildLineSteps,
   buildBestPreview,
-  summaryHeadline,
 } from './lib/analysis/review'
 import type { HeadlineParts } from './lib/analysis/review'
 import { detectThemes, type ThemeHighlight } from './lib/analysis/tactics'
@@ -30,7 +29,7 @@ import { explainLine } from './lib/analysis/explain'
 import { attemptMove, isBestMove } from './lib/analysis/retry'
 import { extractPuzzles } from './lib/analysis/puzzles'
 import { OpeningBadge } from './components/OpeningBadge'
-import { EvalBar } from './components/EvalBar'
+import { EvalBar, EvalBarHorizontal } from './components/EvalBar'
 import { ReviewCoach, ReviewView } from './components/ReviewView'
 import { BoardErrorBoundary } from './components/BoardErrorBoundary'
 import { SummaryView } from './components/SummaryView'
@@ -40,12 +39,12 @@ import { PuzzlePanel } from './components/PuzzlePanel'
 import { ThemePicker } from './components/ThemePicker'
 import { SettingsMenu } from './components/SettingsMenu'
 import { SidebarHeader } from './components/SidebarHeader'
-import { CoachSpeech } from './components/CoachSpeech'
 import { PhoneFooter, type FooterAction } from './components/PhoneFooter'
+import { PhoneMenu } from './components/PhoneMenu'
+import { PhoneReviewBar, type ReviewBarAction } from './components/PhoneReviewBar'
 import { NewestGameBanner } from './components/NewestGameBanner'
 import {
   IconArrowLeft,
-  IconArrowRight,
   IconBulb,
   IconCamera,
   IconCheck,
@@ -53,7 +52,6 @@ import {
   IconGear,
   IconLink,
   IconPalette,
-  IconPlay,
   IconRetry,
   IconShare,
   IconStar,
@@ -1024,9 +1022,10 @@ function App() {
     sub: reviewSub,
   }
 
-  // Phones (PhoneFooter): the gear menu collects the desktop controls column's actions, the green
-  // middle button is the current chapter's main step, and the arrows step the main line — or the
-  // engine line while it is being explained, like the arrow keys.
+  // Phones, after the chess.com app: the summary has the screen to itself (no board, no footer),
+  // the guided review gets a header, a bar of labeled actions and a big "Next" (PhoneReviewBar),
+  // and the loader and practice/puzzles keep the compact footer (PhoneFooter). The gear menu
+  // collects the desktop controls column's actions either way.
   const inSummary = sidebarView === 'summary' && hasReview && !takeover
   const inReview = sidebarView === 'review' && hasReview && !takeover
   const explaining = inReview && reviewSub === 'explain'
@@ -1044,36 +1043,45 @@ function App() {
     ...(inReview
       ? [{ icon: <IconTarget />, label: 'Practice from here', onClick: handleStartPractice, disabled: !isReady || currentPly === 0 }]
       : []),
-    // The move list's ⚡ marker sits far below the board on phones, so the current key moment
-    // can be retried from here too.
-    ...(inReview && currentPly > 0 && visibleKeyMoments.has(currentPly - 1) && retryMoveIndex === null
-      ? [{ icon: <IconRetry />, label: 'Retry this move', onClick: () => handleRetry(currentPly - 1) }]
-      : []),
   ]
   const reviewFinished = inReview && reviewActive && reviewSub === 'idle' && !canGoNext
   const shareableMove = playedClass === 'Brilliant' || playedClass === 'Great'
-  const phoneExtras: FooterAction[] =
-    inReview && reviewActive && reviewSub === 'idle'
-      ? [
-          ...(canExplain ? [{ icon: <IconBulb size={22} />, label: 'Explain', onClick: handleExplain }] : []),
-          ...(canBest ? [{ icon: <IconStar size={22} />, label: 'Best move', onClick: handleBest }] : []),
-        ]
-      : []
-  // Only while there's room left of the green button (gear + two more).
-  if (inReview && reviewActive && reviewSub === 'idle' && shareableMove && phoneExtras.length < 2) {
-    phoneExtras.push({ icon: <IconShare size={22} />, label: 'Share this move', onClick: handleShareMove })
-  }
-  const phonePrimary: FooterAction | null = inSummary
-    ? { icon: <IconStar size={20} />, label: 'Start Review', onClick: handleStartReview }
-    : !inReview
-      ? null
-      : reviewActive && reviewSub === 'best'
-        ? { icon: <IconPlay size={20} />, label: 'Resume', onClick: handleResume }
-        : reviewActive && reviewSub === 'explain'
-          ? { icon: <IconCheck size={20} />, label: 'Got it!', onClick: handleGotIt }
-          : reviewFinished
-            ? { icon: <IconCheck size={20} />, label: 'Finish review', onClick: handleBackToSummary }
-            : { icon: <IconArrowRight size={20} />, label: 'Next', onClick: goToNext, disabled: !canGoNext }
+  const canRetryHere = currentPly > 0 && visibleKeyMoments.has(currentPly - 1)
+  const inRetry = retryMoveIndex !== null
+  const bestAvailable =
+    analysis != null && bestSan != null && !isEnginesBest &&
+    analysis.classification !== 'Book' && analysis.classification !== 'Forced'
+  // Left to right: Retry (at a key moment; Share on a Brilliant/Great move instead), Show (the
+  // engine line, = Explain) and Best. Each toggles its own mode back off.
+  const reviewBarActions: (ReviewBarAction | null)[] = [
+    inRetry
+      ? { icon: <IconRetry size={24} />, label: 'Exit retry', onClick: handleExitRetry, active: true }
+      : reviewActive && reviewSub === 'idle' && canRetryHere
+        ? { icon: <IconRetry size={24} />, label: 'Retry', onClick: () => handleRetry(currentPly - 1) }
+        : reviewActive && reviewSub === 'idle' && shareableMove
+          ? { icon: <IconShare size={24} />, label: 'Share', onClick: handleShareMove }
+          : null,
+    {
+      icon: <IconBulb size={24} />,
+      label: 'Show',
+      onClick: reviewSub === 'explain' ? handleGotIt : handleExplain,
+      disabled: !reviewActive || inRetry || (reviewSub !== 'explain' && !canExplain),
+      active: reviewSub === 'explain',
+    },
+    {
+      icon: <IconStar size={24} />,
+      label: 'Best',
+      onClick: reviewSub === 'best' ? handleResume : handleBest,
+      disabled: !reviewActive || inRetry || (reviewSub !== 'best' && !bestAvailable),
+      active: reviewSub === 'best',
+    },
+  ]
+  const reviewBarPrimary =
+    explaining
+      ? { label: 'Got it!', onClick: handleGotIt }
+      : reviewFinished
+        ? { label: 'Finish', onClick: handleBackToSummary }
+        : { label: 'Next', onClick: goToNext, disabled: !canGoNext }
   // Like chess.com's phone page, the coach sits above the board; the desktop sidebar keeps its own
   // copy, hidden on phones. Smaller than chess.com's (80px and 96px), to leave room for the board
   // and the accuracy on one screen.
@@ -1091,9 +1099,7 @@ function App() {
     ) : null
   const phoneCoach =
     retryPanel && !takeover ? retryPanel
-    : !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'summary' ? (
-      <CoachSpeech align="bottom" size={48}>{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
-    ) : sidebarView === 'review' ? (
+    : !settings.coachEnabled || takeover || !hasReview ? null : sidebarView === 'review' ? (
       <ReviewCoach {...reviewCoachProps} size={64} />
     ) : null
 
@@ -1126,7 +1132,15 @@ function App() {
     // Phones (< md) follow chess.com's mobile page (375x812) instead: a scrolling page with the
     // coach on top, the board spanning the full width, the sidebar below it and a footer bar
     // fixed to the bottom of the screen (PhoneFooter).
-    <div className="page-frame min-h-screen min-h-dvh pt-2 pb-[calc(49px+env(safe-area-inset-bottom))] bg-cc-bg text-cc-text flex flex-col md:h-screen md:h-dvh md:min-h-0 md:overflow-hidden md:flex-row md:justify-center md:p-4 short:p-2">
+    // overflow-x-clip: a classification badge on the h-file spills a few px past the screen edge;
+    // without the clip phones zoom out to fit it, and the fixed bottom bars slide off the screen.
+    <div className={`page-frame min-h-screen min-h-dvh pt-2 max-md:overflow-x-clip ${
+      inSummary
+        ? 'max-md:h-dvh max-md:overflow-hidden'
+        : inReview
+          ? 'pb-[calc(72px+env(safe-area-inset-bottom))]'
+          : 'pb-[calc(49px+env(safe-area-inset-bottom))]'
+    } bg-cc-bg text-cc-text flex flex-col md:h-screen md:h-dvh md:min-h-0 md:overflow-hidden md:flex-row md:justify-center md:p-4 short:p-2`}>
       <ThemePicker
         open={themeOpen}
         onClose={() => setThemeOpen(false)}
@@ -1143,6 +1157,20 @@ function App() {
         onChange={updateSettings}
       />
 
+      {inReview && (
+        <div className="md:hidden">
+          <SidebarHeader
+            title="Game Review"
+            icon={<img src="/marks/best_128x.png" alt="" className="w-6 h-6" />}
+            start={{ icon: <IconArrowLeft />, label: 'Back to summary', onClick: handleBackToSummary }}
+            end={<PhoneMenu actions={phoneMenu} placement="down" />}
+          />
+          <div className="px-3 pt-2.5 pb-3">
+            <EvalBarHorizontal evalResult={boardView.evalResult} label={reviewEvalBadge} />
+          </div>
+        </div>
+      )}
+
       {phoneCoach && (
         <div className={`md:hidden px-3 pb-2 ${sidebarView === 'review' ? 'min-h-[72px]' : ''}`}>
           {phoneCoach}
@@ -1153,13 +1181,15 @@ function App() {
           player bar down (chess.com's gear sits level with the top bar). On phones the player
           bars get 16px gutters, the 20px eval bar sits 1px from the edge and the board takes
           the rest of the width; the controls move into PhoneFooter's menu. ── */}
-      <div className="shrink-0 flex">
+      <div className={`shrink-0 flex ${inSummary ? 'max-md:hidden' : ''}`}>
         <div className="flex-1 min-w-0 flex flex-col gap-2.5 md:flex-initial">
-          <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(topSide)}</div>
-          <div className="flex px-px md:px-0 md:h-[var(--board)]">
-            <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
+          <div className={`mx-4 md:mx-0 md:ml-10 md:w-[var(--board)] ${inReview ? 'max-md:hidden' : ''}`}>{playerBar(topSide)}</div>
+          <div className={`flex md:px-0 md:h-[var(--board)] ${inReview ? '' : 'px-px'}`}>
+            <div className={`flex self-stretch ${inReview ? 'max-md:hidden' : ''}`}>
+              <EvalBar evalResult={boardView.evalResult} orientation={orientation} />
+            </div>
             <div
-              className="flex-1 min-w-0 ml-[9px] aspect-square md:flex-initial md:ml-2.5 md:h-full"
+              className={`flex-1 min-w-0 aspect-square md:flex-initial md:ml-2.5 md:h-full ${inReview ? 'ml-0' : 'ml-[9px]'}`}
               {...boardSwipe}
             >
               <BoardErrorBoundary>
@@ -1182,11 +1212,22 @@ function App() {
               </BoardErrorBoundary>
             </div>
           </div>
-          <div className="mx-4 md:mx-0 md:ml-10 md:w-[var(--board)]">{playerBar(bottomSide)}</div>
-          {/* Not in the summary: there the accuracy has to fit on the first screen. */}
+          <div className={`mx-4 md:mx-0 md:ml-10 md:w-[var(--board)] ${inReview ? 'max-md:hidden' : ''}`}>{playerBar(bottomSide)}</div>
           {isLoaded && !takeover && !inSummary && (
-            <div className="md:hidden -mt-1">
-              <MoveStrip moves={moves} currentPly={currentPly} onSelectPly={goToPly} moveAnalyses={moveAnalyses} />
+            <div className={`md:hidden ${inReview ? '' : '-mt-1'}`}>
+              <MoveStrip
+                moves={moves}
+                currentPly={currentPly}
+                onSelectPly={goToPly}
+                moveAnalyses={moveAnalyses}
+                arrows={inReview ? {
+                  // Step the engine line while it's being explained, like the arrow keys.
+                  onPrev: explaining ? handleLinePrev : goToPrev,
+                  onNext: explaining ? handleLineNext : goToNext,
+                  canPrev: explaining ? explainStep > 0 : canGoPrev,
+                  canNext: explaining ? explainStep < lineSteps.length - 1 : canGoNext,
+                } : undefined}
+              />
             </div>
           )}
         </div>
@@ -1212,10 +1253,12 @@ function App() {
           chapter draws its own 48px SidebarHeader; the nav footer closes the card off in every
           chapter but the summary, which pins its Start Review button there instead. ── */}
       <div
-        className="flex-auto mt-2 bg-black/20 flex flex-col md:flex-initial md:shrink-0 md:min-h-0 md:mt-0 md:rounded-[5px] md:overflow-hidden"
+        className={`flex-auto mt-2 bg-black/20 flex flex-col md:flex-initial md:shrink-0 md:min-h-0 md:mt-0 md:rounded-[5px] md:overflow-hidden ${
+          inSummary ? 'max-md:mt-0 max-md:min-h-0 max-md:bg-transparent' : inReview ? 'max-md:hidden' : ''
+        }`}
         style={{ width: 'var(--sidebar-w)' }}
       >
-        <div className="flex-auto flex flex-col md:flex-1 md:min-h-0">
+        <div className={`flex-auto flex flex-col md:flex-1 md:min-h-0 ${inSummary ? 'max-md:min-h-0' : ''}`}>
           {playout.active ? (
             <PlayoutPanel
               userColor={playout.userColor}
@@ -1259,6 +1302,7 @@ function App() {
               puzzleCount={puzzleList.length}
               onStartPuzzles={handleStartPuzzles}
               winner={winner}
+              phoneMenu={<PhoneMenu actions={phoneMenu} placement="down" />}
             />
           ) : sidebarView === 'review' && hasReview ? (
             <ReviewView
@@ -1402,15 +1446,17 @@ function App() {
         />
       )}
 
-      <PhoneFooter
-        menu={phoneMenu}
-        extras={phoneExtras}
-        primary={phonePrimary}
-        onPrev={explaining ? handleLinePrev : goToPrev}
-        onNext={explaining ? handleLineNext : goToNext}
-        canPrev={explaining ? explainStep > 0 : isLoaded && canGoPrev && !takeover}
-        canNext={explaining ? explainStep < lineSteps.length - 1 : isLoaded && canGoNext && !takeover}
-      />
+      {inReview ? (
+        <PhoneReviewBar actions={reviewBarActions} primary={reviewBarPrimary} />
+      ) : !inSummary && (
+        <PhoneFooter
+          menu={phoneMenu}
+          onPrev={goToPrev}
+          onNext={goToNext}
+          canPrev={isLoaded && canGoPrev && !takeover}
+          canNext={isLoaded && canGoNext && !takeover}
+        />
+      )}
     </div>
   )
 }

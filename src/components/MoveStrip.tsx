@@ -4,19 +4,26 @@ import type { MoveAnalysis } from '../lib/analysis/classify'
 import { CLASS_ICON } from '../lib/analysis/classIcons'
 import { classTextColor } from '../lib/analysis/classColors'
 import { MARKED_CLASSES, splitSan } from '../lib/analysis/moveDisplay'
+import { IconChevronLeft, IconChevronRight } from './icons'
 
 interface MoveStripProps {
   moves: Move[]
   currentPly: number
   onSelectPly: (ply: number) => void
   moveAnalyses: MoveAnalysis[] | null
+  // Step buttons at both ends, like the chess.com app's review (the loader chapter has them in
+  // its footer instead).
+  arrows?: { onPrev: () => void; onNext: () => void; canPrev: boolean; canNext: boolean }
 }
+
+const ARROW_BTN =
+  'w-10 h-10 shrink-0 flex items-center justify-center text-white/70 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed'
 
 // Phones only: the game as one horizontally scrolling line right under the board (like the
 // chess.com and lichess apps), kept centered on the current move. The full move list in the
 // sidebar grows with the page there, so while stepping through a game it showed moves 1-4 under
 // the board no matter where you were.
-export function MoveStrip({ moves, currentPly, onSelectPly, moveAnalyses }: MoveStripProps) {
+export function MoveStrip({ moves, currentPly, onSelectPly, moveAnalyses, arrows }: MoveStripProps) {
   const stripRef = useRef<HTMLDivElement | null>(null)
   const activeRef = useRef<HTMLButtonElement | null>(null)
 
@@ -35,10 +42,12 @@ export function MoveStrip({ moves, currentPly, onSelectPly, moveAnalyses }: Move
 
   if (moves.length === 0) return null
 
-  return (
+  const strip = (
     <div
       ref={stripRef}
-      className="relative h-9 flex items-center gap-0.5 px-3 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className={`relative h-9 flex-1 min-w-0 flex items-center gap-0.5 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+        arrows ? 'px-1' : 'px-3'
+      }`}
     >
       {moves.map((move, i) => {
         const ply = i + 1
@@ -70,6 +79,19 @@ export function MoveStrip({ moves, currentPly, onSelectPly, moveAnalyses }: Move
           </span>
         )
       })}
+    </div>
+  )
+
+  if (!arrows) return strip
+  return (
+    <div className="flex items-center">
+      <button className={ARROW_BTN} onClick={arrows.onPrev} disabled={!arrows.canPrev} aria-label="Previous Move">
+        <IconChevronLeft size={26} />
+      </button>
+      {strip}
+      <button className={ARROW_BTN} onClick={arrows.onNext} disabled={!arrows.canNext} aria-label="Next Move">
+        <IconChevronRight size={26} />
+      </button>
     </div>
   )
 }
