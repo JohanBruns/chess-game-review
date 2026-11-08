@@ -39,6 +39,7 @@ describe('mergeSettings', () => {
   it('turns auto-analysis on for settings stored before the toggle existed', () => {
     const merged = mergeSettings({ showBestMoveArrow: false })
     expect(merged.autoAnalyze).toBe(true)
+    expect(merged.openNewestGame).toBe(true)
   })
 
   it('round-trips a full valid settings object unchanged', () => {
@@ -51,6 +52,7 @@ describe('mergeSettings', () => {
       soundEnabled: false,
       autoplay: true,
       autoAnalyze: false,
+      openNewestGame: false,
       reviewAs: 'white',
       depth: 12,
     }

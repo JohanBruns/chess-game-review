@@ -42,6 +42,7 @@ import { SettingsMenu } from './components/SettingsMenu'
 import { SidebarHeader } from './components/SidebarHeader'
 import { CoachSpeech } from './components/CoachSpeech'
 import { PhoneFooter, type FooterAction } from './components/PhoneFooter'
+import { NewestGameBanner } from './components/NewestGameBanner'
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -65,7 +66,14 @@ import { usePlayout } from './hooks/usePlayout'
 import { usePuzzles } from './hooks/usePuzzles'
 import { exportBoardImage, downloadBlob } from './lib/boardImage'
 import { readStorage, USERNAME_KEY } from './lib/storage'
-import { parseSharedGame, fetchSharedGamePgn, chessComGameId } from './lib/chesscom'
+import { parseSharedGame, fetchSharedGamePgn, chessComGameId, fetchRecentGames, type ChessComGame } from './lib/chesscom'
+import {
+  decideNewestGame,
+  gameIdFromUrl,
+  NEWEST_POLL_INTERVAL_MS,
+  NEWEST_POLL_WINDOW_MS,
+  type NewestGameTrigger,
+} from './lib/newestGame'
 import { takePendingShare } from './lib/sharePush'
 import { deriveBoardView } from './lib/boardView'
 
@@ -766,22 +774,106 @@ function App() {
     }
   }, [isLoaded, pgn, currentPly])
 
+  // "Open the app and the last game is there" (settings.openNewestGame, lib/newestGame.ts): the
+  // saved username's newest chess.com game loads on a cold start and when the app comes back
+  // after a while away; one that turns up while the app is open is offered in a banner instead.
+  // The state the check needs lives in a ref, since it runs from event handlers and timers.
+  const [newestOffer, setNewestOffer] = useState<ChessComGame | null>(null)
+  const newestStateRef = useRef({ enabled: false, loadedId: null as string | null, hasGame: false, busy: false })
+  useEffect(() => {
+    newestStateRef.current = {
+      enabled: settings.openNewestGame,
+      loadedId: chessComGameId(pgn),
+      hasGame: isLoaded,
+      busy: playout.active || puzzles.active || isAnalyzing || linkLoading,
+    }
+  })
+  const lastNewestIdRef = useRef<string | null>(null)
+  const newestRequestRef = useRef(0)
+  const openNewestGame = useCallback((game: ChessComGame) => {
+    const username = readStorage(USERNAME_KEY)?.trim().toLowerCase() ?? ''
+    setNewestOffer(null)
+    // Analyzed straight away whatever settings.autoAnalyze says, like "Analyze last game".
+    analyzeNextLoadRef.current = true
+    handleLoadPgn(game.pgn, game.white.username.toLowerCase() === username ? 'white' : 'black')
+  }, [handleLoadPgn])
+  const checkNewestGame = useCallback((trigger: NewestGameTrigger, awayMs = 0) => {
+    const username = readStorage(USERNAME_KEY)?.trim()
+    if (!newestStateRef.current.enabled || !username) return
+    const request = ++newestRequestRef.current
+    fetchRecentGames(username, { fresh: true }).then(games => {
+      if (request !== newestRequestRef.current) return
+      const newest = games[0] ?? null
+      const newestId = gameIdFromUrl(newest?.url)
+      const state = newestStateRef.current
+      if (!state.enabled) return
+      const action = decideNewestGame({
+        trigger,
+        newestId,
+        loadedId: state.loadedId,
+        hasGame: state.hasGame,
+        lastHandledId: lastNewestIdRef.current,
+        awayMs,
+        busy: state.busy,
+      })
+      if (!action || !newest) return
+      lastNewestIdRef.current = newestId
+      if (action === 'load') openNewestGame(newest)
+      else setNewestOffer(newest)
+    }).catch(() => {})
+  }, [openNewestGame])
+  // Latest callbacks for the mount-only effect below.
+  const handleLoadInputRef = useRef(handleLoadInput)
+  const checkNewestGameRef = useRef(checkNewestGame)
+  useEffect(() => {
+    handleLoadInputRef.current = handleLoadInput
+    checkNewestGameRef.current = checkNewestGame
+  })
+
   // A game sent from the chess.com share sheet (docs/iphone.md): public/sw.js parked it when the
   // push came in. Check whenever the app comes to the front, and when the service worker says so
-  // for the case where it's already there.
+  // for the case where it's already there. A shared game wins; without one the newest-game check
+  // above runs — not on a start that a ?game= / ?pgn= link already took care of.
   useEffect(() => {
-    function loadPendingShare() {
-      if (document.visibilityState !== 'visible') return
-      takePendingShare().then(text => { if (text) handleLoadInput(text) })
+    let hiddenAt: number | null = null
+    let lastOpenedAt = Date.now()
+    function onFront(trigger: NewestGameTrigger, awayMs = 0) {
+      takePendingShare().then(text => {
+        if (text) handleLoadInputRef.current(text)
+        else if (trigger !== 'start' || !urlParamsHandledRef.current) checkNewestGameRef.current(trigger, awayMs)
+      })
     }
-    loadPendingShare()
-    document.addEventListener('visibilitychange', loadPendingShare)
-    navigator.serviceWorker?.addEventListener('message', loadPendingShare)
+    function handleVisibility() {
+      if (document.visibilityState !== 'visible') {
+        hiddenAt = Date.now()
+        return
+      }
+      const awayMs = hiddenAt === null ? 0 : Date.now() - hiddenAt
+      hiddenAt = null
+      lastOpenedAt = Date.now()
+      onFront('resume', awayMs)
+    }
+    function handleServiceWorkerMessage() {
+      if (document.visibilityState === 'visible') takePendingShare().then(text => { if (text) handleLoadInputRef.current(text) })
+    }
+    // The archive can list a just-finished game a few minutes late: keep looking for a while
+    // after each opening, and offer it once it's there.
+    const poll = setInterval(() => {
+      if (document.visibilityState === 'visible' && Date.now() - lastOpenedAt < NEWEST_POLL_WINDOW_MS) {
+        checkNewestGameRef.current('poll')
+      }
+    }, NEWEST_POLL_INTERVAL_MS)
+    if (document.visibilityState === 'visible') onFront('start')
+    else hiddenAt = Date.now()
+    document.addEventListener('visibilitychange', handleVisibility)
+    navigator.serviceWorker?.addEventListener('message', handleServiceWorkerMessage)
     return () => {
-      document.removeEventListener('visibilitychange', loadPendingShare)
-      navigator.serviceWorker?.removeEventListener('message', loadPendingShare)
+      clearInterval(poll)
+      document.removeEventListener('visibilitychange', handleVisibility)
+      navigator.serviceWorker?.removeEventListener('message', handleServiceWorkerMessage)
     }
-  }, [handleLoadInput])
+  // Mount-only (everything goes through refs): a re-run would count as a fresh start.
+  }, [])
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -1227,6 +1319,15 @@ function App() {
           </div>
         )}
       </div>
+
+      {newestOffer && (
+        <NewestGameBanner
+          game={newestOffer}
+          username={readStorage(USERNAME_KEY)?.trim() ?? ''}
+          onAnalyze={() => openNewestGame(newestOffer)}
+          onDismiss={() => setNewestOffer(null)}
+        />
+      )}
 
       <PhoneFooter
         menu={phoneMenu}

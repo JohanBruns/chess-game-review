@@ -171,8 +171,10 @@ export interface ChessComGame {
 }
 
 // A player's latest games, newest first, from this month's and last month's official archives.
-// A game can take a few minutes to show up here after it ends.
-export async function fetchRecentGames(username: string): Promise<ChessComGame[]> {
+// A game can take a few minutes to show up here after it ends. `fresh` revalidates with chess.com
+// instead of taking the browser's cached copy — for the automatic newest-game check, which runs
+// exactly when a just-finished game is expected.
+export async function fetchRecentGames(username: string, { fresh = false } = {}): Promise<ChessComGame[]> {
   const now = new Date()
   const months = [
     { year: now.getFullYear(), month: now.getMonth() + 1 },
@@ -181,13 +183,12 @@ export async function fetchRecentGames(username: string): Promise<ChessComGame[]
       : { year: now.getFullYear(), month: now.getMonth() },
   ]
   const results = await Promise.allSettled(
-    months.map(({ year, month }) =>
-      fetch(
-        `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/${year}/${String(month).padStart(2, '0')}`,
-      )
+    months.map(({ year, month }) => {
+      const url = `https://api.chess.com/pub/player/${encodeURIComponent(username)}/games/${year}/${String(month).padStart(2, '0')}`
+      return (fresh ? fetch(url, { cache: 'no-cache' }) : fetch(url))
         .then(r => (r.ok ? r.json() : { games: [] }))
-        .then(j => (j.games ?? []) as ChessComGame[]),
-    ),
+        .then(j => (j.games ?? []) as ChessComGame[])
+    }),
   )
   return results
     .filter((r): r is PromiseFulfilledResult<ChessComGame[]> => r.status === 'fulfilled')
