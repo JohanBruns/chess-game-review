@@ -93,7 +93,7 @@ export function PuzzlePanel({
             )}
 
             {attempt === null && !revealed && (
-              <p className="text-cc-text-dim text-xs">Drag a piece to make your move.</p>
+              <p className="text-cc-text-dim text-xs">Drag or tap a piece to make your move.</p>
             )}
 
             {attempt !== null && attempt.correct && (
