@@ -112,6 +112,14 @@ export function IconArrowRight(p: IconProps) {
   )
 }
 
+export function IconClose(p: IconProps) {
+  return (
+    <Svg {...p}>
+      <path {...STROKE} strokeWidth={2.5} d="M6 6l12 12M18 6 6 18" />
+    </Svg>
+  )
+}
+
 export function IconPlus(p: IconProps) {
   return (
     <Svg {...p}>

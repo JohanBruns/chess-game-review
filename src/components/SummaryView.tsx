@@ -10,7 +10,7 @@ import { usePlayerAvatar } from '../hooks/usePlayerAvatar'
 import { LazyEvalGraph } from './LazyEvalGraph'
 import { SidebarHeader } from './SidebarHeader'
 import { CoachSpeech } from './CoachSpeech'
-import { IconChevronDown, IconChevronUp, IconPlus, IconPuzzle, PawnAvatar } from './icons'
+import { IconChevronDown, IconChevronUp, IconClose, IconPlus, IconPuzzle, PawnAvatar } from './icons'
 
 // Accuracy threshold for the confetti celebration burst — matches chess.com's "excellent game"
 // bar (see summaryHeadline's own >=90 check for the coach headline).
@@ -45,6 +45,9 @@ interface SummaryViewProps {
   onStartPuzzles: () => void
   // The game's winner (PGN Result header) — chess.com frames the winner's avatar in green.
   winner: 'white' | 'black' | null
+  // Phones: the gear menu in the header's right slot (the summary has the screen to itself there,
+  // without the footer that otherwise holds it).
+  phoneMenu?: React.ReactNode
 }
 
 // Every player-comparison row shares one 3-column template, measured live against chess.com at
@@ -92,6 +95,7 @@ export function SummaryView({
   puzzleCount,
   onStartPuzzles,
   winner,
+  phoneMenu,
 }: SummaryViewProps) {
   // Collapsed by default, like chess.com (checked live 2026-11-08): only the rows that tell the
   // story stay, the rest folds away behind the chevron. Saves a lot of scrolling on phones.
@@ -113,13 +117,23 @@ export function SummaryView({
       <SidebarHeader
         title="Game Review"
         icon={<img src="/marks/best_128x.png" alt="" className="w-6 h-6" />}
-        start={{ icon: <IconPlus />, label: 'Load another game', onClick: onNewGame }}
+        start={{
+          // An ✕ on phones, like the chess.com app's full-screen summary; "+" in the sidebar.
+          icon: (
+            <>
+              <IconClose className="md:hidden" />
+              <IconPlus className="max-md:hidden" />
+            </>
+          ),
+          label: 'Load another game',
+          onClick: onNewGame,
+        }}
+        end={phoneMenu ? <div className="md:invisible">{phoneMenu}</div> : undefined}
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-4 pb-2 md:p-6 md:pb-2">
-          {/* Phones show the coach above the board instead (App's top strip). */}
-          <div className="hidden md:block mb-4">
+          <div className="mb-4">
             <CoachSpeech align="bottom">{summaryHeadline(whiteSummary, blackSummary)}</CoachSpeech>
           </div>
 
@@ -138,9 +152,8 @@ export function SummaryView({
             left={<span className="text-[13px] font-bold text-white truncate">{whiteName}</span>}
             right={<span className="text-[13px] font-bold text-white truncate">{blackName}</span>}
           />
-          {/* Not on phones: the names above already say it, and the accuracy should fit on screen. */}
           <GridRow
-            className="pt-2 max-md:hidden"
+            className="pt-2"
             label="Players"
             left={<PlayerAvatar name={whiteName} winner={winner === 'white'} />}
             right={<PlayerAvatar name={blackName} winner={winner === 'black'} />}
@@ -206,7 +219,7 @@ export function SummaryView({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 pt-[5px] pb-6 short:pb-2">
+      <div className="shrink-0 px-6 pt-[5px] pb-6 max-md:px-4 max-md:pb-[max(16px,env(safe-area-inset-bottom))] short:pb-2">
         <button
           onClick={onStartReview}
           className="cc-btn-primary w-full h-16 short:h-11 rounded-[10px] text-[22px] short:text-lg font-extrabold"
