@@ -127,10 +127,20 @@ async function fetchViaCallbackProxy(shared: SharedGame): Promise<string | null>
     const res = await fetch(`/api/chesscom-game?id=${shared.id}${typeParam}`)
     if (!res.ok) return null
     const json = await res.json() as { game?: CallbackGame }
-    return buildPgnFromCallbackGame(json.game)
+    const pgn = buildPgnFromCallbackGame(json.game)
+    return pgn ? withGameLink(pgn, shared) : null
   } catch {
     return null
   }
+}
+
+// The callback's headers carry no [Link], unlike chess.com's exported PGNs — without one the app
+// can't tell which chess.com game is on the board, and dropped ?game= from the address bar (so a
+// reload lost the game). Adds it when it's missing.
+export function withGameLink(pgn: string, shared: SharedGame): string {
+  if (chessComGameId(pgn)) return pgn
+  const link = `https://www.chess.com/game/${shared.type ? `${shared.type}/` : ''}${shared.id}`
+  return `[Link "${link}"]\n${pgn}`
 }
 
 // Official public API (CORS-enabled): a player's monthly archive, searched for the game id.
