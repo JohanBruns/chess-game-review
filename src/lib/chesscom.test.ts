@@ -8,6 +8,7 @@ import {
   fetchSharedGamePgn,
   fetchRecentGames,
   chessComGameId,
+  withGameLink,
 } from './chesscom'
 
 afterEach(() => {
@@ -130,6 +131,16 @@ describe('buildPgnFromCallbackGame', () => {
   })
 })
 
+describe('withGameLink', () => {
+  it('adds a chess.com link header when the PGN has none, and keeps an existing one', () => {
+    const shared = { id: '123456789', type: 'live' as const, usernames: [] }
+    expect(withGameLink('[Event "x"]\n\n1. e4 *', shared))
+      .toBe('[Link "https://www.chess.com/game/live/123456789"]\n[Event "x"]\n\n1. e4 *')
+    const linked = '[Link "https://www.chess.com/game/live/987"]\n\n1. e4 *'
+    expect(withGameLink(linked, shared)).toBe(linked)
+  })
+})
+
 describe('fetchSharedGamePgn', () => {
   const shared = { id: '185820408402', type: null, usernames: ['jojo2go', 'RiCk_Prime_C137'] }
 
@@ -138,6 +149,8 @@ describe('fetchSharedGamePgn', () => {
     vi.stubGlobal('fetch', fetchMock)
     const pgn = await fetchSharedGamePgn(shared, null)
     expect(pgn).toContain('1. e2e4 e7e5')
+    // The callback has no [Link] header of its own; the game id must survive for ?game=.
+    expect(chessComGameId(pgn)).toBe('185820408402')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]).toEqual(['/api/chesscom-game?id=185820408402'])
   })
