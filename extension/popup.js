@@ -2,19 +2,29 @@ const btn = document.getElementById('btn')
 const status = document.getElementById('status')
 const urlInput = document.getElementById('url-input')
 const userInput = document.getElementById('user-input')
+const settings = globalThis.chessAnalyzerSettings
 
-// Persist settings via localStorage
-const savedUrl = localStorage.getItem('chess-analyzer-url')
-if (savedUrl) urlInput.value = savedUrl
-urlInput.addEventListener('change', () => {
-  localStorage.setItem('chess-analyzer-url', urlInput.value)
-})
+// Settings live in chrome.storage.sync so the in-page button (content.js) sees them too.
+// One-time migration from the popup's old localStorage keys.
+async function initSettings() {
+  const legacyUrl = localStorage.getItem('chess-analyzer-url')
+  const legacyUser = localStorage.getItem('chess-analyzer-username')
+  if (legacyUrl !== null || legacyUser !== null) {
+    await settings.save({
+      ...(legacyUrl !== null ? { appUrl: legacyUrl } : {}),
+      ...(legacyUser !== null ? { username: legacyUser } : {}),
+    })
+    localStorage.removeItem('chess-analyzer-url')
+    localStorage.removeItem('chess-analyzer-username')
+  }
+  const { appUrl, username } = await settings.load()
+  urlInput.value = appUrl
+  userInput.value = username
+}
+initSettings()
 
-const savedUser = localStorage.getItem('chess-analyzer-username')
-if (savedUser) userInput.value = savedUser
-userInput.addEventListener('change', () => {
-  localStorage.setItem('chess-analyzer-username', userInput.value)
-})
+urlInput.addEventListener('change', () => settings.save({ appUrl: urlInput.value.trim() }))
+userInput.addEventListener('change', () => settings.save({ username: userInput.value.trim() }))
 
 btn.addEventListener('click', async () => {
   btn.disabled = true
@@ -30,51 +40,29 @@ btn.addEventListener('click', async () => {
   }
 
   try {
-    // Inject content script on demand — handles tabs that were already open
-    // before the extension was installed or last reloaded.
+    // Inject on demand — handles tabs opened before the extension was installed or reloaded.
+    // content.js guards against running twice.
     try {
-      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content.js'] })
-    } catch (_) { /* already injected or no permission — try sending anyway */ }
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['settings.js', 'content.js'],
+      })
+    } catch (_) { /* no permission — try sending anyway */ }
 
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: 'GET_PGN',
-      username: userInput.value.trim() || null,
+    const result = await chrome.tabs.sendMessage(tab.id, {
+      type: 'GET_ANALYSIS_URL',
+      settings: { appUrl: urlInput.value.trim(), username: userInput.value.trim() },
     })
-    const pgn = response?.pgn
-    const username = response?.username
 
-    const baseUrl = (urlInput.value || 'https://chess-game-review-drab.vercel.app').replace(/\/$/, '')
-
-    if (!pgn) {
-      const fallbackUrl = username
-        ? `${baseUrl}/?username=${encodeURIComponent(username)}&autofetch=1`
-        : baseUrl
-      await chrome.tabs.create({ url: fallbackUrl })
-      status.className = ''
-      status.textContent = username
-        ? `PGN nicht gefunden — App geöffnet, bitte Partie für "${username}" auswählen ✓`
-        : 'PGN nicht gefunden — App geöffnet, bitte Partie auswählen ✓'
-      btn.disabled = false
-      return
-    }
-
-    let url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
-    // Lange Partien: erst die {[%clk …]}-Kommentare opfern, bevor wir aufgeben
-    if (url.length > 8000) {
-      const pgnWithoutComments = pgn.replace(/\s*\{[^}]*\}/g, '')
-      url = `${baseUrl}/?pgn=${encodeURIComponent(pgnWithoutComments)}`
-    }
-
-    // URL-Längenlimit (~8000 Zeichen); bei Überschreitung Warnung
-    if (url.length > 8000) {
+    if (!result?.url) {
       status.className = 'error'
-      status.textContent = `PGN zu lang für URL (${url.length} Zeichen). Bitte PGN manuell kopieren.`
+      status.textContent = result?.error ?? 'Unbekannter Fehler.'
       btn.disabled = false
       return
     }
 
-    await chrome.tabs.create({ url })
-    status.textContent = 'Analyse-Tab geöffnet ✓'
+    await chrome.tabs.create({ url: result.url })
+    status.textContent = result.notice ?? 'Analyse-Tab geöffnet ✓'
   } catch (e) {
     status.className = 'error'
     status.textContent = `Fehler: ${e.message ?? e}`
