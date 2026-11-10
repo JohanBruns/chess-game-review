@@ -21,10 +21,12 @@ None by default — the extension sends games to the hosted version of the app. 
 
 ### In-page buttons
 
-The content script runs on all of chess.com (games played under `/play/online` switch to `/game/…` client-side, without a page load) and adds a blue **"♞ Partie analysieren"** button in two places:
+The content script runs on all of chess.com (games played under `/play/online` switch to `/game/…` client-side, without a page load) and adds a muted-blue **"♞ Partie analysieren"** button in two places:
 
 - **Game-over modal** — replaces the coach speech bubble (`.game-over-coach-speech-slot-component`). The bubble is only hidden once our button is in the slot, so if chess.com renames the class, their modal simply stays as it was.
 - **Sidebar** — above the move navigation controls (`.game-buttons-container-component`), so finished/older games can be opened after the modal is closed.
+
+No button is shown — and the popup refuses too — while the game is still being played (resign/draw/abort controls visible): engine analysis during a game breaks chess.com's fair-play rules.
 
 Clicking it does the same as the popup; the tab is opened by `background.js` (no popup-blocker issues after the async PGN fetch). App-URL and username are set in the popup and stored in `chrome.storage.sync`, shared with the in-page buttons.
 
