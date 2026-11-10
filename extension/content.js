@@ -17,6 +17,15 @@ function parseGamePath(pathname = location.pathname) {
   return { gameType: m[2] ?? m[1] ?? 'live', gameId: m[3] }
 }
 
+// A game in progress also lives under /game/{id}. Running engine analysis on it would break
+// chess.com's fair-play rules, so nothing is offered while its resign/draw/abort controls show.
+const ONGOING_GAME_CONTROLS =
+  '.resign-button-component, .draw-button-component, .abort-button-component, [aria-label="Resign"]'
+
+function isGameInProgress() {
+  return document.querySelector(ONGOING_GAME_CONTROLS) !== null
+}
+
 // Username: provided by popup/settings > URL query param > page DOM
 function resolveUsername(providedUsername = null) {
   return (
@@ -182,6 +191,9 @@ async function buildAnalysisUrl({ appUrl, username } = {}) {
   if (!parseGamePath()) {
     return { error: 'Keine chess.com-Partie auf dieser Seite gefunden.' }
   }
+  if (isGameInProgress()) {
+    return { error: 'Die Partie läuft noch — Analyse erst nach Spielende.' }
+  }
   const baseUrl = (appUrl || globalThis.chessAnalyzerSettings?.DEFAULT_APP_URL || '').replace(/\/$/, '')
   const pgn = await extractPgn(username || null)
   const resolvedUser = resolveUsername(username || null)
@@ -229,10 +241,10 @@ ${MODAL_SLOT}:has(> .cea-modal-slot) > :not(.cea-modal-slot) { display: none !im
   width: 100%; box-sizing: border-box; padding: 8px 0; }
 .cea-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
   box-sizing: border-box; border: none; border-radius: 8px; cursor: pointer;
-  font-family: inherit; font-weight: 800; color: #fff; background: #2563eb;
-  box-shadow: 0 4px 0 #1e40af; transition: background .12s, transform .05s, box-shadow .05s; }
-.cea-btn:hover { background: #3b82f6; }
-.cea-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #1e40af; }
+  font-family: inherit; font-weight: 800; color: #e8eef7; background: #4a6584;
+  box-shadow: 0 4px 0 #36495f; transition: background .12s, transform .05s, box-shadow .05s; }
+.cea-btn:hover { background: #56739a; }
+.cea-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #36495f; }
 .cea-btn[disabled] { opacity: .7; cursor: progress; }
 .cea-btn-modal { min-height: 56px; font-size: 20px; padding: 10px 16px; }
 .cea-btn-sidebar { min-height: 40px; font-size: 15px; padding: 6px 12px; }
@@ -298,15 +310,15 @@ function createButton(variant) {
 
 function ensureModalButton() {
   const slot = document.querySelector(MODAL_SLOT)
-  if (!slot || slot.querySelector(':scope > .cea-modal-slot')) return
+  if (!slot || isGameInProgress() || slot.querySelector(':scope > .cea-modal-slot')) return
   slot.appendChild(createButton('modal'))
 }
 
 function ensureSidebarButton() {
   const existing = document.querySelector('.cea-sidebar')
   const anchor = document.querySelector(SIDEBAR_ANCHOR)
-  // Only on finished/viewed games — during a live game the URL has no game id yet.
-  if (!parseGamePath() || !anchor) {
+  // Only on finished/viewed games, never while the game is still being played.
+  if (!parseGamePath() || !anchor || isGameInProgress()) {
     existing?.remove()
     return
   }
