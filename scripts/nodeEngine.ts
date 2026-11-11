@@ -9,7 +9,7 @@ import { createInterface } from 'node:readline'
 import { fileURLToPath } from 'node:url'
 import {
   accumulateInfo, analysisCommands, batchMovetimeMs, finishSearch, newSearch, ANALYSIS_OPTION_COMMANDS,
-  type EvalResult,
+  type EvalResult, type SearchJob,
 } from '../src/lib/engine/uci.ts'
 
 // The shipped copy in public/engine can't be run directly: this package is "type": "module"
@@ -68,9 +68,9 @@ export class NodeEngine {
 
   // One batch-analysis search. `clearHash: false` skips the leading `ucinewgame` — only for
   // demonstrating why the app clears it (carried-over hash makes results order-dependent).
-  async analyze(fen: string, depth: number, { clearHash = true } = {}): Promise<EvalResult> {
+  async analyze({ fen, searchMoves }: SearchJob, depth: number, { clearHash = true } = {}): Promise<EvalResult> {
     const acc = newSearch(fen)
-    const commands = analysisCommands(fen, depth, batchMovetimeMs(depth))
+    const commands = analysisCommands(fen, depth, batchMovetimeMs(depth), searchMoves)
     for (const cmd of clearHash ? commands : commands.filter(c => c !== 'ucinewgame')) this.send(cmd)
     const bestmove = await this.until(line => line.startsWith('bestmove'), line => {
       if (line.startsWith('info')) accumulateInfo(acc, line)

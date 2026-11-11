@@ -7,8 +7,10 @@ import { Chess } from 'chess.js'
 // used to live inline in useEngine's worker.onmessage closure. Kept free of relative
 // imports so Node can load it directly.
 
-// One engine verdict for a position. cp/mate are White-absolute (see parseInfoScore);
-// the 2nd/3rd lines come from MultiPV 3. Re-exported by useEngine for the app's imports.
+// One engine verdict for a position. cp/mate are White-absolute (see parseInfoScore). The
+// batch analysis fills the 2nd line only where the classification needs it (twoPass.ts); the
+// rest, and every 3rd line, come from the on-demand search behind the engine-lines panel.
+// Re-exported by useEngine for the app's imports.
 export interface EvalResult {
   cp: number | null
   mate: number | null
@@ -133,11 +135,22 @@ export function finishSearch(s: SearchAccumulator, bestmoveLine: string): EvalRe
   }
 }
 
+// One batch-analysis search: the position, and optionally the only root moves to consider
+// (UCI) — the second-line search passes every legal move except the best one.
+export interface SearchJob {
+  fen: string
+  searchMoves?: string[]
+}
+
 // Batch-analysis engine configuration, shared by enginePool.ts and the Node fixture capture
-// so both search identically. Smaller hash than the primary worker's 128MB: N instances run
-// at once, and with the hash cleared per position a big table pays off less. The hash size
-// is part of the result's identity — a different size can change a depth-limited search.
-export const ANALYSIS_OPTION_COMMANDS = ['setoption name MultiPV value 3', 'setoption name Hash value 32']
+// so both search identically. A single PV: MultiPV 3 cost about three times the nodes at the
+// same depth (measured 2026-11, depth 15 and 18), and the lines it added are only read for a
+// minority of positions — see twoPass.ts. A small hash: it is cleared before every search
+// (about 10 ms at 32 MB, 6 ms at 8 MB, more with several instances running), and at depth
+// 12-18 a search fills only a fraction of it — 4 to 32 MB searched the same node counts.
+// The hash size is part of the result's identity — a different size can change a
+// depth-limited search.
+export const ANALYSIS_OPTION_COMMANDS = ['setoption name MultiPV value 1', 'setoption name Hash value 8']
 
 // Per-position time caps, passed alongside the depth limit (`go depth D movetime T` stops
 // at whichever limit is hit first). Depth terminates virtually every search long before
@@ -156,6 +169,44 @@ export function batchMovetimeMs(depth: number): number {
 // would not match a fresh analysis. `go depth D movetime T` stops at whichever comes first;
 // the movetime cap only reins in pathological outliers (it is the one remaining source of
 // timing-dependent results).
-export function analysisCommands(fen: string, depth: number, movetime: number): string[] {
-  return ['ucinewgame', `position fen ${fen}`, `go depth ${depth} movetime ${movetime}`]
+export function analysisCommands(fen: string, depth: number, movetime: number, searchMoves?: string[]): string[] {
+  const only = searchMoves && searchMoves.length > 0 ? ` searchmoves ${searchMoves.join(' ')}` : ''
+  return ['ucinewgame', `position fen ${fen}`, `go depth ${depth} movetime ${movetime}${only}`]
+}
+
+// Every legal move except `bestSan`, in UCI — the root moves of a second-line search. Empty
+// when there is no alternative (or no best move to exclude).
+export function alternativeMoves(fen: string, bestSan: string | null): string[] {
+  if (!bestSan) return []
+  try {
+    return new Chess(fen).moves({ verbose: true }).filter(m => m.san !== bestSan).map(m => m.lan)
+  } catch {
+    return []
+  }
+}
+
+// The eval of a line other than the best one, not rated above the best line (from the side to
+// move's view; cp values are White-absolute). The other lines come from a search of their own,
+// and two depth-limited searches can disagree by a few centipawns about near-equal moves
+// (measured 2026-11: in 1 of 7 second-line searches, almost always by less than 2 win%). Such
+// a line counts as "as good as the best move"; the best move stays the first search's, the way
+// a single search would have named one of the two. A forced mate is no such noise and is kept
+// as found, even if the first search missed it — the classification tells mates from large
+// evals (classify.ts BRILLIANT_WINNING_ANYWAY_CP).
+const MATE_CP = 10000
+
+export function cappedAtBest(fen: string, bestCp: number | null, cp: number): number {
+  if (bestCp === null || Math.abs(cp) >= MATE_CP) return cp
+  return fen.split(' ')[1] === 'b' ? Math.max(cp, bestCp) : Math.min(cp, bestCp)
+}
+
+// Adds the outcome of a second-line search (run on alternativeMoves, so its best line is the
+// position's second-best) to the first-pass result. A failed second search leaves it unchanged.
+export function withSecondLine(fen: string, first: EvalResult, second: EvalResult | null): EvalResult {
+  if (!second || second.cp === null || second.bestMoveSan === null) return first
+  return {
+    ...first,
+    secondBestCp: cappedAtBest(fen, first.cp, second.cp),
+    secondBestMoveSan: second.bestMoveSan,
+  }
 }

@@ -222,6 +222,29 @@ describe('sacrificeRegained', () => {
   it('false without an engine line', () => {
     expect(sacrificeRegained(rxc2(), null, ['c2'])).toBe(false)
   })
+
+  // 10...Bxh2+ (147779282758, Brilliant on chess.com) uncovers the d8-rook against the queen.
+  // The engine shows the combination in either order — both must leave the sacrifice standing.
+  const BXH2_FEN = '3r1rk1/ppp1qppp/2nb1n2/1N6/6b1/4PN2/PPP1BPPP/R1BQ1RK1 b - - 10 10'
+  const bxh2 = () => new Chess(BXH2_FEN).move({ from: 'd6', to: 'h2' })
+
+  it('false while the opponent keeps taking pieces: the second bishop goes first', () => {
+    expect(sacrificeRegained(bxh2(), 'Kxh2 Bxf3 gxf3 Rxd1 Rxd1', ['h2'])).toBe(false)
+  })
+
+  it('false while the opponent keeps taking pieces: the queen falls first, for a rook', () => {
+    expect(sacrificeRegained(bxh2(), 'Kxh2 Rxd1 Rxd1 a6 Nc3', ['h2'])).toBe(false)
+  })
+
+  it('true when the piece comes straight back and only a pawn drops afterwards (10...Nf4)', () => {
+    // 171330597782: 11.Nxf4 exf4 12.Bxf4 trades knights and wins a pawn — no Brilliant on chess.com.
+    const nf4 = new Chess('r1b4r/ppp2k1p/2n3p1/2bnp3/2P5/3P4/PP2NPPP/RNB1K2R b KQ - 0 10').move({ from: 'd5', to: 'f4' })
+    expect(sacrificeRegained(nf4, 'Nxf4 exf4 Bxf4 Rd8 Be3', ['f4'])).toBe(true)
+  })
+
+  it('true when the engine line ends right after the piece is won back', () => {
+    expect(sacrificeRegained(rxc2(), 'Kxc2 Bxa1', ['c2'])).toBe(true)
+  })
 })
 
 describe('sacrificeSquares', () => {

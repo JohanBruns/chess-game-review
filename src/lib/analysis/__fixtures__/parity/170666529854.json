@@ -23,144 +23,144 @@
  ],
  "evalResults": [
   {
-   "cp": 28,
+   "cp": 35,
    "mate": null,
    "bestMoveSan": "e4",
-   "pv": "e4 e6 d4 d5 e5 c5 c3 Nc6 Nf3 Nge7",
-   "secondBestCp": 22,
-   "secondBestMoveSan": "e3",
-   "thirdBestCp": 19,
-   "thirdBestMoveSan": "Nf3"
+   "pv": "e4 e5 Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nc3 Bc5",
+   "secondBestCp": 19,
+   "secondBestMoveSan": "d4",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 30,
+   "cp": 39,
    "mate": null,
-   "bestMoveSan": "e6",
-   "pv": "e6 d4 d5 e5 c5 c3 Nc6 Nf3 Bd7 Be2",
-   "secondBestCp": 34,
-   "secondBestMoveSan": "e5",
-   "thirdBestCp": 39,
-   "thirdBestMoveSan": "c5"
-  },
-  {
-   "cp": 37,
-   "mate": null,
-   "bestMoveSan": "Nf3",
-   "pv": "Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8",
-   "secondBestCp": 33,
-   "secondBestMoveSan": "Nc3",
-   "thirdBestCp": 13,
-   "thirdBestMoveSan": "d4"
+   "bestMoveSan": "e5",
+   "pv": "e5 Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+",
+   "secondBestCp": 39,
+   "secondBestMoveSan": "e6",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
    "cp": 34,
    "mate": null,
+   "bestMoveSan": "Nf3",
+   "pv": "Nf3 Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8",
+   "secondBestCp": 15,
+   "secondBestMoveSan": "Nc3",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
+  },
+  {
+   "cp": 43,
+   "mate": null,
    "bestMoveSan": "Nc6",
    "pv": "Nc6 d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8 f3",
-   "secondBestCp": 36,
+   "secondBestCp": 52,
    "secondBestMoveSan": "Nf6",
-   "thirdBestCp": 47,
-   "thirdBestMoveSan": "d6"
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 38,
+   "cp": 34,
    "mate": null,
    "bestMoveSan": "d4",
-   "pv": "d4 exd4 Nxd4 Nf6 Nxc6 dxc6 Qxd8+ Kxd8 f3 Be6",
-   "secondBestCp": 19,
-   "secondBestMoveSan": "Bc4",
-   "thirdBestCp": 18,
-   "thirdBestMoveSan": "Nc3"
+   "pv": "d4 exd4 Nxd4 Bc5 Be3 Qf6 c3 Nge7 Nc2 Bxe3",
+   "secondBestCp": null,
+   "secondBestMoveSan": null,
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 21,
+   "cp": 26,
    "mate": null,
-   "bestMoveSan": "Bc5",
-   "pv": "Bc5 Nc3 Nf6 d3 h6 O-O O-O Ne2 d5 exd5",
-   "secondBestCp": 22,
-   "secondBestMoveSan": "Nf6",
-   "thirdBestCp": 36,
-   "thirdBestMoveSan": "d6"
+   "bestMoveSan": "Nf6",
+   "pv": "Nf6 d3 Be7 Nc3 d6 a4 Be6 Nd5 Bxd5 exd5",
+   "secondBestCp": 43,
+   "secondBestMoveSan": "d6",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 28,
+   "cp": 22,
    "mate": null,
    "bestMoveSan": "d3",
-   "pv": "d3 Be7 Nc3 O-O O-O d6 a4 Be6 Bxe6 fxe6",
-   "secondBestCp": 21,
-   "secondBestMoveSan": "d4",
-   "thirdBestCp": 16,
-   "thirdBestMoveSan": "Ng5"
+   "pv": "d3 Bc5 Nc3 h6 O-O O-O h3 a5 a4 Kh8",
+   "secondBestCp": null,
+   "secondBestMoveSan": null,
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 30,
+   "cp": 4,
    "mate": null,
    "bestMoveSan": "d5",
-   "pv": "d5 exd5 Na5 d3 Nxc4 dxc4 Bc5 O-O O-O Nc3",
-   "secondBestCp": 104,
+   "pv": "d5 exd5 Na5 Bb5+ c6 dxc6 bxc6 Bd3 Nd5 Nf3",
+   "secondBestCp": 115,
    "secondBestMoveSan": "Bc5",
-   "thirdBestCp": 156,
-   "thirdBestMoveSan": "Nxe4"
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 3,
+   "cp": 7,
    "mate": null,
    "bestMoveSan": "exd5",
-   "pv": "exd5 b5 Bxb5 Qxd5 Bxc6+ Qxc6 O-O h6 Qf3 e4",
-   "secondBestCp": -115,
+   "pv": "exd5 Na5 Bb5+ Bd7 Qe2 Be7 Nf3 Nxd5 Bxd7+ Qxd7",
+   "secondBestCp": -135,
    "secondBestMoveSan": "Bb3",
-   "thirdBestCp": -120,
-   "thirdBestMoveSan": "Bb5"
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": -5,
+   "cp": 13,
    "mate": null,
-   "bestMoveSan": "b5",
-   "pv": "b5 Bf1 Nd4 c3 Nxd5 Ne4 Qh4 Ng3 Bg4 f3",
-   "secondBestCp": -2,
-   "secondBestMoveSan": "Na5",
-   "thirdBestCp": 23,
-   "thirdBestMoveSan": "Nd4"
+   "bestMoveSan": "Na5",
+   "pv": "Na5 Bb5+ c6 dxc6 bxc6 Bd3 Nd5 h4 Be7 Nc3",
+   "secondBestCp": null,
+   "secondBestMoveSan": null,
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 119,
+   "cp": 116,
    "mate": null,
    "bestMoveSan": "Nxf7",
-   "pv": "Nxf7 Kxf7 Qf3+ Qf6 Bxd5+ Ke8 Bxc6+ bxc6 Qe3 Bd6",
-   "secondBestCp": 73,
+   "pv": "Nxf7 Kxf7 Qf3+ Ke6 Nc3 Nb4 O-O c6 d4 Kd6",
+   "secondBestCp": 64,
    "secondBestMoveSan": "d4",
-   "thirdBestCp": 14,
-   "thirdBestMoveSan": "Qh5"
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 121,
+   "cp": 117,
    "mate": null,
    "bestMoveSan": "Kxf7",
    "pv": "Kxf7 Qf3+ Ke6 Nc3 Nb4 Qe4 c6 a3 Nxc2+ Qxc2",
-   "secondBestCp": 249,
-   "secondBestMoveSan": "Qh4",
-   "thirdBestCp": 339,
-   "thirdBestMoveSan": "Qf6"
+   "secondBestCp": null,
+   "secondBestMoveSan": null,
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 93,
+   "cp": 110,
    "mate": null,
    "bestMoveSan": "Qf3+",
-   "pv": "Qf3+ Ke6 Nc3 Nb4 Bb3 c6 a3 Qf6 Qxf6+ gxf6",
-   "secondBestCp": -139,
-   "secondBestMoveSan": "O-O",
-   "thirdBestCp": -213,
-   "thirdBestMoveSan": "d4"
+   "pv": "Qf3+ Ke6 Nc3 Nb4 Kd1 b5 Bb3 Bc5 a3 Rf8",
+   "secondBestCp": -220,
+   "secondBestMoveSan": "Nc3",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
-   "cp": 163,
+   "cp": 116,
    "mate": null,
    "bestMoveSan": "Ke6",
-   "pv": "Ke6 Nc3 Nd4 Bxd5+ Kd6 Qd1 c6 Be4 Qh4 O-O",
-   "secondBestCp": 177,
-   "secondBestMoveSan": "Qf6",
-   "thirdBestCp": 188,
-   "thirdBestMoveSan": "Ke8"
+   "pv": "Ke6 Nc3 Nb4 O-O c6 d4 Qf6 Qd1 Ke7 Re1",
+   "secondBestCp": 176,
+   "secondBestMoveSan": "Ke8",
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
    "cp": 10000,
@@ -169,16 +169,16 @@
    "pv": "Bxd5+ Qxd5 Qxd5+ Be6 Qxe6#",
    "secondBestCp": 10000,
    "secondBestMoveSan": "Qxd5+",
-   "thirdBestCp": 140,
-   "thirdBestMoveSan": "Nc3"
+   "thirdBestCp": null,
+   "thirdBestMoveSan": null
   },
   {
    "cp": 10000,
    "mate": 2,
    "bestMoveSan": "Qxd5",
    "pv": "Qxd5 Qxd5+ Be6 Qxe6#",
-   "secondBestCp": 10000,
-   "secondBestMoveSan": "Be6",
+   "secondBestCp": null,
+   "secondBestMoveSan": null,
    "thirdBestCp": null,
    "thirdBestMoveSan": null
   }
