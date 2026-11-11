@@ -1,6 +1,8 @@
 import { Chess, type Move, type Square } from 'chess.js'
-import type { EvalResult } from '../engine/useEngine'
-import { PIECE_VAL } from './see'
+// Relative imports carry their .ts extension here: Node loads this module directly too
+// (scripts/captureParityFixtures.ts), without a bundler to resolve them.
+import type { EvalResult } from '../engine/uci.ts'
+import { PIECE_VAL } from './see.ts'
 
 export type MoveClass =
   | 'Book'
@@ -227,21 +229,26 @@ function materialBalance(fen: string, color: 'w' | 'b'): number {
 }
 
 // Does the "sacrifice" pay for itself at once? Follows `replyPv` (the engine line in the position
-// after the move) through the opponent's capture, the mover's answer and the opponent's next
-// move: when the mover is not behind in material by then, it was a trade or a desperado —
-// 39...Rxc2+ 40.Kxc2 Bxa1 41.Kb3 wins the rook straight back, and chess.com does not call it
-// Brilliant. Stopping after the mover's answer would be too early: 10...Bxh2+ 11.Kxh2 Bxf3
-// 12.gxf3 is a bishop down again (the queen falls only later). A reply that declines the offer
-// leaves the sacrifice standing.
+// after the move) through the opponent's capture and the mover's answer: when the mover is not
+// behind in material by then, it was a trade or a desperado — 39...Rxc2+ 40.Kxc2 Bxa1 41.Kb3
+// wins the rook straight back, and chess.com does not call it Brilliant. Unless the opponent's
+// next move takes another piece: then the mover has put in more than the offered piece and the
+// combination is still running — 10...Bxh2+ 11.Kxh2 Bxf3 12.gxf3 is a bishop down again (the
+// queen falls only later), and the same combination played 11...Rxd1 12.Rxd1 first is no less a
+// sacrifice. Which of the two orders the engine line shows is arbitrary, so the verdict must not
+// hang on it. A pawn taken there does not count: 10...Nf4 11.Nxf4 exf4 12.Bxf4 trades knights
+// and drops a pawn. A reply that declines the offer leaves the sacrifice standing.
 export function sacrificeRegained(move: Move, replyPv: string | null, sacSquares: Square[]): boolean {
   if (!replyPv || sacSquares.length === 0 || !move.color || !move.before || !move.after) return false
   try {
     const chess = new Chess(move.after)
-    const [reply, ...rest] = replyPv.split(' ')
+    const [reply, answer, next] = replyPv.split(' ')
     const taken = chess.move(reply)
     if (!taken.captured || !sacSquares.includes(taken.to as Square)) return false
-    for (const san of rest.slice(0, 2)) chess.move(san)
-    return materialBalance(chess.fen(), move.color) >= materialBalance(move.before, move.color)
+    if (answer) chess.move(answer)
+    if (materialBalance(chess.fen(), move.color) < materialBalance(move.before, move.color)) return false
+    const captured = next ? chess.move(next).captured : undefined
+    return captured == null || captured === 'p'
   } catch {
     return false
   }
@@ -318,14 +325,33 @@ const REFUTATION_GAP_MIN = 15
 // starting a forced mate, where the only alternative roughly halves the evaluation).
 const REFUTATION_ONLY_MOVE_GAP = 50
 
+// Great — "only good move" branch: not awarded once the mover's win% before the move reaches
+// this — everything wins there, so a big gap to the second-best line no longer marks a critical
+// position.
+const GREAT_ONLY_MOVE_WINPCT_MAX = 85
+
 // No Brilliant when the second-best line still wins by this much (centipawns, mover's view):
 // a sacrifice nobody needed. Mate-scored lines don't count — chess.com still awards 26.Rxf5
-// with several mates on the board.
-const BRILLIANT_WINNING_ANYWAY_CP = 700
+// with several mates on the board. Placed between the verified cases with room for engine
+// noise on both sides: 32.Bxb7 (second-best around +7.0, no Brilliant) and 25...Rad8+
+// (second-best around +5.5, Brilliant).
+const BRILLIANT_WINNING_ANYWAY_CP = 620
+
+// classifyMove's decision plus whether it can depend on the second-best line at all. The batch
+// analysis only searches a second line where it matters (see probeSecondLine), so every read of
+// secondBestCp below must sit behind a gate that also feeds `secondLineMatters`.
+interface Verdict {
+  classification: MoveClass
+  secondLineMatters: boolean
+}
 
 // Optional params enable Brilliant/Great detection when full context is available.
 // Callers that only have loss+isEngineBestMove (e.g. tests) get the standard 7-class result.
-export function classifyMove(
+export function classifyMove(...args: Parameters<typeof judgeMove>): MoveClass {
+  return judgeMove(...args).classification
+}
+
+function judgeMove(
   loss: number,
   isEngineBestMove: boolean,
   move?: Move,
@@ -339,7 +365,7 @@ export function classifyMove(
   sacrificeRegained = false,
   opponentBlundered = false,
   isTrivialRecapture = false,
-): MoveClass {
+): Verdict {
   const winPctAfter = winPctBefore != null ? winPctBefore - loss : undefined
   const rt = ratingThresholds(playerRating)
 
@@ -351,35 +377,42 @@ export function classifyMove(
   // + no MORE valuable own piece hangs free at the same time (that would be a
   //   blunder that happens to also give up material, not a brilliancy).
   // Cheap numeric gates run first so the board scans only touch candidates.
-  if (
+  const brilliantButForSecondLine =
     !suppressBrilliant &&
     move != null && winPctBefore != null && winPctAfter != null &&
     loss <= rt.brilliantLossMax &&
     winPctAfter >= 50 &&
     !sacrificeRegained &&
     !move.promotion &&
-    !(secondBestCp != null && secondBestCp >= BRILLIANT_WINNING_ANYWAY_CP && secondBestCp < 10000) &&
     isSacrifice(move) &&
     !hasCostlierHangingPiece(move)
-  ) return 'Brilliant'
+  // The two Great branches that compare the best move with the second-best line, up to that
+  // comparison. The gap between the two can be at most the best line's own win%, so below a
+  // branch's minimum gap the second line cannot matter.
+  const greatBase = !isTrivialRecapture && isEngineBestMove && bestCp != null && winPctBefore != null
+  const refutationOpen = greatBase && opponentBlundered && winPct(bestCp) >= REFUTATION_GAP_MIN
+  const onlyMoveOpen =
+    greatBase && winPctBefore < GREAT_ONLY_MOVE_WINPCT_MAX && winPct(bestCp) >= rt.greatOnlyMoveGapMin
+  const secondLineMatters = brilliantButForSecondLine || refutationOpen || onlyMoveOpen
+  const verdict = (classification: MoveClass): Verdict => ({ classification, secondLineMatters })
+
+  if (
+    brilliantButForSecondLine &&
+    !(secondBestCp != null && secondBestCp >= BRILLIANT_WINNING_ANYWAY_CP && secondBestCp < 10000)
+  ) return verdict('Brilliant')
 
   // Great — "refutation": the engine's best move immediately after the opponent blundered,
   // with a clear win%-gap to the second-best line. Unlike the "only good move" branch below,
   // this does NOT require the 2nd-best to be losing — chess.com awards Great for finding the
   // punishing move even when a calmer alternative would also keep an edge. Trivial recaptures
   // (just taking back what the opponent captured on the same square) are excluded.
-  if (
-    !isTrivialRecapture &&
-    isEngineBestMove && opponentBlundered &&
-    bestCp != null && secondBestCp != null &&
-    winPctBefore != null
-  ) {
+  if (refutationOpen && secondBestCp != null) {
     const gap = winPct(bestCp) - winPct(secondBestCp)
     // Fire when the move is meaningfully the right one (gap >= REFUTATION_GAP_MIN) AND either
     // the position wasn't already trivially won, OR it is the uniquely critical continuation
     // even in a won position (very large gap — see REFUTATION_ONLY_MOVE_GAP).
     if (gap >= REFUTATION_GAP_MIN && (winPctBefore < 90 || gap >= REFUTATION_ONLY_MOVE_GAP)) {
-      return 'Great'
+      return verdict('Great')
     }
   }
 
@@ -389,13 +422,10 @@ export function classifyMove(
   // this move would have been a serious, critical-position error, not just
   // "slightly less good while still comfortably winning either way".
   if (
-    !isTrivialRecapture &&
-    isEngineBestMove &&
-    bestCp != null && secondBestCp != null &&
-    winPctBefore != null && winPctBefore < 85 &&
+    onlyMoveOpen && secondBestCp != null &&
     winPct(bestCp) - winPct(secondBestCp) >= rt.greatOnlyMoveGapMin &&
     winPct(secondBestCp) < 50
-  ) return 'Great'
+  ) return verdict('Great')
 
   // Great — swing branches: a near-best move (not necessarily THE top engine move)
   // that turns a lost position equal, or an equal position clearly winning.
@@ -413,9 +443,9 @@ export function classifyMove(
       (winPctBefore < 50 && winPctAfterRaw >= 50) ||    // lost -> equal
       (winPctBefore <= 55 && winPctAfterRaw >= 75)      // equal -> winning
     )
-  ) return 'Great'
+  ) return verdict('Great')
 
-  if (isEngineBestMove) return 'Best'
+  if (isEngineBestMove) return verdict('Best')
 
   // Miss: a win is on the board now (winPctBefore >= 80) that wasn't there before the
   // opponent's last move (winPctPrior < 80 — i.e. freshly created by their mistake),
@@ -425,13 +455,13 @@ export function classifyMove(
     winPctBefore >= MISS_WIN_AVAILABLE &&
     winPctAfter <= MISS_RESULT_CEILING &&
     (winPctPrior == null || winPctPrior < MISS_WIN_AVAILABLE)
-  ) return 'Miss'
+  ) return verdict('Miss')
 
-  if (loss <= 2) return 'Excellent'
-  if (loss <= 5) return 'Good'
-  if (loss <= 10) return 'Inaccuracy'
-  if (loss <= 20) return 'Mistake'
-  return 'Blunder'
+  if (loss <= 2) return verdict('Excellent')
+  if (loss <= 5) return verdict('Good')
+  if (loss <= 10) return verdict('Inaccuracy')
+  if (loss <= 20) return verdict('Mistake')
+  return verdict('Blunder')
 }
 
 export function findKeyMoments(analyses: MoveAnalysis[], n = 5): Set<number> {
@@ -447,6 +477,37 @@ export function buildMoveAnalyses(
   openingPly = 0,
   whiteRating?: number,
   blackRating?: number,
+): MoveAnalysis[] {
+  return runAnalyses(moves, evalResults, openingPly, whiteRating, blackRating, null)
+}
+
+// For the two-pass batch analysis (engine/twoPass.ts): classifies the game from first-pass
+// results (best line only) and reports the plies whose class can depend on the second-best
+// line of the position before the move — only those get a second-line search. Deliberately a
+// superset of what buildMoveAnalyses will read: the book is ignored (it only ever replaces a
+// class by Book) and so is the one-Brilliant-per-combination rule (the earlier Brilliant may
+// still fall to its own second line). Which plies come out as Mistake/Miss/Blunder does not
+// depend on any second line, so `analyses` is already final in that respect.
+export function probeSecondLine(
+  moves: Move[],
+  firstPass: (EvalResult | null)[],
+  whiteRating?: number,
+  blackRating?: number,
+): { analyses: MoveAnalysis[]; sensitivePlies: Set<number> } {
+  const sensitivePlies = new Set<number>()
+  const analyses = runAnalyses(moves, firstPass, 0, whiteRating, blackRating, sensitivePlies)
+  return { analyses, sensitivePlies }
+}
+
+// `probe` = null: the real classification. Otherwise the probeSecondLine mode, which collects
+// the plies whose verdict can depend on the second-best line.
+function runAnalyses(
+  moves: Move[],
+  evalResults: (EvalResult | null)[],
+  openingPly: number,
+  whiteRating: number | undefined,
+  blackRating: number | undefined,
+  probe: Set<number> | null,
 ): MoveAnalysis[] {
   const analyses: MoveAnalysis[] = []
   // Classification per ply, for the one-Brilliant-per-combination rule: consecutive
@@ -532,7 +593,7 @@ export function buildMoveAnalyses(
     const prevMove = i > 0 ? moves[i - 1] : undefined
     const isTrivialRecapture = !!(prevMove?.captured && moves[i].captured && prevMove.to === moves[i].to)
 
-    const classification = classifyMove(
+    const { classification, secondLineMatters } = judgeMove(
       loss,
       isEngineBestMove,
       moves[i],
@@ -542,11 +603,12 @@ export function buildMoveAnalyses(
       winPctPrior,
       winPctAfterRaw,
       playerRating,
-      classByPly.get(i - 2) === 'Brilliant' || missedMate,
+      (probe == null && classByPly.get(i - 2) === 'Brilliant') || missedMate,
       sacrificeIsRegained,
       opponentBlundered,
       isTrivialRecapture,
     )
+    if (probe != null && secondLineMatters) probe.add(i)
 
     // Book override: inside opening theory keep the Book label UNLESS the move is a genuine
     // Brilliant/Great — chess.com awards those even for known theory (e.g. 6.Nxf7 Fried Liver).
