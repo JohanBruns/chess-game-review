@@ -54,10 +54,17 @@ describe('extractPuzzles', () => {
     expect(puzzles).toHaveLength(1)
   })
 
-  it('computes the gap by magnitude so a black-to-move position (negated cp) still qualifies', () => {
-    const moves = [{ san: 'Qxg4' }]
-    const evals = [ev(-500, -100, 'Rxf7')] // black to move: best -500 is worse-looking but gap 400
-    expect(extractPuzzles(moves, fens, evals, [analysis(0, 'Blunder')])).toHaveLength(1)
+  it('measures the gap from the mover\'s side, so a Black move (negated cp) still qualifies', () => {
+    const moves = [{ san: 'e4' }, { san: 'Qxg4' }]
+    // Black to move: -500 is the best line for Black, 400 ahead of the second-best -100.
+    const evals = [ev(20, 10, 'd4'), ev(-500, -100, 'Rxf7')]
+    expect(extractPuzzles(moves, fens, evals, [analysis(1, 'Blunder')])).toHaveLength(1)
+  })
+
+  it('drops a position whose second line is rated above the best one (a mate found only there)', () => {
+    const moves = [{ san: 'Qxg4' }, { san: 'Qxg5' }]
+    const evals = [ev(1387, 10000, 'Qh8+'), ev(-1387, -10000, 'Qh1+')]
+    expect(extractPuzzles(moves, fens, evals, [analysis(0, 'Mistake'), analysis(1, 'Mistake')])).toEqual([])
   })
 
   it('skips positions with no engine reference or no second-best line', () => {
@@ -79,9 +86,9 @@ describe('extractPuzzles', () => {
     const moves = [{ san: 'e4' }, { san: 'Qxg4' }, { san: 'Nf6' }, { san: 'Bxh7' }]
     const evals = [
       ev(20, 10, 'd4'),        // Best move, not a mistake → skip
-      ev(600, 50, 'Rxf7'),     // Blunder, gap 550 → keep
+      ev(-600, -50, 'Rxf7'),   // Blunder (Black to move), gap 550 → keep
       ev(30, 20, 'O-O'),       // Mistake but gap 10 → skip
-      ev(-400, -900, 'Qh5'),   // Miss, gap 500 → keep
+      ev(-900, -400, 'Qh5'),   // Miss (Black to move), gap 500 → keep
     ]
     const analyses = [
       analysis(0, 'Best'),
@@ -97,7 +104,7 @@ describe('extractPuzzles', () => {
 
   it('restricts puzzles to one side’s own mistakes when side is given', () => {
     const moves = [{ san: 'Qxg4' }, { san: 'Bxh7' }, { san: 'Nf6' }, { san: 'Kd2' }]
-    const evals = [ev(500, 100, 'Rxf7'), ev(-400, -900, 'Qh5'), ev(600, 50, 'Ne5'), ev(-300, 200, 'Rd8')]
+    const evals = [ev(500, 100, 'Rxf7'), ev(-900, -400, 'Qh5'), ev(600, 50, 'Ne5'), ev(-300, 200, 'Rd8')]
     const analyses = [
       analysis(0, 'Blunder'), // White
       analysis(1, 'Mistake'), // Black

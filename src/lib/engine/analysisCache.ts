@@ -5,6 +5,8 @@ import type { EvalResult } from './uci'
 // nothing but (engine build + options, fen, depth), so a cached entry equals what a fresh
 // search would return. Re-opening a game, or a shared ?pgn= link, then skips the engine
 // entirely, and positions shared between games (openings) are only searched once.
+// An entry carries the second-best line only if some game needed it there (twoPass.ts); a
+// game that needs it later runs just that search and the entry is stored again, extended.
 //
 // Best effort throughout: any IndexedDB failure (unsupported, blocked storage, quota) makes
 // loads miss and stores no-op — the analysis itself never fails because of the cache.
@@ -13,7 +15,7 @@ const DB_NAME = 'chess-review-analysis'
 const STORE = 'evals'
 // Identity of the search configuration. Bump whenever the engine build, ANALYSIS_OPTION_COMMANDS,
 // analysisCommands or the EvalResult shape changes — old entries then simply stop matching.
-const CACHE_VERSION = 'sf18-lite-single|mpv3|hash32|newgame|v1'
+const CACHE_VERSION = 'sf18-lite-single|2pass|hash8|newgame|v2'
 // ~300 bytes per entry → the cap keeps the cache around 15MB. Oldest entries go first.
 const MAX_ENTRIES = 50_000
 const PRUNE_TO = 45_000
@@ -26,24 +28,6 @@ interface CacheEntry {
 
 export function cacheKey(fen: string, depth: number): string {
   return `${CACHE_VERSION}|d${depth}|${fen}`
-}
-
-// Indices of the positions a cache lookup did not cover.
-export function missingIndices(cached: (EvalResult | null)[]): number[] {
-  const missing: number[] = []
-  cached.forEach((r, i) => { if (r == null) missing.push(i) })
-  return missing
-}
-
-// Slots freshly analyzed results (fresh[k] belongs to position missing[k]) into the cached array.
-export function mergeResults(
-  cached: (EvalResult | null)[],
-  missing: number[],
-  fresh: (EvalResult | null)[],
-): (EvalResult | null)[] {
-  const merged = [...cached]
-  missing.forEach((idx, k) => { merged[idx] = fresh[k] ?? null })
-  return merged
 }
 
 let dbPromise: Promise<IDBDatabase | null> | null = null

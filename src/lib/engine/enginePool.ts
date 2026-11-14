@@ -1,11 +1,11 @@
 import {
   accumulateInfo, analysisCommands, batchMovetimeMs, finishSearch, newSearch, ANALYSIS_OPTION_COMMANDS,
-  type EvalResult, type SearchAccumulator,
+  type EvalResult, type SearchAccumulator, type SearchJob,
 } from './uci'
 
 // Worker pool for the whole-game batch analysis. N independent single-thread WASM engine
 // instances (the exact same build the primary worker uses — NOT the rejected pthread
-// multi-thread build) pull positions from a shared cursor, so the ~100-500ms searches run
+// multi-thread build) pull search jobs from a shared cursor, so the ~50-500ms searches run
 // in parallel instead of serially. Every search starts from a cleared hash (see
 // analysisCommands), so a position's result depends only on (fen, depth): identical to the
 // serial sweep, identical across runs, and safe to cache (analysisCache.ts). Only the wall
@@ -16,12 +16,17 @@ import {
 // Grace period after the movetime cap before the watchdog assumes an engine is dead.
 const WATCHDOG_GRACE_MS = 2000
 const INIT_TIMEOUT_MS = 15000
-// Diminishing returns + RAM beyond 4 instances; one core stays free for the main thread
-// (a busy main thread delays bestmove delivery — see useEngine's publish-throttle notes).
-const MAX_POOL_SIZE = 4
+// Up to 8 logical cores (phones, most laptops): at most 4 instances, and one core stays free
+// for the main thread (a busy main thread delays bestmove delivery — see useEngine's
+// publish-throttle notes). Bigger machines run one instance per two logical cores, up to 8.
+// The gain per extra instance shrinks quickly: measured 2026-11 on a 16-thread desktop,
+// 8 instances finish a game about 20% sooner than 4, and 12 no sooner than 8.
+const MAX_POOL_SIZE_SMALL = 4
+const MAX_POOL_SIZE = 8
 
-export function poolSize(): number {
-  return Math.min(MAX_POOL_SIZE, Math.max(1, (navigator.hardwareConcurrency ?? 4) - 1))
+export function poolSize(cores: number = navigator.hardwareConcurrency ?? 4): number {
+  if (cores <= 8) return Math.min(MAX_POOL_SIZE_SMALL, Math.max(1, cores - 1))
+  return Math.min(MAX_POOL_SIZE, Math.floor(cores / 2))
 }
 
 interface SearchState {
@@ -44,7 +49,7 @@ interface PoolWorker {
 }
 
 interface Batch {
-  fens: string[]
+  jobs: SearchJob[]
   depth: number
   movetime: number
   results: (EvalResult | null)[]
@@ -88,17 +93,18 @@ function settle(batch: Batch) {
 function pump(pw: PoolWorker) {
   const batch = activeBatch
   if (!batch || batch.aborted || !pw.alive || pw.search !== null || pw.outstanding > 0) return
-  if (batch.cursor >= batch.fens.length) return
+  if (batch.cursor >= batch.jobs.length) return
   const idx = batch.cursor++
+  const job = batch.jobs[idx]
   const s: SearchState = {
     batch,
     idx,
-    acc: newSearch(batch.fens[idx]),
+    acc: newSearch(job.fen),
     stopTimer: null,
     graceTimer: null,
   }
   pw.search = s
-  for (const cmd of analysisCommands(s.acc.fen, batch.depth, batch.movetime)) pw.worker.postMessage(cmd)
+  for (const cmd of analysisCommands(job.fen, batch.depth, batch.movetime, job.searchMoves)) pw.worker.postMessage(cmd)
   pw.outstanding++
   // `go movetime` self-terminates, so this only fires if the engine went silent: ask it to
   // stop, and only if even that produces no bestmove (engine truly dead), write the
@@ -112,7 +118,7 @@ function pump(pw: PoolWorker) {
       killWorker(pw)
       if (b === activeBatch && !b.aborted) {
         b.remaining--
-        b.onProgress(b.done, b.fens.length)
+        b.onProgress(b.done, b.jobs.length)
         if (b.remaining === 0 || !workers.some(w => w.alive)) settle(b)
       }
     }, WATCHDOG_GRACE_MS)
@@ -138,7 +144,7 @@ function handleMessage(pw: PoolWorker, line: string) {
         batch.results[s.idx] = finishSearch(s.acc, line)
         batch.done++
         batch.remaining--
-        batch.onProgress(batch.done, batch.fens.length)
+        batch.onProgress(batch.done, batch.jobs.length)
         if (batch.remaining === 0) {
           settle(batch)
           return
@@ -198,35 +204,47 @@ export function abortBatch() {
   settle(batch)
 }
 
-// Analyzes every fen at the given depth with MultiPV 3, in parallel across the pool.
-// Resolves with one EvalResult per position (null = watchdog write-off). Never rejects
-// once started; rejects only if not a single pool worker initializes.
+// Tops the pool up to its target size (replaces workers culled by the watchdog or failed
+// inits). Also called ahead of the first analysis — as soon as the primary engine is up — so
+// loading and compiling the engine in each worker overlaps with the game being fetched
+// instead of delaying its analysis.
+export function warmPool(): void {
+  workers = workers.filter(w => w.alive)
+  const target = poolSize()
+  while (workers.length < target) {
+    const pw = spawnWorker()
+    pw.ready.catch(() => {}) // a failed init is dealt with by the next analyzeBatch
+    workers.push(pw)
+  }
+}
+
+// Runs every job (one single-PV search each, see uci.ts) at the given depth, in parallel
+// across the pool. Resolves with one EvalResult per job (null = watchdog write-off). Never
+// rejects once started; rejects only if not a single pool worker initializes.
 export async function analyzeBatch(
-  fens: string[],
+  jobs: SearchJob[],
   depth: number,
   onProgress: (done: number, total: number) => void,
 ): Promise<(EvalResult | null)[]> {
   abortBatch()
   const seq = ++batchSeq
+  if (jobs.length === 0) return []
 
-  // Top up the pool (replaces workers culled by the watchdog or failed inits).
-  workers = workers.filter(w => w.alive)
-  const target = poolSize()
-  while (workers.length < target) workers.push(spawnWorker())
+  warmPool()
   await Promise.allSettled(workers.map(w => w.ready))
   workers = workers.filter(w => w.alive)
 
-  if (batchSeq !== seq) return new Array<EvalResult | null>(fens.length).fill(null) // superseded during init
+  if (batchSeq !== seq) return new Array<EvalResult | null>(jobs.length).fill(null) // superseded during init
   if (workers.length === 0) throw new Error('engine pool: no worker initialized')
 
   return new Promise<(EvalResult | null)[]>(resolve => {
     const batch: Batch = {
-      fens,
+      jobs,
       depth,
       movetime: batchMovetimeMs(depth),
-      results: new Array<EvalResult | null>(fens.length).fill(null),
+      results: new Array<EvalResult | null>(jobs.length).fill(null),
       cursor: 0,
-      remaining: fens.length,
+      remaining: jobs.length,
       done: 0,
       aborted: false,
       settled: false,
