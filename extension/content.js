@@ -1,7 +1,32 @@
-// Injected into chess.com/game/* pages.
-// Tries multiple strategies to extract PGN.
+// Injected into every chess.com page (chess.com switches /play/online → /game/… client-side,
+// without a page load, so matching only /game/* would miss games played in the same tab).
+// - Extracts the PGN of the game on screen (several strategies, see extractPgn)
+// - Puts a "Partie analysieren" button into the game-over modal and under the move list
+// - Answers the popup's GET_ANALYSIS_URL message
+// Wrapped in a guard because popup.js re-injects it into already-open tabs.
+;(() => {
+if (globalThis.__chessAnalyzerContentLoaded) return
+globalThis.__chessAnalyzerContentLoaded = true
 
-// Username: provided by popup > URL query param > page DOM
+// /game/123, /game/live/123, /game/daily/123, /live/game/123, /analysis/game/live/123 …
+const GAME_PATH = /\/(?:(live|daily)\/)?game\/(?:(live|daily|chess960)\/)?(\d+)/
+
+function parseGamePath(pathname = location.pathname) {
+  const m = pathname.match(GAME_PATH)
+  if (!m) return null
+  return { gameType: m[2] ?? m[1] ?? 'live', gameId: m[3] }
+}
+
+// A game in progress also lives under /game/{id}. Running engine analysis on it would break
+// chess.com's fair-play rules, so nothing is offered while its resign/draw/abort controls show.
+const ONGOING_GAME_CONTROLS =
+  '.resign-button-component, .draw-button-component, .abort-button-component, [aria-label="Resign"]'
+
+function isGameInProgress() {
+  return document.querySelector(ONGOING_GAME_CONTROLS) !== null
+}
+
+// Username: provided by popup/settings > URL query param > page DOM
 function resolveUsername(providedUsername = null) {
   return (
     providedUsername ||
@@ -13,10 +38,9 @@ function resolveUsername(providedUsername = null) {
 }
 
 async function extractPgn(providedUsername = null) {
-  const urlMatch = location.pathname.match(/\/game\/(?:(live|daily|chess960)\/)?(\d+)/)
-  if (!urlMatch) return null
-  const gameType = urlMatch[1] ?? 'live'
-  const gameId = urlMatch[2]
+  const game = parseGamePath()
+  if (!game) return null
+  const { gameType, gameId } = game
 
   const username = resolveUsername(providedUsername)
 
@@ -156,11 +180,194 @@ function extractFromNextData() {
   }
 }
 
-// Listen for message from popup
-chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg.type !== 'GET_PGN') return
-  extractPgn(msg.username ?? null).then(pgn => {
-    sendResponse({ pgn, username: resolveUsername(msg.username ?? null) })
+// ---------------------------------------------------------------------------
+// Analysis URL (shared by popup and in-page buttons)
+// ---------------------------------------------------------------------------
+
+const MAX_URL_LENGTH = 8000
+
+// → { url, notice? } on success, { error } otherwise
+async function buildAnalysisUrl({ appUrl, username } = {}) {
+  if (!parseGamePath()) {
+    return { error: 'Keine chess.com-Partie auf dieser Seite gefunden.' }
+  }
+  if (isGameInProgress()) {
+    return { error: 'Die Partie läuft noch — Analyse erst nach Spielende.' }
+  }
+  const baseUrl = (appUrl || globalThis.chessAnalyzerSettings?.DEFAULT_APP_URL || '').replace(/\/$/, '')
+  const pgn = await extractPgn(username || null)
+  const resolvedUser = resolveUsername(username || null)
+
+  if (!pgn) {
+    const url = resolvedUser
+      ? `${baseUrl}/?username=${encodeURIComponent(resolvedUser)}&autofetch=1`
+      : baseUrl
+    return {
+      url,
+      notice: resolvedUser
+        ? `PGN nicht gefunden — App geöffnet, bitte Partie für "${resolvedUser}" auswählen ✓`
+        : 'PGN nicht gefunden — App geöffnet, bitte Partie auswählen ✓',
+    }
+  }
+
+  let url = `${baseUrl}/?pgn=${encodeURIComponent(pgn)}`
+  // Long games: drop the {[%clk …]} comments before giving up
+  if (url.length > MAX_URL_LENGTH) {
+    url = `${baseUrl}/?pgn=${encodeURIComponent(pgn.replace(/\s*\{[^}]*\}/g, ''))}`
+  }
+  if (url.length > MAX_URL_LENGTH) {
+    return { error: `PGN zu lang für URL (${url.length} Zeichen). Bitte PGN manuell kopieren.` }
+  }
+  return { url }
+}
+
+async function loadSettings() {
+  return globalThis.chessAnalyzerSettings?.load() ?? {}
+}
+
+// ---------------------------------------------------------------------------
+// In-page buttons
+// ---------------------------------------------------------------------------
+
+const STYLE_ID = 'cea-styles'
+const MODAL_SLOT = '.game-over-coach-speech-slot-component'
+const SIDEBAR_ANCHOR = '.game-buttons-container-component'
+
+const CSS = `
+/* Replace the coach bubble only once our button is in the slot — if injection ever fails,
+   chess.com's own content stays visible. */
+${MODAL_SLOT}:has(> .cea-modal-slot) > :not(.cea-modal-slot) { display: none !important; }
+.cea-modal-slot { display: flex; flex-direction: column; justify-content: center;
+  width: 100%; box-sizing: border-box; padding: 8px 0; }
+.cea-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+  box-sizing: border-box; border: none; border-radius: 8px; cursor: pointer;
+  font-family: inherit; font-weight: 800; color: #e8eef7; background: #4a6584;
+  box-shadow: 0 4px 0 #36495f; transition: background .12s, transform .05s, box-shadow .05s; }
+.cea-btn:hover { background: #56739a; }
+.cea-btn:active { transform: translateY(2px); box-shadow: 0 2px 0 #36495f; }
+.cea-btn[disabled] { opacity: .7; cursor: progress; }
+.cea-btn-modal { min-height: 56px; font-size: 20px; padding: 10px 16px; }
+.cea-btn-sidebar { min-height: 40px; font-size: 15px; padding: 6px 12px; }
+.cea-btn-sub { display: block; font-size: 12px; font-weight: 600; opacity: .8; }
+.cea-msg { margin-top: 6px; font-size: 12px; line-height: 1.3; color: #f87171; text-align: center; }
+.cea-msg:empty { display: none; }
+.cea-sidebar { padding: 8px 12px 4px; }
+`
+
+function ensureStyles() {
+  if (document.getElementById(STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = STYLE_ID
+  style.textContent = CSS
+  ;(document.head || document.documentElement).appendChild(style)
+}
+
+const ICON = '♞'
+
+function createButton(variant) {
+  const wrapper = document.createElement('div')
+  wrapper.className = variant === 'modal' ? 'cea-modal-slot' : 'cea-sidebar'
+
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = `cea-btn cea-btn-${variant}`
+  const label = document.createElement('span')
+  label.textContent = `${ICON} Partie analysieren`
+  btn.appendChild(label)
+  btn.title = 'Partie in Chess Analyzer öffnen'
+
+  const msg = document.createElement('div')
+  msg.className = 'cea-msg'
+
+  btn.addEventListener('click', async (event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    btn.disabled = true
+    msg.textContent = ''
+    label.textContent = 'PGN wird geladen…'
+    try {
+      const result = await buildAnalysisUrl(await loadSettings())
+      if (!result.url) {
+        msg.textContent = result.error
+        return
+      }
+      await chrome.runtime.sendMessage({ type: 'OPEN_ANALYSIS_TAB', url: result.url })
+      if (result.notice) msg.textContent = result.notice
+    } catch (e) {
+      // After reloading the extension, old content scripts lose their connection to it.
+      msg.textContent = /context invalidated/i.test(String(e?.message ?? e))
+        ? 'Extension wurde neu geladen — bitte Seite neu laden.'
+        : `Fehler: ${e?.message ?? e}`
+    } finally {
+      btn.disabled = false
+      label.textContent = `${ICON} Partie analysieren`
+    }
   })
+
+  wrapper.append(btn, msg)
+  return wrapper
+}
+
+function ensureModalButton() {
+  const slot = document.querySelector(MODAL_SLOT)
+  if (!slot || isGameInProgress() || slot.querySelector(':scope > .cea-modal-slot')) return
+  slot.appendChild(createButton('modal'))
+}
+
+function ensureSidebarButton() {
+  const existing = document.querySelector('.cea-sidebar')
+  const anchor = document.querySelector(SIDEBAR_ANCHOR)
+  // Only on finished/viewed games, never while the game is still being played.
+  if (!parseGamePath() || !anchor || isGameInProgress()) {
+    existing?.remove()
+    return
+  }
+  if (existing && existing.nextElementSibling === anchor) return
+  existing?.remove()
+  anchor.parentElement.insertBefore(createButton('sidebar'), anchor)
+}
+
+function refreshButtons() {
+  try {
+    ensureStyles()
+    ensureModalButton()
+    ensureSidebarButton()
+  } catch (_) { /* never break chess.com's page */ }
+}
+
+// chess.com is a SPA that re-renders constantly (clocks, move list) — coalesce mutations.
+let refreshQueued = false
+function scheduleRefresh() {
+  if (refreshQueued) return
+  refreshQueued = true
+  setTimeout(() => {
+    refreshQueued = false
+    refreshButtons()
+  }, 150)
+}
+
+new MutationObserver(scheduleRefresh).observe(document.documentElement, {
+  childList: true,
+  subtree: true,
+})
+refreshButtons()
+
+// ---------------------------------------------------------------------------
+// Popup messages
+// ---------------------------------------------------------------------------
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type !== 'GET_ANALYSIS_URL') return
+  ;(async () => {
+    const stored = await loadSettings()
+    const settings = {
+      appUrl: msg.settings?.appUrl || stored.appUrl,
+      username: msg.settings?.username || stored.username,
+    }
+    return buildAnalysisUrl(settings)
+  })()
+    .then(sendResponse)
+    .catch((e) => sendResponse({ error: `Fehler: ${e?.message ?? e}` }))
   return true // keep channel open for async response
 })
+})()
