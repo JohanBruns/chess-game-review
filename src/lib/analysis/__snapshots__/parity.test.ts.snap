@@ -3,49 +3,49 @@
 exports[`classification snapshot > 147779282758 1`] = `
 {
   "accuracy": {
-    "black": 94.2,
-    "white": 78.8,
+    "black": 95.5,
+    "white": 80.1,
   },
-  "classes": "kkBEBEgBgEgEgEEBgBX!EBmBgBBgggEBBgBEggBBEgiBEBiiBBBgiB",
+  "classes": "kkBEBEgBgEgEEEEEgBX!EBiBEBBEEgEBBgBEggBBEEiBEBiiBEBgiB",
 }
 `;
 
 exports[`classification snapshot > 170666529854 1`] = `
 {
   "accuracy": {
-    "black": 44.2,
+    "black": 40.6,
     "white": 100,
   },
-  "classes": "kkkkkkkkkk!BBXB",
+  "classes": "kkkkkkkkkk!BGXB",
 }
 `;
 
 exports[`classification snapshot > 170984117356 1`] = `
 {
   "accuracy": {
-    "black": 46.9,
-    "white": 63.1,
+    "black": 44,
+    "white": 63.7,
   },
-  "classes": "kkkkkkkEBBiBiBiiEgBBmmgBBgBgimgEBBBXxiBBBXGEBf!fB",
+  "classes": "kkkkkkkgBBiBgBigBgEBmmgBBgBgmmEEBBBXxEBBBXGgBf!fB",
 }
 `;
 
 exports[`classification snapshot > 170988770322 1`] = `
 {
   "accuracy": {
-    "black": 80.5,
-    "white": 74.4,
+    "black": 81.4,
+    "white": 75.6,
   },
-  "classes": "kkkEBBBBiiBXGgxBGEmgBXBBBggBBEgiEgmGiBEmBgBEBBEiXBXXgmXGBEEBiBBiBgiBEEBBiBBEEEEEEEEEEEBEBEfBEBBEfEBEfEEBEBBE",
+  "classes": "kkkEBBBBgiBXGgxBGgmEBmBBBggBBEggEgmGiBBmBgBEBEEgXEXmEmXGBiiBiBBiBEiBEEBBEBBBEEEEEEEBEEBEBEfBEBBBfEEEfEEEEBBE",
 }
 `;
 
 exports[`classification snapshot > 171190174548 1`] = `
 {
   "accuracy": {
-    "black": 66.4,
-    "white": 72.1,
+    "black": 65.6,
+    "white": 72.2,
   },
-  "classes": "kkkkkkkkEiBiEiiiBBiiXBEiXXXEggEmimBEEBBBgXGBBEgBgBBiBBBBmGmBmXBXGEBBEEEBEE",
+  "classes": "kkkkkkkkBgBiEBimBBgiXBEEXXXBEgBmmmBBgBEBgXGBEgiBgBBiEBBBmGiBXXBXGEBBBEEEEE",
 }
 `;
