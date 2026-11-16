@@ -1,5 +1,7 @@
-import type { EvalResult } from '../engine/useEngine'
-import type { MoveAnalysis, MoveClass } from './classify'
+// Relative imports carry their .ts extension here: Node loads this module directly too
+// (scripts/captureParityFixtures.ts), without a bundler to resolve them.
+import type { EvalResult } from '../engine/uci.ts'
+import type { MoveAnalysis, MoveClass } from './classify.ts'
 
 export interface Puzzle {
   // 0-based index into moves/fens/moveAnalyses of the mistake this puzzle is built from.
@@ -58,10 +60,13 @@ export function extractPuzzles(
     // solve) — skip. A real Mistake/Blunder never equals best, but guard anyway.
     if (bestSan == null || bestSan === playedSan) continue
 
-    // Uniqueness gate: both cp values are White-absolute, but the engine orders MultiPV by the
-    // mover's preference, so |best - second| is the gap regardless of side to move.
+    // Uniqueness gate: the best move must beat the second-best by gapMinCp from the mover's
+    // view (cp values are White-absolute; even plies are White's, as for `side` above). A second
+    // line rated above the best one — a mate only the second-line search found, see uci.ts
+    // cappedAtBest — fails it like any other position with more than one solution.
     if (ev.cp == null || ev.secondBestCp == null) continue
-    if (Math.abs(ev.cp - ev.secondBestCp) < gapMinCp) continue
+    const moverSign = i % 2 === 0 ? 1 : -1
+    if (moverSign * (ev.cp - ev.secondBestCp) < gapMinCp) continue
 
     puzzles.push({ moveIndex: i, fenBefore, bestSan, playedSan, classification: analysis.classification })
   }

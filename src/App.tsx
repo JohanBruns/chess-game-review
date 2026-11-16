@@ -1,6 +1,6 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useGame } from './hooks/useGame'
-import { useEngine } from './lib/engine/useEngine'
+import { useEngine, type EvalResult } from './lib/engine/useEngine'
 import { GamePicker } from './components/GamePicker'
 import { BoardPanel } from './components/BoardPanel'
 import { PlayerBar } from './components/PlayerBar'
@@ -11,6 +11,7 @@ import { MoveStrip } from './components/MoveStrip'
 import { EvalPanel } from './components/EvalPanel'
 import { LazyEvalGraph } from './components/LazyEvalGraph'
 import { buildMoveAnalyses, findKeyMoments } from './lib/analysis/classify'
+import { secondLineCandidates } from './lib/analysis/candidates'
 import { remainingClockSeconds } from './lib/analysis/clocks'
 import type { MoveClass } from './lib/analysis/classify'
 import { buildGameSummary } from './lib/analysis/summary'
@@ -535,10 +536,11 @@ function App() {
     return getEngineLines(evalResults[currentPly] ?? result)
   }, [settings.showEngineLines, evalResults, currentPly, result])
 
-  // EngineLines on-demand refinement: after the two-pass analysis, non-candidate positions only
-  // carry a single-PV result — when the lines panel is open on one of those, run one MultiPV-3
-  // search and merge it back into evalResults. The requested-set guards against re-firing on a
-  // position where even MultiPV 3 yields no 2nd line (e.g. only one legal move).
+  // EngineLines on-demand refinement: the batch analysis stores the best line and, for the
+  // positions whose class depends on it, the second — when the lines panel is open on a
+  // position short of three lines, one search over the other moves fills them in. The
+  // requested-set guards against re-firing where there is nothing to add (fewer than three
+  // legal moves).
   const refineRequestedRef = useRef<Set<number>>(new Set())
   useEffect(() => {
     refineRequestedRef.current.clear()
@@ -546,7 +548,7 @@ function App() {
   useEffect(() => {
     if (!settings.showEngineLines || isAnalyzing || isEvaluating) return
     const stored = evalResults[currentPly]
-    if (!stored || stored.secondBestMoveSan != null) return
+    if (!stored || stored.thirdBestMoveSan != null) return
     if (refineRequestedRef.current.has(currentPly)) return
     refineRequestedRef.current.add(currentPly)
     refinePosition(currentPly, fens[currentPly])
@@ -586,9 +588,16 @@ function App() {
     setReviewSub('idle')
   }, [])
 
+  // The positions whose second-best line the review will read — the analysis searches a second
+  // line only there (engine/twoPass.ts).
+  const selectCandidates = useCallback(
+    (firstPass: (EvalResult | null)[]) => secondLineCandidates(moves, firstPass, whiteElo, blackElo),
+    [moves, whiteElo, blackElo],
+  )
+
   const handleAnalyzeGame = useCallback(
-    () => analyzeGame(fens, settings.depth),
-    [analyzeGame, fens, settings.depth],
+    () => analyzeGame(fens, settings.depth, selectCandidates),
+    [analyzeGame, fens, settings.depth, selectCandidates],
   )
 
   // settings.autoAnalyze: start the analysis as soon as a game is loaded, like chess.com — once
@@ -604,8 +613,8 @@ function App() {
     autoAnalyzedFensRef.current = fens
     analyzeNextLoadRef.current = false
     if (isAnalyzing || evalResults.length > 0) return
-    analyzeGame(fens, settings.depth)
-  }, [settings.autoAnalyze, settings.depth, isReady, fens, isAnalyzing, evalResults.length, analyzeGame])
+    analyzeGame(fens, settings.depth, selectCandidates)
+  }, [settings.autoAnalyze, settings.depth, isReady, fens, isAnalyzing, evalResults.length, analyzeGame, selectCandidates])
 
   // reviewingSide comes from GamePicker when a chess.com username's game is selected (it knows
   // which color that username played) — orients the board with the reviewed player at the

@@ -1,14 +1,16 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { analyzeBatch, abortBatch } from './enginePool'
-import { loadCached, mergeResults, missingIndices, storeCached } from './analysisCache'
-import { parseInfoScore, uciToSan, uciPvToSan, type EvalResult } from './uci'
+import { analyzeBatch, abortBatch, warmPool } from './enginePool'
+import { loadCached, storeCached } from './analysisCache'
+import { analyzeTwoPass } from './twoPass'
+import { alternativeMoves, cappedAtBest, parseInfoScore, uciToSan, uciPvToSan, type EvalResult } from './uci'
 
 export type { EvalResult } from './uci'
 
-// Whole-game batch analysis: every position gets one MultiPV-3 search at the settings depth,
-// run in parallel on the enginePool workers (see enginePool.ts) — unless the per-position
-// IndexedDB cache (analysisCache.ts) already holds it. The primary worker below only serves
-// the interactive paths (evaluate, refinePosition, requestPlayMove).
+// Whole-game batch analysis: every position gets one single-PV search at the settings depth,
+// and the positions whose classification reads the second-best line get a second search for
+// it (twoPass.ts) — run in parallel on the enginePool workers (see enginePool.ts), unless the
+// per-position IndexedDB cache (analysisCache.ts) already holds the result. The primary worker
+// below only serves the interactive paths (evaluate, refinePosition, requestPlayMove).
 //
 // Publishing is deliberately decoupled from the engines (measured 2026-07): pushing
 // evalResults into state after every position re-renders the whole app (move classification
@@ -40,6 +42,32 @@ const INITIAL_STATE: EngineState = {
 
 type InitPhase = 'uci' | 'isready' | 'ready'
 
+// EngineLines refinement: `alternatives` is the outcome of a search over every move but the
+// stored best one, so its lines are the position's 2nd, 3rd, ... best. Fills what the stored
+// batch result lacks and keeps what it has — the eval and best move the review was built on,
+// and a second line the batch searched itself — so opening the panel never shifts the review.
+function withAlternativeLines(fen: string, stored: EvalResult, alternatives: EvalResult): EvalResult {
+  const lines: { cp: number; san: string }[] = []
+  for (const [cp, san] of [
+    [alternatives.cp, alternatives.bestMoveSan],
+    [alternatives.secondBestCp, alternatives.secondBestMoveSan],
+    [alternatives.thirdBestCp, alternatives.thirdBestMoveSan],
+  ] as const) {
+    if (cp !== null && san !== null) lines.push({ cp: cappedAtBest(fen, stored.cp, cp), san })
+  }
+  const second = stored.secondBestMoveSan != null
+    ? { cp: stored.secondBestCp, san: stored.secondBestMoveSan }
+    : lines[0] ?? null
+  const third = lines.find(line => line.san !== second?.san) ?? null
+  return {
+    ...stored,
+    secondBestCp: second?.cp ?? null,
+    secondBestMoveSan: second?.san ?? null,
+    thirdBestCp: third?.cp ?? null,
+    thirdBestMoveSan: third?.san ?? null,
+  }
+}
+
 // Per-move time cap for the interactive one-off evaluate()/refinePosition() searches, passed
 // alongside the depth limit (`go depth D movetime T` stops at whichever limit is hit first).
 // The depth limit terminates virtually every search long before the cap; it only reins in
@@ -70,8 +98,9 @@ export function useEngine() {
   // The finished batch's results (source of truth for the EngineLines refine-merge).
   const batchResultsRef = useRef<(EvalResult | null)[]>([])
   const lastPublishRef = useRef(0)
-  // Single-position refinement (EngineLines on-demand): when set, the next single-eval
-  // bestmove also merges its result into evalResults[refineIndex].
+  // Single-position refinement (EngineLines on-demand): when set, the running search covers
+  // every move but the stored best one, and its bestmove merges the lines it found into
+  // evalResults[refineIndex] (withAlternativeLines) instead of becoming `result`.
   const refineIndexRef = useRef<number | null>(null)
   const lastCpRef = useRef<number | null>(null)
   const lastMateRef = useRef<number | null>(null)
@@ -94,9 +123,9 @@ export function useEngine() {
 
   // Stored in a ref so the timeout callback can call it recursively
   // and the useEffect closure always gets the latest version.
-  const postEvalRef = useRef<(fen: string) => void>(() => {})
+  const postEvalRef = useRef<(fen: string, searchMoves?: string[]) => void>(() => {})
 
-  const postEval = (fen: string) => {
+  const postEval = (fen: string, searchMoves?: string[]) => {
     if (!workerRef.current) return
     evaluatingFenRef.current = fen
     lastCpRef.current = null
@@ -109,7 +138,8 @@ export function useEngine() {
     if (timeoutRef.current !== null) clearTimeout(timeoutRef.current)
     const movetime = movetimeRef.current
     workerRef.current.postMessage(`position fen ${fen}`)
-    workerRef.current.postMessage(`go depth ${depthRef.current} movetime ${movetime}`)
+    const only = searchMoves && searchMoves.length > 0 ? ` searchmoves ${searchMoves.join(' ')}` : ''
+    workerRef.current.postMessage(`go depth ${depthRef.current} movetime ${movetime}${only}`)
     outstandingGoRef.current++
     // `go movetime` self-terminates, so this watchdog only fires if the engine went silent:
     // ask it to stop, and only if even that produces no bestmove (engine truly dead), fail
@@ -161,6 +191,9 @@ export function useEngine() {
         // hash thrashes and throws those transposition-table hits away.
         worker.postMessage('setoption name Hash value 128')
         setState(prev => ({ ...prev, isReady: true }))
+        // Start the batch workers now, behind the primary engine (which the UI waits for), so
+        // they are up by the time a game is loaded and analyzed.
+        warmPool()
         return
       }
 
@@ -175,8 +208,9 @@ export function useEngine() {
           if (info.pvUci.length > 0) lastPvRef.current = info.pvUci.slice(0, 10)
 
           // Don't flicker `result` while a pool batch runs (a just-superseded single search
-          // may still be streaming info lines on this worker).
-          if (!batchActiveRef.current) {
+          // may still be streaming info lines on this worker), nor during a refinement — its
+          // lines are the alternatives to the best move, not the position's eval.
+          if (!batchActiveRef.current && refineIndexRef.current === null) {
             setState(prev => ({
               ...prev,
               result: {
@@ -237,22 +271,32 @@ export function useEngine() {
           thirdBestMoveSan: uciToSan(evaluatingFenRef.current, lastThirdBestUciRef.current),
         }
 
-        // Single eval — optionally a refinement (EngineLines on-demand): merge the fresh
-        // MultiPV result into the stored batch result for that position as well.
+        // A refinement (EngineLines on-demand): the search covered the alternatives to the
+        // stored best move — add its lines to the stored batch result for that position.
         const refineIndex = refineIndexRef.current
         refineIndexRef.current = null
-        if (refineIndex != null && refineIndex < batchResultsRef.current.length) {
-          batchResultsRef.current[refineIndex] = finalResult
-        }
-        setState(prev => {
-          const next = { ...prev, isEvaluating: false, result: finalResult }
-          if (refineIndex != null && refineIndex < prev.evalResults.length) {
-            const merged = [...prev.evalResults]
-            merged[refineIndex] = finalResult
-            next.evalResults = merged
+        if (refineIndex != null) {
+          const stored = batchResultsRef.current[refineIndex]
+          if (!stored) {
+            setState(prev => ({ ...prev, isEvaluating: false }))
+            return
           }
-          return next
-        })
+          const refined = withAlternativeLines(evaluatingFenRef.current ?? '', stored, finalResult)
+          batchResultsRef.current[refineIndex] = refined
+          setState(prev => {
+            const next = { ...prev, isEvaluating: false }
+            if (refineIndex < prev.evalResults.length) {
+              const merged = [...prev.evalResults]
+              merged[refineIndex] = refined
+              next.evalResults = merged
+            }
+            return next
+          })
+          return
+        }
+
+        // Single eval.
+        setState(prev => ({ ...prev, isEvaluating: false, result: finalResult }))
       }
     }
 
@@ -294,16 +338,21 @@ export function useEngine() {
     postEvalRef.current(fen)
   }, [])
 
-  // EngineLines on-demand: a single MultiPV-3 search whose result is also merged into
-  // evalResults[fenIndex] — used when the stored result for the current position lacks the
-  // 2nd/3rd lines the engine-lines panel needs (e.g. a watchdog-stopped batch search).
-  // No-op during a batch.
+  // EngineLines on-demand: the batch analysis stores the best line and, where the
+  // classification needs it, the second — the engine-lines panel wants three. One search over
+  // every move but the stored best one supplies the missing lines, merged into
+  // evalResults[fenIndex]; the stored eval, best move and batch second line stay as they are.
+  // No-op during a batch, without a stored result, or when the best move has no alternative.
   const refinePosition = useCallback((fenIndex: number, fen: string) => {
     if (!workerRef.current || batchActiveRef.current) return
+    const stored = batchResultsRef.current[fenIndex]
+    if (!stored) return
+    const alternatives = alternativeMoves(fen, stored.bestMoveSan)
+    if (alternatives.length === 0) return
     movetimeRef.current = SINGLE_MOVETIME_MS[depthRef.current] ?? DEFAULT_MOVETIME_MS
     refineIndexRef.current = fenIndex
     setState(prev => ({ ...prev, isEvaluating: true, error: null }))
-    postEvalRef.current(fen)
+    postEvalRef.current(fen, alternatives)
   }, [])
 
   const clearAnalysis = useCallback(() => {
@@ -327,7 +376,13 @@ export function useEngine() {
     }))
   }, [])
 
-  const analyzeGame = useCallback((fens: string[], depth = 15) => {
+  // `selectCandidates` names the positions whose second-best line the review reads, given the
+  // first-pass results (analysis/candidates.ts) — only those get a second search.
+  const analyzeGame = useCallback((
+    fens: string[],
+    depth = 15,
+    selectCandidates: (firstPass: (EvalResult | null)[]) => number[] = () => [],
+  ) => {
     if (fens.length === 0) return
     if (timeoutRef.current !== null) {
       clearTimeout(timeoutRef.current)
@@ -352,11 +407,11 @@ export function useEngine() {
       evalResults: new Array(fens.length).fill(null),
       analysisProgress: { current: 0, total: fens.length },
     }))
-    const finish = (results: (EvalResult | null)[], searched: number) => {
+    const finish = (results: (EvalResult | null)[], fromCache: number) => {
       batchActiveRef.current = false
       batchResultsRef.current = results
       if (import.meta.env.DEV) {
-        console.log('[SF] batch analysis:', fens.length, 'positions (', fens.length - searched,
+        console.log('[SF] batch analysis:', fens.length, 'positions (', fromCache,
           'from cache ) in', Math.round(performance.now() - batchStartRef.current), 'ms')
       }
       setState(prev => ({
@@ -371,26 +426,29 @@ export function useEngine() {
     // and progress counts the cache hits as already done.
     loadCached(fens, depth).then(cached => {
       if (batchGenRef.current !== gen) return undefined // aborted or superseded during lookup
-      const missing = missingIndices(cached)
-      if (missing.length === 0) {
-        finish(cached, 0)
-        return undefined
-      }
-      const missingFens = missing.map(i => fens[i])
-      const fromCache = fens.length - missing.length
-      return analyzeBatch(missingFens, depth, (done) => {
-        if (batchGenRef.current !== gen) return
-        // Throttled progress-only publish — see the header comment: evalResults stays
-        // reference-stable during the batch so the O(n) memo chain never recomputes mid-run.
-        const now = performance.now()
-        if (now - lastPublishRef.current >= PUBLISH_INTERVAL_MS) {
-          lastPublishRef.current = now
-          setState(prev => ({ ...prev, analysisProgress: { current: fromCache + done, total: fens.length } }))
-        }
-      }).then(fresh => {
-        if (batchGenRef.current !== gen) return // aborted or superseded
-        void storeCached(missingFens, depth, fresh)
-        finish(mergeResults(cached, missing, fresh), missing.length)
+      const fromCache = cached.filter(r => r != null).length
+      return analyzeTwoPass({
+        fens,
+        known: cached,
+        selectCandidates,
+        runBatch: (jobs, onDone) => analyzeBatch(jobs, depth, onDone),
+        isCancelled: () => batchGenRef.current !== gen,
+        onProgress: fraction => {
+          if (batchGenRef.current !== gen) return
+          // Throttled progress-only publish — see the header comment: evalResults stays
+          // reference-stable during the batch so the O(n) memo chain never recomputes mid-run.
+          const now = performance.now()
+          if (now - lastPublishRef.current >= PUBLISH_INTERVAL_MS) {
+            lastPublishRef.current = now
+            const current = fromCache + Math.floor(fraction * (fens.length - fromCache))
+            setState(prev => ({ ...prev, analysisProgress: { current, total: fens.length } }))
+          }
+        },
+      }).then(outcome => {
+        if (!outcome || batchGenRef.current !== gen) return // aborted or superseded
+        const { results, changed } = outcome
+        void storeCached(changed.map(i => fens[i]), depth, changed.map(i => results[i]))
+        finish(results, fromCache)
       })
     }).catch(() => {
       if (batchGenRef.current !== gen) return
