@@ -9,8 +9,10 @@ None by default — the extension sends games to the hosted version of the app. 
 ## Option A: Bookmarklet (no extension setup needed)
 
 1. Create a new bookmark
-2. Paste the contents of `bookmarklet.js` as the URL (one line, starts with `javascript:`)
-3. Click the bookmark on a chess.com game page → the app opens
+2. Paste the contents of `bookmarklet.js` as the URL — everything from the line that starts with `javascript:` onward
+3. Click the bookmark on a finished chess.com game → the app opens with that game
+
+The bookmarklet only reads the game id from the address and opens the app with `?game=<id>`; the app then loads the game itself. It refuses to run while the game is still in progress.
 
 ## Option B: Chrome Extension (Manifest V3)
 
