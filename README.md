@@ -1,14 +1,26 @@
 # Chess Game Review
 
-A tool that analyzes your chess games — similar to chess.com's "Game Review" feature. It shows you which moves were good, which were bad, where you went wrong, and how to improve.
+A tool that analyzes your chess games — similar to chess.com's "Game Review" feature. It shows you which moves were good, which were bad, where you went wrong, and how to improve. Stockfish runs right in your browser, so there's no account and no daily review limit.
+
+**Try it:** [chess-game-review-drab.vercel.app](https://chess-game-review-drab.vercel.app)
 
 <p align="center">
-  <img src="docs/images/game_summary.png" alt="Summary of a game with accuracy, best moves, and mistakes" width="80%">
+  <img src="docs/images/game_summary.png" alt="Game summary: coach, evaluation graph, accuracy for both players and a count of every move class" width="80%">
 </p>
 
 <p align="center">
-  <img src="docs/images/blunder.png" alt="The tool flags a blunder directly on the board" width="80%">
+  <img src="docs/images/brilliant.png" alt="Guided review at 15.Bxh6, a bishop sacrifice the tool rates as Brilliant" width="80%">
 </p>
+
+<p align="center"><em>15.Bxh6!! — a bishop sacrifice on h6 that opens Black's king, rated Brilliant in the guided review.</em></p>
+
+<p align="center">
+  <img src="docs/images/phone_summary.png" alt="Phone layout: full-screen game summary" width="32%">
+  &nbsp;
+  <img src="docs/images/phone_brilliant.png" alt="Phone layout: guided review at the Brilliant move" width="32%">
+</p>
+
+<p align="center"><em>On phones the layout follows the chess.com app.</em></p>
 
 
 ---
@@ -21,7 +33,7 @@ The fastest way to use this tool is the Chrome extension by itself — no instal
 2. Open `chrome://extensions` in Chrome
 3. Turn on **"Developer mode"** in the top right
 4. Click **"Load unpacked"** and select the `extension/` folder
-5. Open any finished game on chess.com and click the new extension icon — the game opens automatically in the analysis tool
+5. Finish a game on chess.com and click **♞ Partie analysieren** in the game-over window or the sidebar (or the extension icon) — the game opens automatically in the analysis tool
 
 There's also an even simpler option without an extension at all: a so-called **bookmarklet** (a bookmark with built-in functionality). Details in [`extension/README.md`](extension/README.md).
 
@@ -80,11 +92,15 @@ By default, the extension sends games to the hosted version of the app. To use y
 
 ## What you'll see in the analysis
 
-- **Move ratings** — every move gets a label like Best, Good, Inaccuracy, Mistake, or Blunder
-- **Evaluation graph** — a chart showing when the game swung in whose favor
-- **Accuracy %** — how precisely each side played overall
+- **Move ratings** — every move gets a label, from Brilliant (!!) and Great (!) through Best, Excellent and Good down to Inaccuracy, Mistake, Miss and Blunder
+- **Guided review** — step through the game with a coach who says what each move did and shows the engine's best move
+- **Evaluation graph and bar** — when the game swung in whose favor
+- **Accuracy % and game rating** — how precisely each side played overall
 - **Opening recognition** — which known opening was played
-- **Coaching explanations** *(optional)* — short, plain-language explanations of individual moves
+- **Retry and practice** — try a better move at the critical moments, or play the position out against the engine
+- **Puzzles from your own mistakes** — your Mistakes, Misses and Blunders become puzzles to solve
+- **Share links** — every game and move has its own link (`?game=…&move=…`)
+- **Themes** — board and piece styles to choose from
 
 ---
 
@@ -124,11 +140,11 @@ npm test        # run tests
 
 ```
 ├── src/
-│   ├── components/        # React components (board, eval, coaching, ...)
+│   ├── components/        # React components (board, summary, review, puzzles, ...)
 │   ├── lib/
-│   │   ├── analysis/      # Analysis logic (classification, accuracy)
+│   │   ├── analysis/      # Analysis logic (classification, accuracy, coach text, puzzles)
 │   │   └── engine/        # Engine communication and Web Worker
-│   ├── hooks/             # Custom hooks (useGame, useCoaching)
+│   ├── hooks/             # Custom hooks (useGame, usePuzzles, useSettings, ...)
 │   ├── data/               # Static data (openings database)
 │   ├── App.tsx
 │   └── main.tsx
@@ -137,7 +153,9 @@ npm test        # run tests
 │   ├── pieces/             # Chess piece SVGs
 │   ├── sounds/             # Move sounds
 │   └── marks/              # Classification icons
-├── extension/               # Browser extension
+├── api/                     # Serverless functions (chess.com game proxy, share push)
+├── docs/                    # iPhone setup and README screenshots
+├── extension/               # Browser extension and bookmarklet
 ├── Board&Game/              # Design assets
 └── package.json
 ```
